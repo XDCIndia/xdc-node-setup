@@ -293,6 +293,43 @@ services:
       - dashboard
 
   #--------------------------------------------------------------------------
+  # NetOwn Agent - Fleet monitoring sidecar
+  # Reports node health, metrics, and security status to NetOwn platform
+  #--------------------------------------------------------------------------
+  netown-agent:
+    image: alpine:3.19
+    container_name: netown-agent
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./netown-agent.sh:/agent.sh:ro
+      - ./netown.conf:/etc/xdc-node/netown.conf:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # for docker stats
+      - /etc/ssh/sshd_config:/host/sshd_config:ro     # for security checks
+      - /proc:/host/proc:ro                             # for system metrics
+    environment:
+      - NETOWN_CONF=/etc/xdc-node/netown.conf
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache bash curl jq bc procps >/dev/null 2>&1
+        chmod +x /agent.sh
+        echo "NetOwn Agent started - reporting every 60s"
+        while true; do
+          /agent.sh 2>/dev/null
+          sleep 60
+        done
+    depends_on:
+      - xdc-node
+    profiles:
+      - netown
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  #--------------------------------------------------------------------------
   # XDC Owner Metrics Collector - Collects owner-focused metrics via RPC
   # Runs every 60 seconds and writes to node-exporter textfile collector
   #--------------------------------------------------------------------------

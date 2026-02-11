@@ -1,0 +1,17 @@
+# NetOwn Agent Configuration
+# Copy this to netown.conf and fill in your values
+
+# Required: Your NetOwn API endpoint
+NETOWN_API_URL=https://net.xdc.network/api/v1
+
+# Required: Your node's API key (get from NetOwn dashboard or registration)
+NETOWN_API_KEY=your-api-key-here
+
+# Required: Your node ID (assigned during registration)
+NETOWN_NODE_ID=your-node-id-here
+
+# RPC endpoint of the XDC node (default: localhost:8545)
+RPC_URL=http://127.0.0.1:8545
+
+# Optional: Node name for display
+NODE_NAME=my-xdc-node

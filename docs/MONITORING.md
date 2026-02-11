@@ -11,7 +11,8 @@ Complete guide for setting up monitoring and alerting for XDC Network nodes.
 3. [Prometheus Configuration](#3-prometheus-configuration)
 4. [Alerting Rules](#4-alerting-rules)
 5. [Telegram Bot Setup](#5-telegram-bot-setup)
-6. [Troubleshooting](#6-troubleshooting)
+6. [NetOwn Fleet Monitoring](#6-netown-fleet-monitoring)
+7. [Troubleshooting](#7-troubleshooting)
 
 ---
 
@@ -393,7 +394,199 @@ docker compose -f /opt/xdc-node/docker/docker-compose.yml restart prometheus
 
 ---
 
-## Metrics Reference
+## 6. NetOwn Fleet Monitoring
+
+NetOwn provides centralized fleet monitoring for XDC nodes with automatic registration, health reporting, and security scoring.
+
+### Overview
+
+The NetOwn Agent runs as a Docker sidecar container alongside your XDC node:
+
+- **Auto-registration**: Nodes self-register with the NetOwn platform
+- **Heartbeat reporting**: Sends health metrics every 60 seconds
+- **Security scoring**: Analyzes SSH config, firewall rules, and system hardening
+- **Fleet dashboard**: View all nodes at https://net.xdc.network
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    XDC Node Server                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────────┐      ┌──────────────┐                    │
+│  │   XDC Node   │      │ NetOwn Agent │──────┐              │
+│  │   (Docker)   │      │  (Sidecar)   │      │              │
+│  └──────────────┘      └──────────────┘      │              │
+│                                              │              │
+└──────────────────────────────────────────────┼──────────────┘
+                                               │
+                                               ▼
+                                      ┌──────────────────┐
+                                      │  NetOwn Platform │
+                                      │ net.xdc.network  │
+                                      └──────────────────┘
+```
+
+### Enabling NetOwn Agent
+
+#### Option 1: With Docker Compose (New Install)
+
+Enable the `netown` profile when starting services:
+
+```bash
+cd /opt/xdc-node/docker
+
+# Copy the agent script and config template
+cp ../scripts/netown-agent.sh ./netown-agent.sh
+cp ../configs/netown.conf.template ./netown.conf
+
+# Edit configuration
+nano netown.conf
+```
+
+Configure your `netown.conf`:
+```bash
+# Required: Your NetOwn API endpoint
+NETOWN_API_URL=https://net.xdc.network/api/v1
+
+# Required: Your node's API key (get from NetOwn dashboard)
+NETOWN_API_KEY=your-api-key-here
+
+# Required: Your node ID (assigned during registration)
+NETOWN_NODE_ID=your-node-id-here
+
+# RPC endpoint of the XDC node
+RPC_URL=http://127.0.0.1:8545
+
+# Optional: Node name for display
+NODE_NAME=my-xdc-node
+```
+
+Start with the netown profile:
+```bash
+docker compose --profile netown up -d
+```
+
+#### Option 2: Standalone Agent (Existing Node)
+
+For nodes already running that you want to add monitoring to:
+
+```bash
+mkdir -p /opt/netown-agent
+cd /opt/netown-agent
+
+# Download agent files
+curl -O https://raw.githubusercontent.com/XDC-Node-Setup/main/scripts/netown-agent.sh
+curl -O https://raw.githubusercontent.com/XDC-Node-Setup/main/configs/netown.conf.template
+mv netown.conf.template netown.conf
+
+# Edit configuration
+nano netown.conf
+# Fill in your API key and node ID
+
+# Download standalone compose file
+curl -O https://raw.githubusercontent.com/XDC-Node-Setup/main/docker/netown-agent-standalone.yml
+
+# Start the agent
+docker compose -f netown-agent-standalone.yml up -d
+```
+
+### Configuration Options
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `NETOWN_API_URL` | Yes | - | NetOwn API endpoint |
+| `NETOWN_API_KEY` | Yes | - | Your API key from NetOwn dashboard |
+| `NETOWN_NODE_ID` | Yes | - | Unique node identifier |
+| `RPC_URL` | No | `http://127.0.0.1:8545` | XDC node RPC endpoint |
+| `NODE_NAME` | No | Hostname | Display name for the node |
+
+### Registering a New Node
+
+1. **Get API credentials**: Visit https://net.xdc.network/dashboard
+2. **Create node entry**: Click "Add Node" and note the assigned Node ID
+3. **Generate API key**: Create an API key for the node
+4. **Configure agent**: Add credentials to `netown.conf`
+5. **Start agent**: Run `docker compose up -d`
+6. **Verify**: Check the dashboard for the node's first heartbeat
+
+### Verifying Agent Operation
+
+Check container status:
+```bash
+docker ps --filter "name=netown-agent"
+```
+
+View agent logs:
+```bash
+docker logs netown-agent --tail 50
+```
+
+Check fleet status via API:
+```bash
+curl -s https://net.xdc.network/api/v1/fleet/status | jq '.nodes[] | {name, status, security_score}'
+```
+
+### Troubleshooting NetOwn Agent
+
+#### Agent Not Reporting
+
+**Symptoms**: Node shows as offline in dashboard
+
+**Checklist**:
+1. Verify container is running:
+   ```bash
+   docker ps | grep netown-agent
+   ```
+
+2. Check for configuration errors:
+   ```bash
+   docker logs netown-agent --tail 20
+   ```
+
+3. Verify RPC endpoint is accessible:
+   ```bash
+   curl -X POST http://localhost:8545 \
+     -H "Content-Type: application/json" \
+     -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+   ```
+
+4. Check API credentials are correct in `netown.conf`
+
+5. Restart the agent:
+   ```bash
+   docker restart netown-agent
+   ```
+
+#### Security Score Low
+
+**Symptoms**: Security score below 80 in dashboard
+
+**Common issues**:
+- **SSH password auth enabled**: Disable in `/etc/ssh/sshd_config`:
+  ```
+  PasswordAuthentication no
+  ChallengeResponseAuthentication no
+  ```
+- **Root login allowed**: Set `PermitRootLogin no`
+- **Missing firewall rules**: Ensure UFW or iptables is active
+
+#### Network Connectivity Issues
+
+The agent requires outbound HTTPS access to `net.xdc.network`:
+
+```bash
+# Test connectivity
+curl -I https://net.xdc.network/api/v1/health
+
+# Check DNS resolution
+nslookup net.xdc.network
+```
+
+---
+
+## 7. Troubleshooting
 
 ### XDC Node Metrics
 

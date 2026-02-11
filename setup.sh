@@ -193,6 +193,7 @@ Environment Variables:
   P2P_PORT            P2P port (default: 30303)
   SYNC_MODE           Sync mode: full, snap (default: full)
   ENABLE_MONITORING   Enable monitoring: true/false (default: true)
+  ENABLE_NETOWN       Enable NetOwn fleet monitoring: true/false (default: false)
   ENABLE_SECURITY     Enable security hardening: true/false (default: true)
   ENABLE_UPDATES      Enable auto-updates: true/false (default: true)
   HTTP_PROXY          HTTP proxy URL
@@ -439,6 +440,7 @@ init_config() {
     
     # Feature flags
     ENABLE_MONITORING="${ENABLE_MONITORING:-true}"
+    ENABLE_NETOWN="${ENABLE_NETOWN:-false}"
     ENABLE_SECURITY="${ENABLE_SECURITY:-true}"
     ENABLE_NOTIFICATIONS="${ENABLE_NOTIFICATIONS:-false}"
     ENABLE_UPDATES="${ENABLE_UPDATES:-true}"
@@ -553,6 +555,9 @@ prompt_features() {
     read -rp "Enable monitoring (Grafana + Prometheus)? [Y/n]: " input
     [[ ! "${input:-Y}" =~ ^[Nn]$ ]] && ENABLE_MONITORING="true" || ENABLE_MONITORING="false"
     
+    read -rp "Enable NetOwn fleet monitoring? [y/N]: " input
+    [[ "${input:-N}" =~ ^[Yy]$ ]] && ENABLE_NETOWN="true" || ENABLE_NETOWN="false"
+    
     if [[ "$OS" == "linux" ]]; then
         read -rp "Enable security hardening (SSH, UFW, fail2ban)? [Y/n]: " input
         [[ ! "${input:-Y}" =~ ^[Nn]$ ]] && ENABLE_SECURITY="true" || ENABLE_SECURITY="false"
@@ -567,7 +572,7 @@ prompt_features() {
     read -rp "Install CLI tool (xdc-node)? [Y/n]: " input
     [[ ! "${input:-Y}" =~ ^[Nn]$ ]] && INSTALL_CLI="true" || INSTALL_CLI="false"
     
-    log "Monitoring: $ENABLE_MONITORING, Security: $ENABLE_SECURITY, Notifications: $ENABLE_NOTIFICATIONS, Updates: $ENABLE_UPDATES, CLI: $INSTALL_CLI"
+    log "Monitoring: $ENABLE_MONITORING, NetOwn: $ENABLE_NETOWN, Security: $ENABLE_SECURITY, Notifications: $ENABLE_NOTIFICATIONS, Updates: $ENABLE_UPDATES, CLI: $INSTALL_CLI"
 }
 
 prompt_advanced() {
@@ -755,6 +760,50 @@ EOF
     networks:
       - xdc-network
 EOF
+    fi
+
+    # Add NetOwn agent if enabled
+    if [[ "$ENABLE_NETOWN" == "true" ]]; then
+        cat >> "$INSTALL_DIR/docker/docker-compose.yml" << 'EOF'
+
+  netown-agent:
+    image: alpine:3.19
+    container_name: netown-agent
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./netown-agent.sh:/agent.sh:ro
+      - ./netown.conf:/etc/xdc-node/netown.conf:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /etc/ssh/sshd_config:/host/sshd_config:ro
+      - /proc:/host/proc:ro
+    environment:
+      - NETOWN_CONF=/etc/xdc-node/netown.conf
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache bash curl jq bc procps >/dev/null 2>&1
+        chmod +x /agent.sh
+        echo "NetOwn Agent started - reporting every 60s"
+        while true; do
+          /agent.sh 2>/dev/null
+          sleep 60
+        done
+    depends_on:
+      - xdc-node
+EOF
+        
+        # Copy netown agent files
+        cp "$SCRIPT_DIR/scripts/netown-agent.sh" "$INSTALL_DIR/docker/netown-agent.sh" 2>/dev/null || \
+            curl -sSL "https://raw.githubusercontent.com/XDC-Node-Setup/main/scripts/netown-agent.sh" -o "$INSTALL_DIR/docker/netown-agent.sh"
+        chmod +x "$INSTALL_DIR/docker/netown-agent.sh"
+        
+        # Create netown.conf from template
+        if [[ ! -f "$INSTALL_DIR/docker/netown.conf" ]]; then
+            cp "$SCRIPT_DIR/configs/netown.conf.template" "$INSTALL_DIR/docker/netown.conf" 2>/dev/null || \
+                curl -sSL "https://raw.githubusercontent.com/XDC-Node-Setup/main/configs/netown.conf.template" -o "$INSTALL_DIR/docker/netown.conf"
+            warn "Please edit $INSTALL_DIR/docker/netown.conf with your NetOwn API credentials"
+        fi
     fi
 
     # Close the compose file
