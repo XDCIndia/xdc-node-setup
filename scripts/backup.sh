@@ -3,18 +3,29 @@ set -euo pipefail
 
 #==============================================================================
 # XDC Node Backup Script
-# Backs up chain data, keystore, and configurations
+# Implements backup standards from XDC-NODE-STANDARDS.md
+# Features: Incremental rsync, GPG encryption, S3/FTP upload, retention
 #==============================================================================
 
-# Configuration
+# Configuration (can be overridden via /root/.xdc-backup.conf)
 BACKUP_DIR="${BACKUP_DIR:-/backup/xdc-node}"
 DATA_DIR="${DATA_DIR:-/root/xdcchain}"
 CONFIG_DIR="${CONFIG_DIR:-/opt/xdc-node}"
-RETENTION_DAYS=7
-RETENTION_WEEKS=4
+CONFIG_FILE="/root/.xdc-backup.conf"
+
+# Retention settings
+RETENTION_DAILY=${RETENTION_DAILY:-7}
+RETENTION_WEEKLY=${RETENTION_WEEKLY:-4}
+RETENTION_MONTHLY=${RETENTION_MONTHLY:-12}
+
+# Encryption settings
 ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY:-}"
+GPG_RECIPIENT="${BACKUP_GPG_RECIPIENT:-}"
+
+# Remote storage settings
 S3_BUCKET="${BACKUP_S3_BUCKET:-}"
 S3_ENDPOINT="${BACKUP_S3_ENDPOINT:-}"
+S3_REGION="${BACKUP_S3_REGION:-us-east-1}"
 FTP_HOST="${BACKUP_FTP_HOST:-}"
 FTP_USER="${BACKUP_FTP_USER:-}"
 FTP_PASS="${BACKUP_FTP_PASS:-}"
@@ -26,8 +37,29 @@ LOG_FILE="/var/log/xdc-backup.log"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 
+# Stats
+BACKUP_SIZE=0
+BACKUP_START_TIME=0
+BACKUP_DURATION=0
+BACKUP_SUCCESS=false
+
+#==============================================================================
+# Load Config File
+#==============================================================================
+load_config() {
+    if [[ -f "$CONFIG_FILE" ]]; then
+        log "Loading configuration from $CONFIG_FILE"
+        # shellcheck source=/dev/null
+        source "$CONFIG_FILE"
+    fi
+}
+
+#==============================================================================
+# Logging
+#==============================================================================
 log() {
     echo -e "${GREEN}[$(date '+%Y-%m-%d %H:%M:%S')] $1${NC}"
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE" 2>/dev/null || true
@@ -43,11 +75,25 @@ error() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
+info() {
+    echo -e "${BLUE}[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1${NC}"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1" >> "$LOG_FILE" 2>/dev/null || true
+}
+
 #==============================================================================
 # Pre-flight Checks
 #==============================================================================
 check_prerequisites() {
-    mkdir -p "$BACKUP_DIR"/{daily,weekly,config}
+    log "Checking prerequisites..."
+    
+    # Create backup directories
+    mkdir -p "$BACKUP_DIR"/{daily,weekly,monthly,config,logs}
+    
+    # Check if data directory exists
+    if [[ ! -d "$DATA_DIR" ]]; then
+        error "Data directory not found: $DATA_DIR"
+        exit 1
+    fi
     
     # Check available disk space
     local backup_disk_usage
@@ -56,17 +102,25 @@ check_prerequisites() {
     data_size=$(du -sG "$DATA_DIR" 2>/dev/null | awk '{print $1}' || echo "1")
     
     if [[ $backup_disk_usage -lt $((data_size * 2)) ]]; then
-        warn "Low disk space on backup directory. Available: ${backup_disk_usage}GB, Needed: ~$((data_size * 2))GB"
+        warn "Low disk space on backup directory. Available: ${backup_disk_usage}GB, Recommended: ~$((data_size * 2))GB"
+    else
+        log "✓ Sufficient disk space: ${backup_disk_usage}GB available"
     fi
     
-    log "Prerequisites check complete"
+    # Check for required tools
+    if ! command -v rsync &> /dev/null; then
+        error "rsync not installed"
+        exit 1
+    fi
+    
+    log "✓ Prerequisites check complete"
 }
 
 #==============================================================================
 # Backup Functions
 #==============================================================================
 backup_chain_data() {
-    log "Backing up chain data..."
+    log "=== Backing up chain data (incremental rsync) ==="
     
     local timestamp
     timestamp=$(date +%Y%m%d-%H%M%S)
@@ -75,18 +129,37 @@ backup_chain_data() {
     
     mkdir -p "$backup_path"
     
+    # Find previous backup for hard-linking (incremental)
+    local link_dest=""
+    local prev_backup
+    prev_backup=$(find "$BACKUP_DIR/daily" -maxdepth 1 -type d -name "chaindata-*" ! -name "$backup_name" -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)
+    
+    if [[ -n "$prev_backup" && -d "$prev_backup/chaindata" ]]; then
+        link_dest="--link-dest=$prev_backup/chaindata"
+        log "Using incremental backup (hard-linking to $prev_backup)"
+    fi
+    
     # Use rsync for incremental backup
     log "Running rsync..."
-    rsync -av --delete \
-        --exclude="*/LOCK" \
-        --exclude="*/LOG" \
-        --exclude="*/CURRENT" \
-        --exclude="*/MANIFEST*" \
-        "$DATA_DIR/XDC/chaindata/" \
-        "$backup_path/chaindata/" 2>> "$LOG_FILE" || {
-        error "Chain data backup failed"
-        return 1
-    }
+    local rsync_opts="-av --delete --exclude='*/LOCK' --exclude='*/LOG' --exclude='*/CURRENT' --exclude='*/MANIFEST*'"
+    
+    if [[ -n "$link_dest" ]]; then
+        # shellcheck disable=SC2086
+        rsync $rsync_opts "$link_dest" \
+            "$DATA_DIR/XDC/chaindata/" \
+            "$backup_path/chaindata/" 2>> "$LOG_FILE" || {
+            error "Chain data backup failed"
+            return 1
+        }
+    else
+        # shellcheck disable=SC2086
+        rsync $rsync_opts \
+            "$DATA_DIR/XDC/chaindata/" \
+            "$backup_path/chaindata/" 2>> "$LOG_FILE" || {
+            error "Chain data backup failed"
+            return 1
+        }
+    fi
     
     # Create metadata
     cat > "$backup_path/metadata.json" << EOF
@@ -94,7 +167,9 @@ backup_chain_data() {
   "timestamp": "$(date -Iseconds)",
   "type": "chain_data",
   "source": "$DATA_DIR/XDC/chaindata",
-  "hostname": "$(hostname)"
+  "hostname": "$(hostname)",
+  "incremental": $([[ -n "$prev_backup" ]] && echo "true" || echo "false"),
+  "link_dest": "${prev_backup:-null}"
 }
 EOF
     
@@ -103,7 +178,7 @@ EOF
 }
 
 backup_keystore() {
-    log "Backing up keystore..."
+    log "=== Backing up keystore ==="
     
     local timestamp
     timestamp=$(date +%Y%m%d-%H%M%S)
@@ -114,6 +189,7 @@ backup_keystore() {
     
     if [[ -d "$DATA_DIR/keystore" ]]; then
         cp -r "$DATA_DIR/keystore" "$backup_path/"
+        chmod -R 600 "$backup_path/keystore"/* 2>/dev/null || true
         
         cat > "$backup_path/metadata.json" << EOF
 {
@@ -127,13 +203,13 @@ EOF
         log "✓ Keystore backed up to: $backup_path"
         echo "$backup_path"
     else
-        warn "No keystore directory found"
+        info "No keystore directory found at $DATA_DIR/keystore"
         return 0
     fi
 }
 
 backup_configs() {
-    log "Backing up configurations..."
+    log "=== Backing up configurations ==="
     
     local timestamp
     timestamp=$(date +%Y%m%d-%H%M%S)
@@ -142,24 +218,33 @@ backup_configs() {
     
     mkdir -p "$backup_path"
     
-    # Backup configs
+    # Backup configs directory
     if [[ -d "$CONFIG_DIR" ]]; then
         tar -czf "$backup_path/configs.tar.gz" -C "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR")" 2>> "$LOG_FILE"
+        log "✓ Configs archived"
     fi
     
     # Backup genesis
     if [[ -f "$DATA_DIR/genesis.json" ]]; then
         cp "$DATA_DIR/genesis.json" "$backup_path/"
+        log "✓ Genesis saved"
     fi
     
     # Backup docker compose
     if [[ -f "$CONFIG_DIR/docker/docker-compose.yml" ]]; then
         cp "$CONFIG_DIR/docker/docker-compose.yml" "$backup_path/"
+    elif [[ -f "/opt/xdc-node/docker/docker-compose.yml" ]]; then
+        cp "/opt/xdc-node/docker/docker-compose.yml" "$backup_path/"
     fi
     
     # Backup systemd services
     if [[ -f "/etc/systemd/system/xdc-node.service" ]]; then
         cp /etc/systemd/system/xdc-node*.service "$backup_path/" 2>/dev/null || true
+    fi
+    
+    # Backup environment files
+    if [[ -f "$CONFIG_DIR/configs/node.env" ]]; then
+        cp "$CONFIG_DIR/configs/node.env" "$backup_path/"
     fi
     
     cat > "$backup_path/metadata.json" << EOF
@@ -192,35 +277,73 @@ compress_backup() {
     # Remove uncompressed directory
     rm -rf "$source_dir"
     
-    log "✓ Compressed to: $output_file"
+    local size
+    size=$(du -h "$output_file" | cut -f1)
+    log "✓ Compressed to: $output_file ($size)"
     echo "$output_file"
 }
 
 encrypt_backup() {
     local input_file=$1
     
-    if [[ -z "$ENCRYPTION_KEY" ]]; then
-        log "No encryption key set, skipping encryption"
+    if [[ -z "$ENCRYPTION_KEY" && -z "$GPG_RECIPIENT" ]]; then
+        info "No encryption configured, skipping encryption"
         return 0
     fi
     
     log "Encrypting backup..."
     
-    local output_file="${input_file}.enc"
+    local output_file="${input_file}.gpg"
     
-    # Use AES-256-GCM encryption
-    openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 \
-        -in "$input_file" -out "$output_file" \
-        -pass pass:"$ENCRYPTION_KEY" 2>> "$LOG_FILE" || {
-        error "Encryption failed"
-        return 1
-    }
+    if [[ -n "$GPG_RECIPIENT" ]]; then
+        # Use GPG public key encryption
+        gpg --trust-model always --encrypt --recipient "$GPG_RECIPIENT" \
+            --output "$output_file" "$input_file" 2>> "$LOG_FILE" || {
+            error "GPG encryption failed"
+            return 1
+        }
+    else
+        # Use passphrase-based encryption
+        gpg --symmetric --cipher-algo AES256 --compress-algo 1 \
+            --passphrase "$ENCRYPTION_KEY" --batch --yes \
+            --output "$output_file" "$input_file" 2>> "$LOG_FILE" || {
+            error "GPG encryption failed"
+            return 1
+        }
+    fi
     
     # Remove unencrypted file
     rm -f "$input_file"
     
     log "✓ Encrypted to: $output_file"
     echo "$output_file"
+}
+
+#==============================================================================
+# Backup Integrity Verification
+#==============================================================================
+verify_backup() {
+    local backup_file=$1
+    
+    log "Verifying backup integrity..."
+    
+    # Test archive integrity
+    if [[ "$backup_file" == *.gpg ]]; then
+        # For encrypted files, just check GPG can read the packet
+        if gpg --list-packets "$backup_file" > /dev/null 2>> "$LOG_FILE"; then
+            log "✓ Encrypted backup integrity verified"
+            return 0
+        fi
+    elif [[ "$backup_file" == *.tar.gz ]]; then
+        # For tar.gz, test extraction
+        if tar -tzf "$backup_file" > /dev/null 2>> "$LOG_FILE"; then
+            log "✓ Archive integrity verified"
+            return 0
+        fi
+    fi
+    
+    error "Backup integrity check failed: $backup_file"
+    return 1
 }
 
 #==============================================================================
@@ -237,22 +360,23 @@ upload_to_s3() {
     
     local filename
     filename=$(basename "$file")
-    local s3_path="s3://$S3_BUCKET/xdc-backups/$(hostname)/$filename"
+    local s3_key="xdc-backups/$(hostname)/$(date +%Y/%m)/$filename"
     
     if command -v aws &> /dev/null; then
-        if aws s3 cp "$file" "$s3_path" 2>> "$LOG_FILE"; then
-            log "✓ Uploaded to S3: $s3_path"
+        local aws_opts=""
+        [[ -n "$S3_ENDPOINT" ]] && aws_opts="--endpoint-url=$S3_ENDPOINT"
+        
+        # shellcheck disable=SC2086
+        if aws s3 cp "$file" "s3://$S3_BUCKET/$s3_key" $aws_opts 2>> "$LOG_FILE"; then
+            log "✓ Uploaded to S3: s3://$S3_BUCKET/$s3_key"
+            return 0
         else
             warn "S3 upload failed"
-        fi
-    elif command -v s3cmd &> /dev/null; then
-        if s3cmd put "$file" "$s3_path" 2>> "$LOG_FILE"; then
-            log "✓ Uploaded to S3: $s3_path"
-        else
-            warn "S3 upload failed"
+            return 1
         fi
     else
-        warn "No S3 client found (install awscli or s3cmd)"
+        warn "AWS CLI not installed, skipping S3 upload"
+        return 1
     fi
 }
 
@@ -267,19 +391,31 @@ upload_to_ftp() {
     
     local filename
     filename=$(basename "$file")
+    local remote_path="xdc-backups/$(hostname)/$(date +%Y/%m)"
     
     if command -v lftp &> /dev/null; then
-        lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" << EOF
+        lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" << EOF 2>> "$LOG_FILE"
 set ssl:verify-certificate no
 set net:max-retries 3
-mkdir -p xdc-backups/$(hostname)
-cd xdc-backups/$(hostname)
+set net:timeout 30
+mkdir -p $remote_path
+cd $remote_path
 put "$file"
 bye
 EOF
         log "✓ Uploaded to FTP"
+        return 0
+    elif command -v curl &> /dev/null; then
+        # Fallback to curl FTP
+        curl -T "$file" "ftp://$FTP_USER:$FTP_PASS@$FTP_HOST/$remote_path/$filename" 2>> "$LOG_FILE" || {
+            warn "FTP upload failed"
+            return 1
+        }
+        log "✓ Uploaded to FTP"
+        return 0
     else
-        warn "lftp not installed, skipping FTP upload"
+        warn "No FTP client found (install lftp), skipping FTP upload"
+        return 1
     fi
 }
 
@@ -287,39 +423,99 @@ EOF
 # Retention Policy
 #==============================================================================
 apply_retention() {
-    log "Applying retention policy..."
+    log "=== Applying retention policy ==="
     
-    # Keep last 7 daily backups
-    log "Cleaning up daily backups (keeping last $RETENTION_DAYS)..."
-    find "$BACKUP_DIR/daily" -type f -name "*.tar.gz*" -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
-    find "$BACKUP_DIR/daily" -type d -mtime +$RETENTION_DAYS -exec rm -rf {} + 2>/dev/null || true
+    # Daily: Keep last $RETENTION_DAILY
+    log "Cleaning up daily backups (keeping last $RETENTION_DAILY)..."
+    find "$BACKUP_DIR/daily" -type f \( -name "*.tar.gz" -o -name "*.gpg" \) -mtime +$RETENTION_DAILY -delete 2>/dev/null || true
+    find "$BACKUP_DIR/daily" -type d -mtime +$RETENTION_DAILY -exec rm -rf {} + 2>/dev/null || true
     
-    # Move some backups to weekly
-    if [[ $(date +%u) -eq 7 ]]; then  # Sunday
-        log "Creating weekly backup..."
+    # Weekly: On Sundays, copy to weekly and keep last $RETENTION_WEEKLY
+    if [[ $(date +%u) -eq 7 ]]; then
+        log "Sunday - creating weekly backup..."
         local latest_backup
-        latest_backup=$(find "$BACKUP_DIR/daily" -name "*.tar.gz*" -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2-)
+        latest_backup=$(find "$BACKUP_DIR/daily" -name "*.tar.gz" -o -name "*.gpg" | sort | tail -1)
         if [[ -n "$latest_backup" ]]; then
             cp "$latest_backup" "$BACKUP_DIR/weekly/"
+            log "✓ Copied to weekly backups"
         fi
     fi
     
-    # Keep last 4 weekly backups
-    log "Cleaning up weekly backups (keeping last $RETENTION_WEEKS)..."
-    find "$BACKUP_DIR/weekly" -type f -mtime +$((RETENTION_WEEKS * 7)) -delete 2>/dev/null || true
+    # Keep last $RETENTION_WEEKLY weekly backups
+    log "Cleaning up weekly backups (keeping last $RETENTION_WEEKLY)..."
+    find "$BACKUP_DIR/weekly" -type f -mtime +$((RETENTION_WEEKLY * 7)) -delete 2>/dev/null || true
     
-    # Keep last 30 config backups
+    # Monthly: On the 1st of month, copy to monthly and keep last $RETENTION_MONTHLY
+    if [[ $(date +%d) -eq 01 ]]; then
+        log "First of month - creating monthly backup..."
+        local latest_backup
+        latest_backup=$(find "$BACKUP_DIR/daily" -name "*.tar.gz" -o -name "*.gpg" | sort | tail -1)
+        if [[ -n "$latest_backup" ]]; then
+            cp "$latest_backup" "$BACKUP_DIR/monthly/"
+            log "✓ Copied to monthly backups"
+        fi
+    fi
+    
+    # Keep last $RETENTION_MONTHLY monthly backups
+    log "Cleaning up monthly backups (keeping last $RETENTION_MONTHLY)..."
+    find "$BACKUP_DIR/monthly" -type f -mtime +$((RETENTION_MONTHLY * 30)) -delete 2>/dev/null || true
+    
+    # Config backups: Keep last 30
+    log "Cleaning up config backups (keeping last 30)..."
     find "$BACKUP_DIR/config" -type d -mtime +30 -exec rm -rf {} + 2>/dev/null || true
     
     log "✓ Retention policy applied"
 }
 
 #==============================================================================
+# Generate Report
+#==============================================================================
+generate_report() {
+    local backup_file=$1
+    local timestamp
+    timestamp=$(date +%Y%m%d-%H%M%S)
+    local report_file="$BACKUP_DIR/logs/backup-report-${timestamp}.json"
+    
+    local size_bytes=0
+    if [[ -f "$backup_file" ]]; then
+        size_bytes=$(stat -c%s "$backup_file" 2>/dev/null || echo "0")
+    fi
+    
+    cat > "$report_file" << EOF
+{
+  "timestamp": "$(date -Iseconds)",
+  "hostname": "$(hostname)",
+  "backup_file": "$backup_file",
+  "size_bytes": $size_bytes,
+  "size_human": "$(du -h "$backup_file" 2>/dev/null | cut -f1 || echo "unknown")",
+  "duration_seconds": $BACKUP_DURATION,
+  "success": $BACKUP_SUCCESS,
+  "encrypted": $([[ -n "$ENCRYPTION_KEY" || -n "$GPG_RECIPIENT" ]] && echo "true" || echo "false"),
+  "s3_uploaded": $([[ -n "$S3_BUCKET" ]] && echo "true" || echo "false"),
+  "ftp_uploaded": $([[ -n "$FTP_HOST" ]] && echo "true" || echo "false")
+}
+EOF
+    
+    log "Report saved to: $report_file"
+}
+
+#==============================================================================
 # Main
 #==============================================================================
 main() {
-    log "Starting XDC Node backup..."
+    BACKUP_START_TIME=$(date +%s)
     
+    log "========================================"
+    log "XDC Node Backup Starting"
+    log "========================================"
+    log "Data directory: $DATA_DIR"
+    log "Backup directory: $BACKUP_DIR"
+    log "Retention: $RETENTION_DAILY daily, $RETENTION_WEEKLY weekly, $RETENTION_MONTHLY monthly"
+    
+    # Load configuration
+    load_config
+    
+    # Run pre-flight checks
     check_prerequisites
     
     local timestamp
@@ -342,30 +538,37 @@ main() {
     config_backup=$(backup_configs)
     
     # Copy to consolidate directory
-    if [[ -n "$chain_backup" ]]; then
+    if [[ -n "$chain_backup" && -d "$chain_backup" ]]; then
         cp -r "$chain_backup" "$consolidate_dir/chaindata"
     fi
     
-    if [[ -n "$keystore_backup" ]]; then
+    if [[ -n "$keystore_backup" && -d "$keystore_backup" ]]; then
         cp -r "$keystore_backup" "$consolidate_dir/keystore"
     fi
     
-    if [[ -n "$config_backup" ]]; then
+    if [[ -n "$config_backup" && -d "$config_backup" ]]; then
         cp -r "$config_backup" "$consolidate_dir/config"
     fi
     
     # Create consolidated backup
+    log "Creating consolidated archive..."
     tar -czf "$backup_archive" -C "$temp_dir" "xdc-backup-$timestamp" 2>> "$LOG_FILE"
     
     # Clean up temp directory
     rm -rf "$temp_dir"
     
     # Remove uncompressed backups
-    rm -rf "$chain_backup" "$keystore_backup"
+    [[ -n "$chain_backup" && -d "$chain_backup" ]] && rm -rf "$chain_backup"
+    [[ -n "$keystore_backup" && -d "$keystore_backup" ]] && rm -rf "$keystore_backup"
     
-    # Encrypt if key provided
-    if [[ -n "$ENCRYPTION_KEY" ]]; then
+    # Encrypt if configured
+    if [[ -n "$ENCRYPTION_KEY" || -n "$GPG_RECIPIENT" ]]; then
         backup_archive=$(encrypt_backup "$backup_archive")
+    fi
+    
+    # Verify backup integrity
+    if verify_backup "$backup_archive"; then
+        BACKUP_SUCCESS=true
     fi
     
     # Upload to remote storage
@@ -375,29 +578,27 @@ main() {
     # Apply retention policy
     apply_retention
     
+    # Calculate duration
+    BACKUP_DURATION=$(($(date +%s) - BACKUP_START_TIME))
+    
     # Generate report
-    local report_file="$BACKUP_DIR/backup-report-${timestamp}.json"
-    cat > "$report_file" << EOF
-{
-  "timestamp": "$(date -Iseconds)",
-  "hostname": "$(hostname)",
-  "backup_file": "$backup_archive",
-  "size_bytes": $(stat -c%s "$backup_archive" 2>/dev/null || echo "0"),
-  "encrypted": $([[ -n "$ENCRYPTION_KEY" ]] && echo "true" || echo "false"),
-  "s3_uploaded": $([[ -n "$S3_BUCKET" ]] && echo "true" || echo "false"),
-  "ftp_uploaded": $([[ -n "$FTP_HOST" ]] && echo "true" || echo "false")
-}
-EOF
+    generate_report "$backup_archive"
     
+    # Final summary
     log ""
-    log "=================================="
+    log "========================================"
     log "Backup Complete"
-    log "=================================="
+    log "========================================"
     log "Archive: $backup_archive"
-    log "Size: $(du -h "$backup_archive" | cut -f1)"
-    log "Report: $report_file"
+    log "Size: $(du -h "$backup_archive" 2>/dev/null | cut -f1)"
+    log "Duration: ${BACKUP_DURATION}s"
+    log "Success: $BACKUP_SUCCESS"
     
-    return 0
+    if [[ "$BACKUP_SUCCESS" == true ]]; then
+        exit 0
+    else
+        exit 1
+    fi
 }
 
 main "$@"

@@ -8,13 +8,22 @@
       "current": "v2.6.0",
       "latest": null,
       "autoUpdate": false,
-      "binary": "XDC"
+      "binary": "XDC",
+      "image": "xinfinorg/xdposchain",
+      "nodes": [
+        {
+          "host": "localhost",
+          "role": "production",
+          "rpcPort": 8545
+        }
+      ]
     },
     "erigon-xdc": {
       "repo": "AnilChinchawale/erigon-xdc",
       "current": "0.1.0-alpha",
       "latest": null,
-      "autoUpdate": false
+      "autoUpdate": false,
+      "binary": "erigon"
     }
   },
   "infrastructure": {
@@ -23,6 +32,42 @@
     },
     "ubuntu": {
       "supported": ["20.04", "22.04", "24.04"]
+    }
+  },
+  "notifications": {
+    "telegram": {
+      "enabled": false,
+      "botToken": "",
+      "chatId": ""
+    },
+    "webhook": {
+      "enabled": false,
+      "url": ""
+    }
+  },
+  "monitoring": {
+    "healthCheckInterval": 15,
+    "versionCheckInterval": 360,
+    "alertThresholds": {
+      "blocksBehind": 100,
+      "minPeers": 3,
+      "diskWarning": 85,
+      "diskCritical": 95,
+      "cpuWarning": 90,
+      "memoryWarning": 90,
+      "securityScoreWarning": 70
+    }
+  },
+  "backup": {
+    "enabled": true,
+    "schedule": {
+      "daily": "0 3 * * *",
+      "weekly": "0 2 * * 0"
+    },
+    "retention": {
+      "daily": 7,
+      "weekly": 4,
+      "monthly": 12
     }
   }
 }

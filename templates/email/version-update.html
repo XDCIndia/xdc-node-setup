@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{TITLE}}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #12121a;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+        .header {
+            background: linear-gradient(135deg, #1a2e1a 0%, #1a1a2e 100%);
+            padding: 30px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-left: 4px solid #28a745;
+        }
+        .update-icon {
+            width: 60px;
+            height: 60px;
+            background: rgba(40, 167, 69, 0.1);
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 15px;
+            font-size: 28px;
+        }
+        h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+            color: #fff;
+        }
+        .subtitle {
+            color: #888;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .content {
+            padding: 30px;
+        }
+        .version-comparison {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            margin: 25px 0;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+        }
+        .version-box {
+            text-align: center;
+        }
+        .version-label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+        .version-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e0e0e0;
+            font-family: 'Courier New', monospace;
+        }
+        .version-value.current {
+            color: #888;
+        }
+        .version-value.latest {
+            color: #28a745;
+        }
+        .version-arrow {
+            font-size: 24px;
+            color: #28a745;
+        }
+        .message-box {
+            background: rgba(31, 76, 237, 0.05);
+            border: 1px solid rgba(31, 76, 237, 0.2);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+        .action-box {
+            background: rgba(40, 167, 69, 0.05);
+            border: 1px solid rgba(40, 167, 69, 0.2);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .action-title {
+            color: #28a745;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .code-block {
+            background: #0a0a0f;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #4ecdc4;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .metadata {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .metadata-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .metadata-row:last-child {
+            border-bottom: none;
+        }
+        .metadata-label {
+            color: #888;
+            font-size: 13px;
+        }
+        .metadata-value {
+            color: #e0e0e0;
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+        }
+        .button {
+            display: inline-block;
+            background: #1F4CED;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            margin-top: 15px;
+        }
+        .footer {
+            background: #0d0d12;
+            padding: 20px 30px;
+            text-align: center;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .footer-logo {
+            width: 40px;
+            height: 40px;
+            margin-bottom: 10px;
+        }
+        .footer-text {
+            color: #666;
+            font-size: 12px;
+        }
+        .footer-brand {
+            color: #1F4CED;
+            font-weight: 600;
+        }
+        @media only screen and (max-width: 600px) {
+            .container {
+                margin: 10px;
+                border-radius: 8px;
+            }
+            .header, .content, .footer {
+                padding: 20px;
+            }
+            .version-comparison {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="update-icon">📦</div>
+            <h1>{{TITLE}}</h1>
+            <div class="subtitle">{{NODE_HOST}} • {{TIMESTAMP}}</div>
+        </div>
+        
+        <div class="content">
+            {{MESSAGE}}
+            
+            <div class="action-box">
+                <div class="action-title">How to Update</div>
+                <p>Connect to your server and run the update command:</p>
+                <div class="code-block">cd /opt/xdc-node/docker<br>docker compose pull<br>docker compose up -d</div>
+                <p>Or use the version check script:</p>
+                <div class="code-block">/opt/xdc-node/scripts/version-check.sh</div>
+            </div>
+            
+            <div class="metadata">
+                <div class="metadata-row">
+                    <span class="metadata-label">Node Host</span>
+                    <span class="metadata-value">{{NODE_HOST}}</span>
+                </div>
+                <div class="metadata-row">
+                    <span class="metadata-label">Notification Time</span>
+                    <span class="metadata-value">{{TIMESTAMP}}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <svg class="footer-logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="50" cy="50" r="45" stroke="#1F4CED" stroke-width="2"/>
+                <path d="M30 50 L50 30 L70 50 L50 70 Z" fill="#1F4CED"/>
+            </svg>
+            <p class="footer-text">
+                <span class="footer-brand">XDC Node Monitor</span><br>
+                Automated version update notification.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

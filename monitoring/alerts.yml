@@ -1,7 +1,16 @@
+#==============================================================================
+# Prometheus Alert Rules for XDC Nodes
+# Implements ALL alert conditions from XDC-NODE-STANDARDS.md
+#==============================================================================
+
 groups:
   - name: xdc-node-alerts
     rules:
-      # Node down alert
+      #------------------------------------------------------------------------
+      # Node Availability
+      #------------------------------------------------------------------------
+      
+      # Node offline > 5 min
       - alert: XDCNodeDown
         expr: up{job="xdc-node"} == 0
         for: 5m
@@ -10,49 +19,234 @@ groups:
         annotations:
           summary: "XDC Node is down"
           description: "XDC node has been down for more than 5 minutes on {{ $labels.instance }}"
-
-      # High disk usage
-      - alert: HighDiskUsage
-        expr: (node_filesystem_avail_bytes{mountpoint="/root/xdcchain"} / node_filesystem_size_bytes{mountpoint="/root/xdcchain"}) < 0.15
+          action: "Check node status: systemctl status xdc-node"
+      
+      # Prometheus target missing
+      - alert: XDCNodeTargetMissing
+        expr: up{job="xdc-node"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "XDC Node target is missing"
+          description: "Prometheus cannot scrape XDC node metrics"
+      
+      #------------------------------------------------------------------------
+      # Block Height & Sync
+      #------------------------------------------------------------------------
+      
+      # Block height behind > 100 blocks
+      - alert: XDCBlockHeightBehind
+        expr: |
+          (
+            xdpos_block_number{job="xdc-node"} < 
+            scalar(xdpos_block_number{job="xdc-node-mainnet-reference"} > 0) - 100
+          )
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "XDC block height is behind"
+          description: "XDC node is more than 100 blocks behind mainnet on {{ $labels.instance }}"
+          action: "Check sync status: curl http://localhost:8545 -X POST -d '{\"method\":\"eth_syncing\"}'"
+      
+      # Node not syncing for too long
+      - alert: XDCNodeNotSyncing
+        expr: increase(xdpos_block_number{job="xdc-node"}[10m]) == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "XDC node not producing new blocks"
+          description: "Block height hasn't increased in 15 minutes on {{ $labels.instance }}"
+      
+      #------------------------------------------------------------------------
+      # Peer Count
+      #------------------------------------------------------------------------
+      
+      # Peer count = 0
+      - alert: XDCPeerCountZero
+        expr: xdpos_peers{job="xdc-node"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "XDC has no peers"
+          description: "XDC node has no peers on {{ $labels.instance }}. Check network connectivity."
+          action: "Check network: ufw status, test P2P port 30303"
+      
+      # Low peer count
+      - alert: XDCPeerCountLow
+        expr: xdpos_peers{job="xdc-node"} < 3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "XDC peer count is low"
+          description: "XDC node has less than 3 peers on {{ $labels.instance }}"
+          action: "Check P2P connectivity and bootnodes"
+      
+      #------------------------------------------------------------------------
+      # Disk Usage
+      #------------------------------------------------------------------------
+      
+      # Disk usage > 85% (warning)
+      - alert: XDCDiskUsageWarning
+        expr: |
+          (
+            node_filesystem_avail_bytes{mountpoint="/root/xdcchain",job="node-exporter"} /
+            node_filesystem_size_bytes{mountpoint="/root/xdcchain",job="node-exporter"}
+          ) < 0.15
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "High disk usage on XDC node"
-          description: "Disk usage is above 85% on {{ $labels.instance }}"
-
-      # Critical disk usage
-      - alert: CriticalDiskUsage
-        expr: (node_filesystem_avail_bytes{mountpoint="/root/xdcchain"} / node_filesystem_size_bytes{mountpoint="/root/xdcchain"}) < 0.05
+          description: "Disk usage is above 85% on {{ $labels.instance }} ({{ $value | humanizePercentage }} remaining)"
+          action: "Consider pruning or expanding storage"
+      
+      # Disk usage > 95% (critical)
+      - alert: XDCDiskUsageCritical
+        expr: |
+          (
+            node_filesystem_avail_bytes{mountpoint="/root/xdcchain",job="node-exporter"} /
+            node_filesystem_size_bytes{mountpoint="/root/xdcchain",job="node-exporter"}
+          ) < 0.05
         for: 2m
         labels:
           severity: critical
         annotations:
           summary: "Critical disk usage on XDC node"
-          description: "Disk usage is above 95% on {{ $labels.instance }}. Immediate action required."
-
-      # High memory usage
-      - alert: HighMemoryUsage
-        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
-        for: 10m
+          description: "Disk usage is above 95% on {{ $labels.instance }}. Immediate action required!"
+          action: "URGENT: Free up space or expand volume immediately"
+      
+      # Disk almost full on root partition
+      - alert: XDCRootDiskCritical
+        expr: |
+          (
+            node_filesystem_avail_bytes{mountpoint="/",job="node-exporter"} /
+            node_filesystem_size_bytes{mountpoint="/",job="node-exporter"}
+          ) < 0.05
+        for: 5m
         labels:
-          severity: warning
+          severity: critical
         annotations:
-          summary: "High memory usage"
-          description: "Memory usage is above 90% on {{ $labels.instance }}"
-
-      # High CPU usage
-      - alert: HighCPUUsage
-        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+          summary: "Root filesystem critically full"
+          description: "Root partition is above 95% on {{ $labels.instance }}"
+      
+      #------------------------------------------------------------------------
+      # CPU Usage
+      #------------------------------------------------------------------------
+      
+      # CPU > 90%
+      - alert: XDCHighCPUUsage
+        expr: |
+          100 - (
+            avg by (instance) (
+              irate(node_cpu_seconds_total{mode="idle",job="node-exporter"}[5m])
+            ) * 100
+          ) > 90
         for: 15m
         labels:
           severity: warning
         annotations:
-          summary: "High CPU usage"
-          description: "CPU usage is above 90% on {{ $labels.instance }} for more than 15 minutes"
-
+          summary: "High CPU usage on XDC node"
+          description: "CPU usage is above 90% on {{ $labels.instance }} for more than 15 minutes (current: {{ $value | humanize }}%)"
+      
+      # CPU iowait high (indicates disk bottleneck)
+      - alert: XDCHighIOWait
+        expr: |
+          avg by (instance) (
+            irate(node_cpu_seconds_total{mode="iowait",job="node-exporter"}[5m])
+          ) * 100 > 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High I/O wait on XDC node"
+          description: "I/O wait is above 20% on {{ $labels.instance }}, possible disk bottleneck"
+      
+      #------------------------------------------------------------------------
+      # Memory Usage
+      #------------------------------------------------------------------------
+      
+      # Memory > 90%
+      - alert: XDCHighMemoryUsage
+        expr: |
+          (
+            node_memory_MemTotal_bytes{job="node-exporter"} -
+            node_memory_MemAvailable_bytes{job="node-exporter"}
+          ) / node_memory_MemTotal_bytes{job="node-exporter"} > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on XDC node"
+          description: "Memory usage is above 90% on {{ $labels.instance }} ({{ $value | humanizePercentage }})"
+      
+      # Out of memory risk
+      - alert: XDCMemoryNearExhaustion
+        expr: |
+          (
+            node_memory_MemTotal_bytes{job="node-exporter"} -
+            node_memory_MemAvailable_bytes{job="node-exporter"}
+          ) / node_memory_MemTotal_bytes{job="node-exporter"} > 0.95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Memory near exhaustion on XDC node"
+          description: "Memory usage is above 95% on {{ $labels.instance }}. OOM risk!"
+      
+      #------------------------------------------------------------------------
+      # Version Management
+      #------------------------------------------------------------------------
+      
+      # New client version available
+      - alert: XDCNewVersionAvailable
+        expr: |
+          (
+            xdpos_version_current != xdpos_version_latest
+          )
+        for: 1h
+        labels:
+          severity: info
+        annotations:
+          summary: "New XDC client version available"
+          description: "Current: {{ $labels.current }}, Latest: {{ $labels.latest }}. Review release notes and update."
+          action: "Run /opt/xdc-node/scripts/version-check.sh --notify"
+      
+      #------------------------------------------------------------------------
+      # Security Score
+      #------------------------------------------------------------------------
+      
+      # Security score < 70
+      - alert: XDCSecurityScoreLow
+        expr: xdc_security_score < 70
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "XDC node security score is low"
+          description: "Security score is {{ $value }}/100 on {{ $labels.instance }}. Review required."
+          action: "Run /opt/xdc-node/scripts/security-harden.sh"
+      
+      # Security score critical
+      - alert: XDCSecurityScoreCritical
+        expr: xdc_security_score < 50
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "XDC node security score is critical"
+          description: "Security score is {{ $value }}/100 on {{ $labels.instance }}. Immediate review required!"
+      
+      #------------------------------------------------------------------------
+      # Infrastructure Health
+      #------------------------------------------------------------------------
+      
       # Node exporter down
-      - alert: NodeExporterDown
+      - alert: XDCNodeExporterDown
         expr: up{job="node-exporter"} == 0
         for: 5m
         labels:
@@ -60,33 +254,66 @@ groups:
         annotations:
           summary: "Node exporter is down"
           description: "Node exporter has been down for more than 5 minutes on {{ $labels.instance }}"
-
-      # High load average
-      - alert: HighLoadAverage
-        expr: node_load15 > 2
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High load average"
-          description: "Load average is high on {{ $labels.instance }}: {{ $value }}"
-
-      # Low peer count
-      - alert: XDCPeerCountLow
-        expr: xdpos_peers < 3
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "XDC peer count is low"
-          description: "XDC node has less than 3 peers on {{ $labels.instance }}"
-
-      # No peers
-      - alert: XDCPeerCountZero
-        expr: xdpos_peers == 0
+      
+      # cAdvisor down
+      - alert: XDCCAdvisorDown
+        expr: up{job="cadvisor"} == 0
         for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "cAdvisor is down"
+          description: "cAdvisor has been down for more than 5 minutes on {{ $labels.instance }}"
+      
+      # High load average
+      - alert: XDCHighLoadAverage
+        expr: node_load15{job="node-exporter"} > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High load average on XDC node"
+          description: "Load average is high on {{ $labels.instance }}: {{ $value }}"
+      
+      #------------------------------------------------------------------------
+      # Network
+      #------------------------------------------------------------------------
+      
+      # High network errors
+      - alert: XDCNetworkErrors
+        expr: |
+          increase(node_network_receive_errs_total{job="node-exporter"}[5m]) > 10
+          or
+          increase(node_network_transmit_errs_total{job="node-exporter"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Network errors detected"
+          description: "Network interface errors on {{ $labels.instance }}: {{ $labels.device }}"
+      
+      #------------------------------------------------------------------------
+      # Container Health
+      #------------------------------------------------------------------------
+      
+      # Container restarting too frequently
+      - alert: XDCContainerRestarting
+        expr: |
+          increase(engine_daemon_container_states_containers{state="restarting"}[15m]) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "XDC container is restarting frequently"
+          description: "Container has restarted more than 3 times in 15 minutes"
+      
+      # Container OOM killed
+      - alert: XDCContainerOOMKilled
+        expr: |
+          engine_daemon_container_states_containers{state="oomkilled"} > 0
+        for: 0m
         labels:
           severity: critical
         annotations:
-          summary: "XDC has no peers"
-          description: "XDC node has no peers on {{ $labels.instance }}. Check network connectivity."
+          summary: "XDC container was OOM killed"
+          description: "Container was killed due to out of memory. Increase memory limit."

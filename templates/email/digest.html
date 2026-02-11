@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{TITLE}}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #12121a;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+        .header {
+            background: linear-gradient(135deg, #1b2d3d 0%, #1a1a2e 100%);
+            padding: 30px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-left: 4px solid #17a2b8;
+        }
+        .digest-icon {
+            width: 60px;
+            height: 60px;
+            background: rgba(23, 162, 184, 0.1);
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 15px;
+            font-size: 28px;
+        }
+        h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+            color: #fff;
+        }
+        .subtitle {
+            color: #888;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .content {
+            padding: 30px;
+        }
+        .summary-box {
+            background: rgba(23, 162, 184, 0.05);
+            border: 1px solid rgba(23, 162, 184, 0.2);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+        .summary-count {
+            font-size: 36px;
+            font-weight: 700;
+            color: #17a2b8;
+        }
+        .summary-text {
+            color: #888;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .alert-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .alert-item {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 3px solid;
+        }
+        .alert-item.critical {
+            border-left-color: #dc3545;
+        }
+        .alert-item.warning {
+            border-left-color: #ffc107;
+        }
+        .alert-item.info {
+            border-left-color: #17a2b8;
+        }
+        .alert-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .alert-title {
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .alert-level {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        .alert-level.critical {
+            background: rgba(220, 53, 69, 0.2);
+            color: #ff6b6b;
+        }
+        .alert-level.warning {
+            background: rgba(255, 193, 7, 0.2);
+            color: #ffd93d;
+        }
+        .alert-level.info {
+            background: rgba(23, 162, 184, 0.2);
+            color: #4ecdc4;
+        }
+        .alert-message {
+            color: #aaa;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .alert-time {
+            color: #666;
+            font-size: 11px;
+            margin-top: 8px;
+        }
+        .quiet-notice {
+            background: rgba(255, 193, 7, 0.05);
+            border: 1px solid rgba(255, 193, 7, 0.2);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            text-align: center;
+            font-size: 13px;
+            color: #888;
+        }
+        .quiet-notice-icon {
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+        .footer {
+            background: #0d0d12;
+            padding: 20px 30px;
+            text-align: center;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .footer-logo {
+            width: 40px;
+            height: 40px;
+            margin-bottom: 10px;
+        }
+        .footer-text {
+            color: #666;
+            font-size: 12px;
+        }
+        .footer-brand {
+            color: #1F4CED;
+            font-weight: 600;
+        }
+        @media only screen and (max-width: 600px) {
+            .container {
+                margin: 10px;
+                border-radius: 8px;
+            }
+            .header, .content, .footer {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="digest-icon">📬</div>
+            <h1>{{TITLE}}</h1>
+            <div class="subtitle">{{NODE_HOST}} • {{TIMESTAMP}}</div>
+        </div>
+        
+        <div class="content">
+            {{MESSAGE}}
+            
+            <div class="quiet-notice">
+                <div class="quiet-notice-icon">🌙</div>
+                <strong>Quiet Hours Active</strong><br>
+                Non-critical alerts are batched during {{NOTIFY_QUIET_START}} - {{NOTIFY_QUIET_END}}<br>
+                Critical alerts are always sent immediately.
+            </div>
+        </div>
+        
+        <div class="footer">
+            <svg class="footer-logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="50" cy="50" r="45" stroke="#1F4CED" stroke-width="2"/>
+                <path d="M30 50 L50 30 L70 50 L50 70 Z" fill="#1F4CED"/>
+            </svg>
+            <p class="footer-text">
+                <span class="footer-brand">XDC Node Monitor</span><br>
+                Hourly digest of non-critical alerts from your XDC Network node.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

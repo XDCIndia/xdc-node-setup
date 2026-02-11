@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{TITLE}}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #12121a;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+        .header {
+            padding: 30px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .header.critical {
+            background: linear-gradient(135deg, #2d1b1b 0%, #1a1a2e 100%);
+            border-left: 4px solid #dc3545;
+        }
+        .header.warning {
+            background: linear-gradient(135deg, #2d2a1b 0%, #1a1a2e 100%);
+            border-left: 4px solid #ffc107;
+        }
+        .header.info {
+            background: linear-gradient(135deg, #1b2d2d 0%, #1a1a2e 100%);
+            border-left: 4px solid #17a2b8;
+        }
+        .level-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        .level-badge.critical {
+            background: #dc3545;
+            color: white;
+        }
+        .level-badge.warning {
+            background: #ffc107;
+            color: #1a1a2e;
+        }
+        .level-badge.info {
+            background: #17a2b8;
+            color: white;
+        }
+        h1 {
+            margin: 10px 0 0 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .header.critical h1 {
+            color: #ff6b6b;
+        }
+        .header.warning h1 {
+            color: #ffd93d;
+        }
+        .header.info h1 {
+            color: #4ecdc4;
+        }
+        .content {
+            padding: 30px;
+        }
+        .message {
+            background: rgba(31, 76, 237, 0.05);
+            border: 1px solid rgba(31, 76, 237, 0.2);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            font-size: 15px;
+            white-space: pre-wrap;
+        }
+        .metadata {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .metadata-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .metadata-row:last-child {
+            border-bottom: none;
+        }
+        .metadata-label {
+            color: #888;
+            font-size: 13px;
+        }
+        .metadata-value {
+            color: #e0e0e0;
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+        }
+        .footer {
+            background: #0d0d12;
+            padding: 20px 30px;
+            text-align: center;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .footer-logo {
+            width: 40px;
+            height: 40px;
+            margin-bottom: 10px;
+        }
+        .footer-text {
+            color: #666;
+            font-size: 12px;
+        }
+        .footer-brand {
+            color: #1F4CED;
+            font-weight: 600;
+        }
+        @media only screen and (max-width: 600px) {
+            .container {
+                margin: 10px;
+                border-radius: 8px;
+            }
+            .header, .content, .footer {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header {{LEVEL}}">
+            <span class="level-badge {{LEVEL}}">{{LEVEL}}</span>
+            <h1>{{TITLE}}</h1>
+        </div>
+        
+        <div class="content">
+            <div class="message">{{MESSAGE}}</div>
+            
+            <div class="metadata">
+                <div class="metadata-row">
+                    <span class="metadata-label">Node Host</span>
+                    <span class="metadata-value">{{NODE_HOST}}</span>
+                </div>
+                <div class="metadata-row">
+                    <span class="metadata-label">Alert Time</span>
+                    <span class="metadata-value">{{TIMESTAMP}}</span>
+                </div>
+                <div class="metadata-row">
+                    <span class="metadata-label">Alert ID</span>
+                    <span class="metadata-value">{{ALERT_TYPE}}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <svg class="footer-logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="50" cy="50" r="45" stroke="#1F4CED" stroke-width="2"/>
+                <path d="M30 50 L50 30 L70 50 L50 70 Z" fill="#1F4CED"/>
+            </svg>
+            <p class="footer-text">
+                Alert from <span class="footer-brand">XDC Node Monitor</span><br>
+                This is an automated message from your XDC Network node.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

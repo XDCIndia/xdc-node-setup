@@ -4,17 +4,25 @@ set -euo pipefail
 #==============================================================================
 # XDC Node Setup Script
 # Enterprise-grade XDC Network node deployment toolkit
+# Implements Section 8 of XDC-NODE-STANDARDS.md
+# Supports: Interactive and --non-interactive modes
 #==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="/var/log/xdc-node-setup.log"
+
+# Non-interactive mode variables
+NON_INTERACTIVE=false
+NODE_TYPE="${NODE_TYPE:-full}"      # full, archive, rpc
+NETWORK="${NETWORK:-mainnet}"      # mainnet, testnet
+SKIP_SECURITY="${SKIP_SECURITY:-false}"
 
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 #==============================================================================
 # Logging Functions
@@ -63,7 +71,7 @@ check_os() {
         error "Ubuntu $UBUNTU_VERSION is not supported. Supported versions: ${SUPPORTED_VERSIONS[*]}"
     fi
     
-    log "Detected Ubuntu $UBUNTU_VERSION"
+    log "✓ Detected Ubuntu $UBUNTU_VERSION (supported)"
 }
 
 check_hardware() {
@@ -76,21 +84,31 @@ check_hardware() {
     info "  RAM: ${TOTAL_RAM}GB"
     info "  Disk Available: ${DISK_AVAIL}GB"
     
+    local warnings=0
+    
     if [[ $CPU_CORES -lt 8 ]]; then
         warn "Recommended: 8+ CPU cores (found: $CPU_CORES)"
+        warnings=$((warnings + 1))
     fi
     
     if [[ $TOTAL_RAM -lt 32 ]]; then
         warn "Recommended: 32GB+ RAM (found: ${TOTAL_RAM}GB)"
+        warnings=$((warnings + 1))
     fi
     
     if [[ $DISK_AVAIL -lt 100 ]]; then
         warn "Recommended: 100GB+ disk space (found: ${DISK_AVAIL}GB)"
+        warnings=$((warnings + 1))
+    fi
+    
+    if [[ $warnings -gt 0 && "$NON_INTERACTIVE" != true ]]; then
+        read -rp "Continue anyway? [y/N]: " confirm
+        [[ "$confirm" =~ ^[Yy]$ ]] || exit 1
     fi
 }
 
 #==============================================================================
-# User Input
+# User Input (Interactive Mode)
 #==============================================================================
 select_node_type() {
     echo ""
@@ -166,7 +184,9 @@ install_dependencies() {
         iotop \
         ncdu \
         logrotate \
-        unattended-upgrades
+        unattended-upgrades \
+        rsync \
+        gpg
     
     # Install Docker
     if ! command -v docker &> /dev/null; then
@@ -179,6 +199,9 @@ install_dependencies() {
         # Enable Docker
         systemctl enable docker
         systemctl start docker
+        log "✓ Docker installed"
+    else
+        log "✓ Docker already installed"
     fi
     
     # Install Docker Compose v2 (plugin)
@@ -192,7 +215,7 @@ install_dependencies() {
         usermod -aG docker "$SUDO_USER" 2>/dev/null || true
     fi
     
-    log "Dependencies installed successfully"
+    log "✓ Dependencies installed"
 }
 
 #==============================================================================
@@ -203,7 +226,12 @@ configure_node() {
     
     # Create data directories
     mkdir -p /root/xdcchain/{XDC,keystore}
-    mkdir -p /opt/xdc-node/{configs,scripts,logs}
+    mkdir -p /opt/xdc-node/{configs,scripts,reports,logs}
+    
+    # Set permissions
+    chmod 750 /root/xdcchain
+    chmod 700 /root/xdcchain/keystore
+    chmod 750 /opt/xdc-node
     
     # Copy configuration files
     if [[ -f "$SCRIPT_DIR/configs/${NETWORK}.env" ]]; then
@@ -211,57 +239,59 @@ configure_node() {
     else
         # Create default env file
         cat > /opt/xdc-node/configs/node.env << EOF
+# XDC Node Configuration
 NETWORK=$NETWORK
-CHAIN_ID=$CHAIN_ID
+CHAIN_ID=${CHAIN_ID:-50}
 RPC_PORT=8545
 WS_PORT=8546
 P2P_PORT=30303
 DATA_DIR=/root/xdcchain
 SYNC_MODE=$NODE_TYPE
-BOOTNODES=enode://1c20e6b46ce608c1fe739e78691227b2a174e0d9e79d5ef9a72c8069931057b73e7dbad8a55d2a123658f520a47888d2657314b7c9a55569e2db5e89f1e288dd@5.189.144.192:30303,enode://1c20e6b46ce608c1fe739e78691227b2a174e0d9e79d5ef9a72c8069931057b73e7dbad8a55d2a123658f520a47888d2657314b7c9a55569e2db5e89f1e288dd@88.99.97.197:30303
 EOF
     fi
     
-    # Set permissions
-    chmod 750 /root/xdcchain
-    chmod 700 /root/xdcchain/keystore
+    # Copy versions.json
+    if [[ -f "$SCRIPT_DIR/configs/versions.json" ]]; then
+        cp "$SCRIPT_DIR/configs/versions.json" /opt/xdc-node/configs/
+    fi
     
-    log "Node configuration created at /opt/xdc-node/configs/"
+    # Set permissions
+    chmod 600 /opt/xdc-node/configs/*.env 2>/dev/null || true
+    chmod 600 /opt/xdc-node/configs/*.json 2>/dev/null || true
+    
+    log "✓ Node configuration created"
 }
 
 #==============================================================================
 # Genesis Configuration
 #==============================================================================
-generate_genesis() {
-    log "Generating genesis configuration for $NETWORK..."
+download_genesis() {
+    log "Downloading genesis configuration for $NETWORK..."
     
     local genesis_file="/root/xdcchain/genesis.json"
+    local genesis_url=""
     
     if [[ "$NETWORK" == "mainnet" ]]; then
-        # Download mainnet genesis
-        curl -fsSL -o "$genesis_file" "https://raw.githubusercontent.com/XinFinOrg/XDPoSChain/master/genesis/mainnet.json" || {
-            warn "Failed to download mainnet genesis, using fallback..."
-            create_mainnet_genesis "$genesis_file"
-        }
+        genesis_url="https://raw.githubusercontent.com/XinFinOrg/XDPoSChain/master/genesis/mainnet.json"
     else
-        # Download testnet genesis
-        curl -fsSL -o "$genesis_file" "https://raw.githubusercontent.com/XinFinOrg/XDPoSChain/master/genesis/testnet.json" || {
-            warn "Failed to download testnet genesis, using fallback..."
-            create_testnet_genesis "$genesis_file"
-        }
+        genesis_url="https://raw.githubusercontent.com/XinFinOrg/XDPoSChain/master/genesis/testnet.json"
     fi
     
-    log "Genesis configuration saved to $genesis_file"
+    if curl -fsSL -o "$genesis_file" "$genesis_url" 2>> "$LOG_FILE"; then
+        log "✓ Genesis downloaded from $genesis_url"
+    else
+        warn "Failed to download genesis, will use default"
+        create_fallback_genesis "$genesis_file"
+    fi
 }
 
-create_mainnet_genesis() {
+create_fallback_genesis() {
     cat > "$1" << 'EOF'
 {
   "config": {
     "chainId": 50,
     "homesteadBlock": 1,
     "eip150Block": 2,
-    "eip150Hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "eip155Block": 3,
     "eip158Block": 3,
     "byzantiumBlock": 4,
@@ -288,112 +318,7 @@ create_mainnet_genesis() {
   "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
 }
 EOF
-}
-
-create_testnet_genesis() {
-    cat > "$1" << 'EOF'
-{
-  "config": {
-    "chainId": 51,
-    "homesteadBlock": 1,
-    "eip150Block": 2,
-    "eip150Hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-    "eip155Block": 3,
-    "eip158Block": 3,
-    "byzantiumBlock": 4,
-    "XDPoS": {
-      "period": 2,
-      "epoch": 900,
-      "reward": 5000,
-      "rewardCheckpoint": 900,
-      "gap": 450,
-      "foudationWalletAddr": "xdc0000000000000000000000000000000000000068",
-      "foudationRewardAddr": "xdc0000000000000000000000000000000000000069"
-    }
-  },
-  "nonce": "0x0",
-  "timestamp": "0x5d21a752",
-  "extraData": "0x0000000000000000000000000000000000000000000000000000000000000000",
-  "gasLimit": "0x47b760",
-  "difficulty": "0x1",
-  "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-  "coinbase": "xdc0000000000000000000000000000000000000000",
-  "alloc": {},
-  "number": "0x0",
-  "gasUsed": "0x0",
-  "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
-}
-EOF
-}
-
-#==============================================================================
-# Firewall Configuration
-#==============================================================================
-configure_firewall() {
-    log "Configuring firewall (UFW)..."
-    
-    # Reset UFW
-    ufw --force reset
-    
-    # Default policies
-    ufw default deny incoming
-    ufw default allow outgoing
-    
-    # SSH (using non-standard port if configured)
-    SSH_PORT=$(grep "^Port" /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}' || echo "22")
-    ufw allow "$SSH_PORT/tcp" comment "SSH"
-    
-    # XDC P2P
-    ufw allow 30303/tcp comment "XDC P2P"
-    ufw allow 30303/udp comment "XDC P2P Discovery"
-    
-    # Prometheus (localhost only)
-    ufw allow from 127.0.0.1 to any port 9090 comment "Prometheus (local only)"
-    
-    # Grafana (if exposing)
-    # ufw allow 3000/tcp comment "Grafana"
-    
-    # Enable firewall
-    echo "y" | ufw enable
-    
-    log "Firewall configured"
-    ufw status verbose
-}
-
-#==============================================================================
-# Fail2ban Configuration
-#==============================================================================
-configure_fail2ban() {
-    log "Configuring fail2ban..."
-    
-    SSH_PORT=$(grep "^Port" /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}' || echo "22")
-    
-    cat > /etc/fail2ban/jail.local << EOF
-[DEFAULT]
-bantime = 3600
-findtime = 600
-maxretry = 3
-backend = auto
-
-[sshd]
-enabled = true
-port = $SSH_PORT
-filter = sshd
-logpath = /var/log/auth.log
-maxretry = 3
-
-[docker-compose]
-enabled = true
-filter = docker-compose
-port = all
-logpath = /var/log/auth.log
-maxretry = 5
-EOF
-    
-    systemctl restart fail2ban
-    systemctl enable fail2ban
-    
-    log "Fail2ban configured and started"
+    log "✓ Fallback genesis created"
 }
 
 #==============================================================================
@@ -407,180 +332,39 @@ setup_docker_compose() {
     # Copy docker-compose.yml
     if [[ -f "$SCRIPT_DIR/docker/docker-compose.yml" ]]; then
         cp "$SCRIPT_DIR/docker/docker-compose.yml" /opt/xdc-node/docker/
+        log "✓ docker-compose.yml copied"
     else
-        create_docker_compose
+        error "docker-compose.yml not found in $SCRIPT_DIR/docker/"
     fi
     
-    # Copy or create Dockerfile
+    # Copy Dockerfile if exists
     if [[ -f "$SCRIPT_DIR/docker/Dockerfile" ]]; then
         cp "$SCRIPT_DIR/docker/Dockerfile" /opt/xdc-node/docker/
     fi
     
-    log "Docker Compose configuration ready"
-}
-
-create_docker_compose() {
-    cat > /opt/xdc-node/docker/docker-compose.yml << 'EOF'
-version: '3.8'
-
-services:
-  xdc-node:
-    image: xinfinorg/xdposchain:latest
-    container_name: xdc-node
-    restart: unless-stopped
-    ports:
-      - "30303:30303"
-      - "30303:30303/udp"
-      - "8545:8545"
-      - "8546:8546"
-    volumes:
-      - /root/xdcchain:/xdcchain
-      - /opt/xdc-node/configs/node.env:/.env:ro
-    environment:
-      - NETWORK=${NETWORK:-mainnet}
-      - SYNC_MODE=${SYNC_MODE:-full}
-    command: >
-      --datadir /xdcchain/XDC
-      --syncmode ${SYNC_MODE:-full}
-      --rpc
-      --rpcaddr 0.0.0.0
-      --rpcport 8545
-      --rpcapi eth,net,web3,XDPoS
-      --rpcvhosts "*"
-      --ws
-      --wsaddr 0.0.0.0
-      --wsport 8546
-      --wsorigins "*"
-      --port 30303
-      --nat any
-    networks:
-      - xdc-network
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8545", "||", "exit", "1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: xdc-prometheus
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:9090:9090"
-    volumes:
-      - /opt/xdc-node/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-      - '--storage.tsdb.retention.time=30d'
-    networks:
-      - xdc-network
-
-  node-exporter:
-    image: prom/node-exporter:latest
-    container_name: xdc-node-exporter
-    restart: unless-stopped
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.rootfs=/rootfs'
-      - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-    networks:
-      - xdc-network
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: xdc-grafana
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - /opt/xdc-node/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - /opt/xdc-node/monitoring/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
-    networks:
-      - xdc-network
-
-networks:
-  xdc-network:
-    driver: bridge
-
-volumes:
-  prometheus-data:
-  grafana-data:
-EOF
-}
-
-#==============================================================================
-# Systemd Service
-#==============================================================================
-setup_systemd() {
-    log "Setting up systemd service..."
-    
-    # Copy systemd files
-    if [[ -f "$SCRIPT_DIR/systemd/xdc-node.service" ]]; then
-        cp "$SCRIPT_DIR/systemd/xdc-node.service" /etc/systemd/system/
-    else
-        create_systemd_service
-    fi
-    
-    systemctl daemon-reload
-    
-    log "Systemd service configured"
-}
-
-create_systemd_service() {
-    cat > /etc/systemd/system/xdc-node.service << 'EOF'
-[Unit]
-Description=XDC Network Node
-Documentation=https://docs.xdc.community
-Requires=docker.service
-After=docker.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=/opt/xdc-node/docker
-ExecStart=/usr/bin/docker compose up -d
-ExecStop=/usr/bin/docker compose down
-ExecReload=/usr/bin/docker compose restart
-TimeoutStartSec=0
-
-[Install]
-WantedBy=multi-user.target
-EOF
+    log "✓ Docker Compose configuration ready"
 }
 
 #==============================================================================
 # Monitoring Setup
 #==============================================================================
 setup_monitoring() {
-    log "Setting up monitoring..."
+    log "Setting up monitoring stack (Prometheus + Grafana)..."
     
-    mkdir -p /opt/xdc-node/monitoring/grafana/dashboards
-    mkdir -p /opt/xdc-node/monitoring/grafana/datasources
+    mkdir -p /opt/xdc-node/monitoring/grafana/{dashboards,datasources}
     
     # Copy monitoring configs
     if [[ -f "$SCRIPT_DIR/monitoring/prometheus.yml" ]]; then
         cp "$SCRIPT_DIR/monitoring/prometheus.yml" /opt/xdc-node/monitoring/
-    else
-        create_prometheus_config
+    fi
+    
+    if [[ -f "$SCRIPT_DIR/monitoring/alerts.yml" ]]; then
+        cp "$SCRIPT_DIR/monitoring/alerts.yml" /opt/xdc-node/monitoring/
     fi
     
     # Copy Grafana dashboards
-    if [[ -f "$SCRIPT_DIR/monitoring/grafana/dashboards/xdc-node.json" ]]; then
-        cp "$SCRIPT_DIR/monitoring/grafana/dashboards/xdc-node.json" /opt/xdc-node/monitoring/grafana/dashboards/
+    if [[ -d "$SCRIPT_DIR/monitoring/grafana/dashboards" ]]; then
+        cp -r "$SCRIPT_DIR/monitoring/grafana/dashboards/"* /opt/xdc-node/monitoring/grafana/dashboards/ 2>/dev/null || true
     fi
     
     # Create datasources config
@@ -596,37 +380,43 @@ datasources:
     editable: false
 EOF
     
-    log "Monitoring stack configured"
+    # Create dashboard provisioning config
+    cat > /opt/xdc-node/monitoring/grafana/dashboards.yml << 'EOF'
+apiVersion: 1
+
+providers:
+  - name: 'default'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+EOF
+    
+    log "✓ Monitoring stack configured"
 }
 
-create_prometheus_config() {
-    cat > /opt/xdc-node/monitoring/prometheus.yml << 'EOF'
-global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
-
-alerting:
-  alertmanagers:
-    - static_configs:
-        - targets: []
-
-rule_files:
-  - "alerts.yml"
-
-scrape_configs:
-  - job_name: 'prometheus'
-    static_configs:
-      - targets: ['localhost:9090']
-
-  - job_name: 'node-exporter'
-    static_configs:
-      - targets: ['node-exporter:9100']
-
-  - job_name: 'xdc-node'
-    static_configs:
-      - targets: ['xdc-node:6060']
-    metrics_path: /debug/metrics/prometheus
-EOF
+#==============================================================================
+# Security Hardening
+#==============================================================================
+run_security_hardening() {
+    if [[ "$SKIP_SECURITY" == true ]]; then
+        warn "Skipping security hardening (SKIP_SECURITY=true)"
+        return 0
+    fi
+    
+    log "Running security hardening..."
+    
+    if [[ -f "$SCRIPT_DIR/scripts/security-harden.sh" ]]; then
+        cp "$SCRIPT_DIR/scripts/security-harden.sh" /opt/xdc-node/scripts/
+        chmod +x /opt/xdc-node/scripts/security-harden.sh
+        /opt/xdc-node/scripts/security-harden.sh 2>> "$LOG_FILE"
+        log "✓ Security hardening complete"
+    else
+        warn "security-harden.sh not found, skipping"
+    fi
 }
 
 #==============================================================================
@@ -638,19 +428,15 @@ install_scripts() {
     mkdir -p /opt/xdc-node/scripts
     
     # Copy scripts
-    for script in node-health-check.sh version-check.sh backup.sh security-harden.sh; do
+    for script in node-health-check.sh version-check.sh backup.sh; do
         if [[ -f "$SCRIPT_DIR/scripts/$script" ]]; then
             cp "$SCRIPT_DIR/scripts/$script" /opt/xdc-node/scripts/
             chmod +x "/opt/xdc-node/scripts/$script"
+            log "✓ Installed: $script"
         fi
     done
     
-    # Copy configs
-    if [[ -f "$SCRIPT_DIR/configs/versions.json" ]]; then
-        cp "$SCRIPT_DIR/configs/versions.json" /opt/xdc-node/configs/
-    fi
-    
-    log "Scripts installed to /opt/xdc-node/scripts/"
+    log "✓ Scripts installed to /opt/xdc-node/scripts/"
 }
 
 #==============================================================================
@@ -659,29 +445,81 @@ install_scripts() {
 setup_cron() {
     log "Setting up cron jobs..."
     
+    # Run cron setup script if available
     if [[ -f "$SCRIPT_DIR/cron/setup-crons.sh" ]]; then
         cp "$SCRIPT_DIR/cron/setup-crons.sh" /opt/xdc-node/
         chmod +x /opt/xdc-node/setup-crons.sh
-    fi
-    
-    # Create initial cron jobs
-    cat > /etc/cron.d/xdc-node << 'EOF'
-# XDC Node Monitoring
+        /opt/xdc-node/setup-crons.sh 2>> "$LOG_FILE"
+    else
+        # Create basic cron jobs
+        cat > /etc/cron.d/xdc-node << 'EOF'
+# XDC Node Scheduled Tasks
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# Health check every 15 minutes
 */15 * * * * root /opt/xdc-node/scripts/node-health-check.sh >> /var/log/xdc-health-check.log 2>&1
 
-# Version Check (every 6 hours)
-0 */6 * * * root /opt/xdc-node/scripts/version-check.sh >> /var/log/xdc-version-check.log 2>&1
+# Version check every 6 hours
+17 */6 * * * root /opt/xdc-node/scripts/version-check.sh >> /var/log/xdc-version-check.log 2>&1
 
-# Daily Backup
+# Daily backup at 3:00 AM
 0 3 * * * root /opt/xdc-node/scripts/backup.sh >> /var/log/xdc-backup.log 2>&1
 
-# Weekly Log Rotation
-0 0 * * 0 root /usr/sbin/logrotate -f /etc/logrotate.d/xdc-node 2>/dev/null || true
+# Weekly backup (Sunday 2:00 AM)
+0 2 * * 0 root /opt/xdc-node/scripts/backup.sh >> /var/log/xdc-backup.log 2>&1
+
+# Daily security check at 6:00 AM
+0 6 * * * root /opt/xdc-node/scripts/node-health-check.sh --full >> /var/log/xdc-health-check.log 2>&1
 EOF
+        chmod 644 /etc/cron.d/xdc-node
+    fi
     
-    chmod 644 /etc/cron.d/xdc-node
+    # Create log files
+    touch /var/log/xdc-{health-check,version-check,backup,security-harden}.log 2>/dev/null || true
+    chmod 640 /var/log/xdc-*.log 2>/dev/null || true
     
-    log "Cron jobs configured"
+    log "✓ Cron jobs configured"
+}
+
+#==============================================================================
+# Systemd Service
+#==============================================================================
+setup_systemd() {
+    log "Setting up systemd service..."
+    
+    if [[ -f "$SCRIPT_DIR/systemd/xdc-node.service" ]]; then
+        cp "$SCRIPT_DIR/systemd/xdc-node.service" /etc/systemd/system/
+    else
+        # Create default service file
+        cat > /etc/systemd/system/xdc-node.service << 'EOF'
+[Unit]
+Description=XDC Network Node
+Documentation=https://docs.xdc.community
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/xdc-node/docker
+ExecStartPre=/usr/bin/docker compose pull --quiet
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+ExecReload=/usr/bin/docker compose restart
+TimeoutStartSec=300
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    fi
+    
+    systemctl daemon-reload
+    systemctl enable xdc-node.service
+    
+    log "✓ Systemd service configured"
 }
 
 #==============================================================================
@@ -693,79 +531,242 @@ start_services() {
     cd /opt/xdc-node/docker
     
     # Pull latest images
-    docker compose pull
+    log "Pulling Docker images..."
+    docker compose pull 2>> "$LOG_FILE"
     
     # Start services
-    docker compose up -d
+    log "Starting containers..."
+    docker compose up -d 2>> "$LOG_FILE"
     
-    # Enable systemd service
-    systemctl enable xdc-node.service
+    # Wait for containers to start
+    sleep 5
     
-    log "Services started successfully"
+    # Check status
+    if docker compose ps | grep -q "Up"; then
+        log "✓ Services started successfully"
+    else
+        warn "Some services may not have started properly"
+    fi
 }
 
 #==============================================================================
-# Print Status
+# Get Node Status
 #==============================================================================
-print_status() {
+get_node_status() {
+    local status="unknown"
+    local block_height="N/A"
+    local peers="N/A"
+    
+    if docker ps | grep -q "xdc-node"; then
+        status="running"
+        
+        # Try to get block height
+        local response
+        response=$(curl -s -m 5 -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
+            http://localhost:8545 2>/dev/null || echo '{}')
+        
+        local hex_height
+        hex_height=$(echo "$response" | jq -r '.result // "0x0"')
+        if [[ "$hex_height" != "0x0" ]]; then
+            block_height=$((16#${hex_height#0x}))
+        fi
+        
+        # Try to get peer count
+        response=$(curl -s -m 5 -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' \
+            http://localhost:8545 2>/dev/null || echo '{}')
+        
+        local hex_peers
+        hex_peers=$(echo "$response" | jq -r '.result // "0x0"')
+        if [[ -n "$hex_peers" ]]; then
+            peers=$((16#${hex_peers#0x}))
+        fi
+    else
+        status="not running"
+    fi
+    
+    echo "$status|$block_height|$peers"
+}
+
+#==============================================================================
+# Print Summary
+#==============================================================================
+print_summary() {
+    local node_status
+    local block_height
+    local peers
+    
+    IFS='|' read -r node_status block_height peers <<< "$(get_node_status)"
+    
     echo ""
     echo "=================================="
     echo "    XDC Node Setup Complete!"
     echo "=================================="
     echo ""
-    echo "Node Type: $NODE_TYPE"
-    echo "Network: $NETWORK (Chain ID: $CHAIN_ID)"
-    echo "Data Directory: /root/xdcchain"
-    echo "Config Directory: /opt/xdc-node/configs"
+    echo "Configuration:"
+    echo "  Node Type: $NODE_TYPE"
+    echo "  Network: $NETWORK (Chain ID: ${CHAIN_ID:-50})"
+    echo "  Data Directory: /root/xdcchain"
+    echo "  Config Directory: /opt/xdc-node/configs"
+    echo ""
+    echo "Node Status:"
+    echo "  Status: $node_status"
+    echo "  Block Height: $block_height"
+    echo "  Peers: $peers"
     echo ""
     echo "Services:"
-    echo "  XDC Node:     docker compose -f /opt/xdc-node/docker/docker-compose.yml ps"
-    echo "  Logs:         docker compose -f /opt/xdc-node/docker/docker-compose.yml logs -f"
-    echo "  Grafana:      http://localhost:3000 (admin/admin)"
-    echo "  Prometheus:   http://localhost:9090"
+    echo "  Docker: docker compose -f /opt/xdc-node/docker/docker-compose.yml ps"
+    echo "  Logs:   docker compose -f /opt/xdc-node/docker/docker-compose.yml logs -f"
+    echo "  Stop:   systemctl stop xdc-node"
+    echo "  Start:  systemctl start xdc-node"
+    echo ""
+    echo "Dashboards:"
+    echo "  Grafana:    http://localhost:3000 (admin/admin)"
+    echo "  Prometheus: http://localhost:9090"
     echo ""
     echo "Useful Commands:"
-    echo "  Stop:         systemctl stop xdc-node"
-    echo "  Start:        systemctl start xdc-node"
-    echo "  Restart:      systemctl restart xdc-node"
     echo "  Health Check: /opt/xdc-node/scripts/node-health-check.sh"
+    echo "  Security:     /opt/xdc-node/scripts/security-harden.sh"
+    echo "  Backup:       /opt/xdc-node/scripts/backup.sh"
     echo ""
-    echo "Security:"
-    echo "  Run security hardening: /opt/xdc-node/scripts/security-harden.sh"
+    echo "Next Steps:"
+    echo "  1. Update Grafana password: docker exec xdc-grafana grafana-cli admin reset-admin-password <new-password>"
+    echo "  2. Configure Telegram alerts in /opt/xdc-node/configs/versions.json"
+    echo "  3. Run security hardening if not already done"
+    echo "  4. Monitor sync progress: watch -n 30 'curl -s localhost:8545 -X POST ...'"
     echo ""
     echo "Documentation: https://github.com/AnilChinchawale/XDC-Node-Setup"
     echo ""
+    
+    # Save summary to file
+    cat > /opt/xdc-node/SETUP_SUMMARY.txt << EOF
+XDC Node Setup Summary
+======================
+Date: $(date)
+Node Type: $NODE_TYPE
+Network: $NETWORK
+Status: $node_status
+Block Height: $block_height
+Peers: $peers
+
+Quick Commands:
+  docker compose -f /opt/xdc-node/docker/docker-compose.yml ps
+  docker compose -f /opt/xdc-node/docker/docker-compose.yml logs -f
+  systemctl status xdc-node
+
+URLs:
+  Grafana: http://localhost:3000
+  Prometheus: http://localhost:9090
+EOF
+}
+
+#==============================================================================
+# Usage / Help
+#==============================================================================
+show_usage() {
+    cat << EOF
+Usage: $(basename "$0") [OPTIONS]
+
+XDC Node Setup - Enterprise-grade XDC Network node deployment
+
+Options:
+  --non-interactive    Run in non-interactive mode (uses environment variables)
+  --help, -h           Show this help message
+
+Environment Variables (for --non-interactive):
+  NODE_TYPE            Node type: full, archive, rpc (default: full)
+  NETWORK              Network: mainnet, testnet (default: mainnet)
+  SKIP_SECURITY        Skip security hardening: true/false (default: false)
+  TELEGRAM_BOT_TOKEN   Telegram bot token for notifications
+  TELEGRAM_CHAT_ID     Telegram chat ID for notifications
+
+Examples:
+  # Interactive mode (default)
+  sudo ./setup.sh
+
+  # Non-interactive mode
+  sudo NODE_TYPE=full NETWORK=mainnet ./setup.sh --non-interactive
+
+  # Archive node on testnet
+  sudo NODE_TYPE=archive NETWORK=testnet ./setup.sh --non-interactive
+
+EOF
 }
 
 #==============================================================================
 # Main
 #==============================================================================
 main() {
-    log "Starting XDC Node Setup..."
+    # Parse arguments
+    for arg in "$@"; do
+        case $arg in
+            --non-interactive)
+                NON_INTERACTIVE=true
+                shift
+                ;;
+            --help|-h)
+                show_usage
+                exit 0
+                ;;
+        esac
+    done
+    
+    # Initialize log
+    mkdir -p "$(dirname "$LOG_FILE")"
+    touch "$LOG_FILE"
+    
+    log "========================================"
+    log "XDC Node Setup Starting"
+    log "========================================"
+    log "Mode: $([[ "$NON_INTERACTIVE" == true ]] && echo "NON-INTERACTIVE" || echo "INTERACTIVE")"
     
     check_root
     check_os
     check_hardware
     
-    select_node_type
-    select_network
+    if [[ "$NON_INTERACTIVE" == true ]]; then
+        # Validate environment variables
+        case "$NODE_TYPE" in
+            full|archive|rpc) ;;
+            *) error "Invalid NODE_TYPE: $NODE_TYPE (must be full, archive, or rpc)" ;;
+        esac
+        
+        case "$NETWORK" in
+            mainnet) CHAIN_ID=50 ;;
+            testnet) CHAIN_ID=51 ;;
+            *) error "Invalid NETWORK: $NETWORK (must be mainnet or testnet)" ;;
+        esac
+        
+        log "Configuration from environment:"
+        log "  NODE_TYPE: $NODE_TYPE"
+        log "  NETWORK: $NETWORK"
+        log "  SKIP_SECURITY: $SKIP_SECURITY"
+    else
+        # Interactive mode
+        select_node_type
+        select_network
+    fi
     
     install_dependencies
     configure_node
-    generate_genesis
-    configure_firewall
-    configure_fail2ban
+    download_genesis
     setup_docker_compose
-    setup_systemd
     setup_monitoring
     install_scripts
+    setup_systemd
     setup_cron
+    run_security_hardening
     start_services
     
-    print_status
+    print_summary
     
-    log "Setup complete!"
+    log "========================================"
+    log "Setup Complete!"
+    log "========================================"
+    log "See SETUP_SUMMARY.txt for details"
 }
 
-# Run main function
 main "$@"

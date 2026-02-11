@@ -1,0 +1,159 @@
+#==============================================================================
+# Alertmanager Configuration for XDC Nodes
+# Implements alert routing from XDC-NODE-STANDARDS.md
+# Features: Telegram webhook, critical/warning routing, batched notifications
+#==============================================================================
+
+global:
+  # Global settings
+  resolve_timeout: 5m
+  # HTTP settings for webhooks
+  http_config:
+    follow_redirects: true
+
+# Alert templates
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree
+route:
+  # Default receiver
+  receiver: 'telegram-warnings'
+  
+  # Group alerts by alertname, instance, and severity
+  group_by: ['alertname', 'instance', 'severity']
+  
+  # How long to wait before sending a notification about new alerts
+  group_wait: 30s
+  
+  # How long to wait before sending an update notification about an existing alert group
+  group_interval: 5m
+  
+  # How long an alert is silenced before firing again
+  repeat_interval: 4h
+  
+  # Child routes for different severities
+  routes:
+    # Critical alerts: immediate notification
+    - match:
+        severity: critical
+      receiver: 'telegram-critical'
+      group_wait: 10s
+      group_interval: 1m
+      repeat_interval: 1h
+      continue: true
+    
+    # Warning alerts: batched every 30 minutes
+    - match:
+        severity: warning
+      receiver: 'telegram-warnings'
+      group_wait: 5m
+      group_interval: 30m
+      repeat_interval: 4h
+    
+    # Info alerts: batched, low priority
+    - match:
+        severity: info
+      receiver: 'telegram-info'
+      group_wait: 10m
+      group_interval: 1h
+      repeat_interval: 24h
+
+# Receivers
+receivers:
+  # Critical alerts - immediate Telegram notification
+  - name: 'telegram-critical'
+    telegram_configs:
+      - bot_token: '${TELEGRAM_BOT_TOKEN}'
+        chat_id: ${TELEGRAM_CHAT_ID}
+        api_url: 'https://api.telegram.org'
+        parse_mode: 'Markdown'
+        disable_notifications: false
+        message: |
+          🔴 *CRITICAL ALERT*
+          
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Instance:* {{ .GroupLabels.instance }}
+          *Status:* {{ .Status | toUpper }}
+          
+          {{ range .Alerts }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          {{ if .Annotations.action }}*Action:* {{ .Annotations.action }}{{ end }}
+          *Started:* {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+          {{ end }}
+          
+          ---
+          _XDC Node Alertmanager_
+  
+  # Warning alerts - batched Telegram notification
+  - name: 'telegram-warnings'
+    telegram_configs:
+      - bot_token: '${TELEGRAM_BOT_TOKEN}'
+        chat_id: ${TELEGRAM_CHAT_ID}
+        api_url: 'https://api.telegram.org'
+        parse_mode: 'Markdown'
+        disable_notifications: false
+        message: |
+          🟡 *WARNING ALERT*
+          
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Instance:* {{ .GroupLabels.instance }}
+          *Alerts:* {{ len .Alerts }} firing
+          
+          {{ range .Alerts }}
+          • {{ .Annotations.summary }}
+          {{ end }}
+          
+          ---
+          _Batched warning notification_
+  
+  # Info alerts - low priority
+  - name: 'telegram-info'
+    telegram_configs:
+      - bot_token: '${TELEGRAM_BOT_TOKEN}'
+        chat_id: ${TELEGRAM_CHAT_ID}
+        api_url: 'https://api.telegram.org'
+        parse_mode: 'Markdown'
+        disable_notifications: true
+        message: |
+          ℹ️ *INFO*
+          
+          {{ range .Alerts }}
+          *{{ .Labels.alertname }}*
+          {{ .Annotations.summary }}
+          {{ end }}
+  
+  # Webhook receiver (alternative to Telegram)
+  - name: 'webhook-critical'
+    webhook_configs:
+      - url: '${WEBHOOK_URL}'
+        send_resolved: true
+        http_config:
+          basic_auth:
+            username: '${WEBHOOK_USER}'
+            password: '${WEBHOOK_PASS}'
+
+# Inhibition rules
+# Prevent sending notifications for less severe alerts when more severe ones are firing
+inhibit_rules:
+  # If critical alert is firing, suppress warning for same alertname
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+  
+  # If node is down, suppress all other alerts for that instance
+  - source_match:
+      alertname: 'XDCNodeDown'
+    target_match_re:
+      alertname: 'XDC.*'
+    equal: ['instance']
+  
+  # If disk is critically full, suppress warning
+  - source_match:
+      alertname: 'XDCDiskUsageCritical'
+    target_match:
+      alertname: 'XDCDiskUsageWarning'
+    equal: ['instance']

@@ -1,0 +1,159 @@
+# XDC Node Notification Configuration
+# =====================================
+# This file configures how your XDC node sends alerts and reports.
+# Place this file at: /etc/xdc-node/notify.conf
+#
+# The notification system supports three channels:
+# 1. Platform API (recommended) - Uses XDC Gateway for Telegram + Email
+# 2. Direct Telegram - Your own Telegram bot
+# 3. Email - Direct SMTP configuration
+#
+
+#------------------------------------------------------------------------------
+# Notification Channels
+#------------------------------------------------------------------------------
+# Comma-separated list of channels to use: platform, telegram, email
+# Examples:
+#   NOTIFY_CHANNELS="platform"           # Use XDC Gateway only (recommended)
+#   NOTIFY_CHANNELS="telegram"           # Use direct Telegram only
+#   NOTIFY_CHANNELS="email"              # Use email only
+#   NOTIFY_CHANNELS="platform,email"     # Use both platform and email
+#   NOTIFY_CHANNELS="telegram,email"     # Use both Telegram and email
+#   NOTIFY_CHANNELS="platform,telegram,email"  # Use all channels
+#
+NOTIFY_CHANNELS="platform"
+
+#------------------------------------------------------------------------------
+# Platform API Configuration (Recommended)
+#------------------------------------------------------------------------------
+# The XDC Gateway platform provides a unified notification service.
+# Register your node at https://cloud.xdcrpc.com to get an API key.
+# The platform handles both Telegram and Email notifications.
+#
+# NOTIFY_PLATFORM_URL: The API endpoint for notifications
+# NOTIFY_PLATFORM_API_KEY: Your API key from the XDC Gateway dashboard
+#
+NOTIFY_PLATFORM_URL="https://cloud.xdcrpc.com/api/v1/notifications"
+NOTIFY_PLATFORM_API_KEY=""
+
+#------------------------------------------------------------------------------
+# Direct Telegram Configuration (Fallback)
+#------------------------------------------------------------------------------
+# Use your own Telegram bot for notifications.
+# 1. Create a bot via @BotFather (https://t.me/BotFather)
+# 2. Get your chat ID from @userinfobot (https://t.me/userinfobot)
+# 3. Set the values below
+#
+# Note: Platform API is recommended over direct Telegram.
+# Direct Telegram is useful for testing or if you prefer full control.
+#
+NOTIFY_TELEGRAM_BOT_TOKEN=""
+NOTIFY_TELEGRAM_CHAT_ID=""
+
+#------------------------------------------------------------------------------
+# Email Configuration
+#------------------------------------------------------------------------------
+# Configure SMTP settings for email notifications.
+# Email can be sent via:
+# 1. Platform API (if NOTIFY_PLATFORM_API_KEY is set) - Recommended
+# 2. Direct SMTP (configure settings below)
+#
+NOTIFY_EMAIL_ENABLED="false"
+NOTIFY_EMAIL_TO=""              # Recipient email address
+NOTIFY_EMAIL_FROM="alerts@xdc.network"  # Sender address
+
+# SMTP Settings (only needed for direct SMTP, not for Platform API)
+NOTIFY_EMAIL_SMTP_HOST="smtp.gmail.com"
+NOTIFY_EMAIL_SMTP_PORT="587"
+NOTIFY_EMAIL_SMTP_USER=""       # SMTP username (often your email)
+NOTIFY_EMAIL_SMTP_PASS=""       # SMTP password or app-specific password
+
+#------------------------------------------------------------------------------
+# Notification Intervals and Limits
+#------------------------------------------------------------------------------
+
+# Minimum seconds between the same alert type (deduplication)
+# Prevents spam by throttling repeated alerts of the same type
+NOTIFY_ALERT_INTERVAL="300"     # 5 minutes
+
+# Minimum seconds between reports of the same type
+NOTIFY_REPORT_INTERVAL="86400"  # 24 hours
+
+# Maximum notifications per hour per channel (rate limiting)
+NOTIFY_RATE_LIMIT_PER_HOUR="10"
+
+#------------------------------------------------------------------------------
+# Digest Mode (Batch Non-Critical Alerts)
+#------------------------------------------------------------------------------
+# When digest mode is enabled, non-critical alerts during quiet hours
+# are batched and sent as a summary when quiet hours end.
+#
+NOTIFY_DIGEST_ENABLED="true"
+NOTIFY_DIGEST_INTERVAL="3600"   # Send digest every hour (if there are alerts)
+
+#------------------------------------------------------------------------------
+# Quiet Hours
+#------------------------------------------------------------------------------
+# During quiet hours, only CRITICAL alerts are sent immediately.
+# Warning and info alerts are either:
+# - Batched into a digest (if NOTIFY_DIGEST_ENABLED=true)
+# - Dropped until quiet hours end (if NOTIFY_DIGEST_ENABLED=false)
+#
+NOTIFY_QUIET_START="23:00"      # Start of quiet hours (11 PM)
+NOTIFY_QUIET_END="07:00"        # End of quiet hours (7 AM)
+
+#------------------------------------------------------------------------------
+# Retry Configuration
+#------------------------------------------------------------------------------
+# Number of retry attempts for failed notifications
+NOTIFY_RETRY_MAX="3"
+
+#------------------------------------------------------------------------------
+# Node Identification
+#------------------------------------------------------------------------------
+# Hostname or IP address used to identify this node in notifications
+# Defaults to the server's primary IP address
+NOTIFY_NODE_HOST=""
+
+#------------------------------------------------------------------------------
+# Advanced Settings
+#------------------------------------------------------------------------------
+# Uncomment to customize log file location
+# NOTIFY_LOG_FILE="/var/log/xdc-node/notifications.log"
+
+# Uncomment to customize state file location
+# NOTIFY_STATE_FILE="/var/lib/xdc-node/alert-state.json"
+
+#------------------------------------------------------------------------------
+# Example Configurations
+#------------------------------------------------------------------------------
+
+# Example 1: XDC Gateway Platform Only (Recommended)
+#   NOTIFY_CHANNELS="platform"
+#   NOTIFY_PLATFORM_API_KEY="your-api-key-from-cloud.xdcrpc.com"
+#
+#   This sends all notifications via the XDC Gateway platform,
+#   which handles both Telegram and Email delivery.
+
+# Example 2: Direct Telegram Only
+#   NOTIFY_CHANNELS="telegram"
+#   NOTIFY_TELEGRAM_BOT_TOKEN="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+#   NOTIFY_TELEGRAM_CHAT_ID="123456789"
+
+# Example 3: Email Only (Direct SMTP)
+#   NOTIFY_CHANNELS="email"
+#   NOTIFY_EMAIL_ENABLED="true"
+#   NOTIFY_EMAIL_TO="admin@example.com"
+#   NOTIFY_EMAIL_SMTP_HOST="smtp.gmail.com"
+#   NOTIFY_EMAIL_SMTP_PORT="587"
+#   NOTIFY_EMAIL_SMTP_USER="your-email@gmail.com"
+#   NOTIFY_EMAIL_SMTP_PASS="your-app-password"
+
+# Example 4: Multiple Channels
+#   NOTIFY_CHANNELS="platform,email"
+#   NOTIFY_PLATFORM_API_KEY="your-api-key"
+#   NOTIFY_EMAIL_ENABLED="true"
+#   NOTIFY_EMAIL_TO="backup@example.com"
+#
+#   This sends notifications via Platform API (Telegram+Email),
+#   and also sends a backup copy via direct email.
