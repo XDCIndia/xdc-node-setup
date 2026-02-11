@@ -1,0 +1,37 @@
+{
+  "mainnet": {
+    "full": {
+      "url": "https://download.xinfin.network/xdcchain-mainnet-full-latest.tar.gz",
+      "size": "~250GB",
+      "type": "full",
+      "updated": "weekly",
+      "description": "Full node snapshot for mainnet"
+    },
+    "archive": {
+      "url": "https://download.xinfin.network/xdcchain-mainnet-archive-latest.tar.gz",
+      "size": "~500GB",
+      "type": "archive",
+      "updated": "monthly",
+      "description": "Archive node with full historical state"
+    }
+  },
+  "testnet": {
+    "full": {
+      "url": "https://download.xinfin.network/xdcchain-testnet-full-latest.tar.gz",
+      "size": "~50GB",
+      "type": "full",
+      "updated": "weekly",
+      "description": "Full node snapshot for Apothem testnet"
+    }
+  },
+  "sources": {
+    "primary": "https://download.xinfin.network",
+    "mirrors": [
+      "https://xdc-snapshots.s3.amazonaws.com"
+    ]
+  },
+  "checksums": {
+    "algorithm": "SHA256",
+    "suffix": ".sha256"
+  }
+}

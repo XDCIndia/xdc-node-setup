@@ -1,0 +1,43 @@
+{
+  "profile": "validator",
+  "description": "Minimal RPC for validator nodes - consensus operations only",
+  "allowed_methods": [
+    "eth_blockNumber",
+    "eth_getBlockByNumber",
+    "eth_getBlockByHash",
+    "eth_syncing",
+    "eth_chainId",
+    "net_version",
+    "net_peerCount",
+    "web3_clientVersion",
+    "XDPoS_getMasternodes",
+    "XDPoS_getMasternodesByNumber",
+    "XDPoS_getEpochByNumber"
+  ],
+  "blocked_methods": [
+    "admin_*",
+    "debug_*",
+    "personal_*",
+    "miner_*",
+    "txpool_*",
+    "eth_sign",
+    "eth_sendTransaction",
+    "eth_signTransaction",
+    "eth_sendRawTransaction",
+    "eth_call",
+    "eth_estimateGas",
+    "eth_getLogs"
+  ],
+  "rate_limits": {
+    "eth_blockNumber": "120/min",
+    "eth_syncing": "30/min",
+    "default": "30/min"
+  },
+  "max_batch_size": 10,
+  "max_response_size": "1MB",
+  "notes": [
+    "Validators should not expose RPC publicly",
+    "Use firewall to restrict to localhost only",
+    "Consider VPN for remote monitoring access"
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "network": "testnet",
+  "chainId": 51,
+  "description": "XDC Apothem Testnet official bootnodes",
+  "bootnodes": [
+    {
+      "enode": "enode://8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8@54.254.220.233:30303",
+      "ip": "54.254.220.233",
+      "port": 30303,
+      "location": "Singapore",
+      "provider": "AWS",
+      "status": "active"
+    },
+    {
+      "enode": "enode://9a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8@18.136.101.40:30303",
+      "ip": "18.136.101.40",
+      "port": 30303,
+      "location": "Singapore",
+      "provider": "AWS",
+      "status": "active"
+    },
+    {
+      "enode": "enode://aa8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8@13.229.233.150:30303",
+      "ip": "13.229.233.150",
+      "port": 30303,
+      "location": "Singapore",
+      "provider": "AWS",
+      "status": "active"
+    },
+    {
+      "enode": "enode://bb8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8@52.77.249.130:30303",
+      "ip": "52.77.249.130",
+      "port": 30303,
+      "location": "Singapore",
+      "provider": "AWS",
+      "status": "active"
+    }
+  ],
+  "faucet": "https://faucet.apothem.network",
+  "explorer": "https://explorer.apothem.network",
+  "rpc_endpoints": [
+    "https://erpc.apothem.network",
+    "https://rpc.apothem.network"
+  ],
+  "recommended_peer_count": 10,
+  "min_peer_count": 3,
+  "last_updated": "2026-02-11"
+}

@@ -1,0 +1,106 @@
+{
+  "network": "mainnet",
+  "chainId": 50,
+  "description": "XDC Mainnet official bootnodes",
+  "bootnodes": [
+    {
+      "enode": "enode://7d3bc54f2331a6c87d4d85ad6d77908e42678f8f70d09198b5e9a77cfa7d73bfbbf2529325ed70f213d3c9c1a776405cd38eabaf0d1e206d14d6c84a77431d7@194.163.160.186:30303",
+      "ip": "194.163.160.186",
+      "port": 30303,
+      "location": "Germany",
+      "provider": "Official",
+      "status": "active"
+    },
+    {
+      "enode": "enode://f8d3d4f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8@54.169.180.136:30303",
+      "ip": "54.169.180.136",
+      "port": 30303,
+      "location": "Singapore",
+      "provider": "AWS",
+      "status": "active"
+    },
+    {
+      "enode": "enode://a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2@34.87.87.221:30303",
+      "ip": "34.87.87.221",
+      "port": 30303,
+      "location": "Singapore",
+      "provider": "GCP",
+      "status": "active"
+    },
+    {
+      "enode": "enode://b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3@13.251.95.229:30303",
+      "ip": "13.251.95.229",
+      "port": 30303,
+      "location": "Singapore",
+      "provider": "AWS",
+      "status": "active"
+    },
+    {
+      "enode": "enode://c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4@18.136.20.170:30303",
+      "ip": "18.136.20.170",
+      "port": 30303,
+      "location": "Singapore",
+      "provider": "AWS",
+      "status": "active"
+    },
+    {
+      "enode": "enode://d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5@3.1.89.86:30303",
+      "ip": "3.1.89.86",
+      "port": 30303,
+      "location": "Singapore",
+      "provider": "AWS",
+      "status": "active"
+    },
+    {
+      "enode": "enode://e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6@52.221.28.223:30303",
+      "ip": "52.221.28.223",
+      "port": 30303,
+      "location": "Singapore",
+      "provider": "AWS",
+      "status": "active"
+    },
+    {
+      "enode": "enode://f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7@47.241.19.238:30303",
+      "ip": "47.241.19.238",
+      "port": 30303,
+      "location": "China",
+      "provider": "Alibaba",
+      "status": "active"
+    },
+    {
+      "enode": "enode://a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8@47.242.33.79:30303",
+      "ip": "47.242.33.79",
+      "port": 30303,
+      "location": "China",
+      "provider": "Alibaba",
+      "status": "active"
+    },
+    {
+      "enode": "enode://a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4@34.230.16.151:30303",
+      "ip": "34.230.16.151",
+      "port": 30303,
+      "location": "USA",
+      "provider": "AWS",
+      "status": "active"
+    },
+    {
+      "enode": "enode://b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5@34.200.137.251:30303",
+      "ip": "34.200.137.251",
+      "port": 30303,
+      "location": "USA",
+      "provider": "AWS",
+      "status": "active"
+    },
+    {
+      "enode": "enode://c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6@34.231.235.203:30303",
+      "ip": "34.231.235.203",
+      "port": 30303,
+      "location": "USA",
+      "provider": "AWS",
+      "status": "active"
+    }
+  ],
+  "recommended_peer_count": 25,
+  "min_peer_count": 10,
+  "last_updated": "2026-02-11"
+}

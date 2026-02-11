@@ -1,295 +1,240 @@
-# XDC Node Setup — Improvement Roadmap
+# XDC Node Setup — Roadmap
 
-> Plan to make XDC Node Setup the **industry-leading** open-source toolkit for running XDC Network nodes.
+> XDC-specific improvements for node operators
 
 **Repository:** [github.com/AnilChinchawale/XDC-Node-Setup](https://github.com/AnilChinchawale/XDC-Node-Setup)
 
 ---
 
-## Current State (v1.0) ✅
+## Current State (v2.0) ✅
 
-| Feature | Status |
-|---------|--------|
-| One-line installer | ✅ Done |
-| Security hardening (SSH, UFW, fail2ban, auditd) | ✅ Done |
-| Node health monitoring | ✅ Done |
-| Version management & auto-update | ✅ Done |
-| Backup system (encrypted, retention) | ✅ Done |
-| Notification system (Platform API, TG, Email) | ✅ Done |
-| Docker Compose deployment | ✅ Done |
-| Grafana dashboards | ✅ Done |
-| Prometheus alerting | ✅ Done |
-| Security scorecard (0-100) | ✅ Done |
-| Compliance documentation (108 items) | ✅ Done |
-| Email templates (XDC branding) | ✅ Done |
-| Systemd services | ✅ Done |
+### Core Infrastructure — COMPLETE
 
----
+| Feature | Status | Script/Config |
+|---------|--------|---------------|
+| One-line installer | ✅ Done | `setup.sh` |
+| Security hardening (SSH, UFW, fail2ban, auditd) | ✅ Done | `security-harden.sh` |
+| Node health monitoring | ✅ Done | `node-health-check.sh` |
+| Version management & auto-update | ✅ Done | `version-check.sh` |
+| Backup system (encrypted, retention) | ✅ Done | `backup.sh` |
+| Notification system (Platform API, TG, Email) | ✅ Done | `lib/notify.sh` |
+| Docker Compose deployment | ✅ Done | `docker/` |
+| Grafana dashboards | ✅ Done | `monitoring/grafana/` |
+| Prometheus alerting | ✅ Done | `monitoring/alerts.yml` |
+| Security scorecard (0-100) | ✅ Done | `node-health-check.sh` |
+| CLI tool (`xdc-node`) | ✅ Done | `cli/xdc-node` |
+| Web dashboard | ✅ Done | `dashboard/` |
 
-## Phase 2: Web Dashboard (v2.0)
+### XDC-Specific Features — COMPLETE (v2.1)
 
-**Goal:** Single-page web UI to manage all XDC nodes from a browser.
-
-### 2.1 Node Dashboard Web App
-- [ ] Lightweight web UI (Next.js or plain HTML + API)
-- [ ] Real-time node status cards (block height, peers, sync %, CPU/RAM/disk)
-- [ ] Security score visualization per server
-- [ ] Version comparison table with one-click update trigger
-- [ ] Historical charts (block height over time, peer count trends)
-- [ ] Mobile-responsive design
-
-### 2.2 REST API for Node Management
-- [ ] `GET /api/nodes` — List all nodes with current status
-- [ ] `GET /api/nodes/:id/health` — Detailed health for single node
-- [ ] `POST /api/nodes/:id/restart` — Remote restart
-- [ ] `POST /api/nodes/:id/update` — Trigger version update
-- [ ] `GET /api/reports` — Historical health reports
-- [ ] `GET /api/security/score` — Security scores for all nodes
-- [ ] JWT authentication for API access
-
-### 2.3 WebSocket Live Updates
-- [ ] Real-time block height streaming
-- [ ] Live peer count updates
-- [ ] Instant alert notifications in browser
-- [ ] Connection status indicators
+| Feature | Status | Script |
+|---------|--------|--------|
+| Masternode setup wizard | ✅ Done | `masternode-setup.sh` |
+| Bootnode optimizer | ✅ Done | `bootnode-optimize.sh` |
+| Snapshot manager | ✅ Done | `snapshot-manager.sh` |
+| XDC monitor (epoch, rewards, fork) | ✅ Done | `xdc-monitor.sh` |
+| Sync optimizer | ✅ Done | `sync-optimizer.sh` |
+| RPC security | ✅ Done | `rpc-security.sh` |
+| Network intelligence | ✅ Done | `network-intel.sh` |
+| Masternode guide | ✅ Done | `docs/MASTERNODE-GUIDE.md` |
+| Sync guide | ✅ Done | `docs/SYNC-GUIDE.md` |
+| RPC profiles (public, validator, archive, dev) | ✅ Done | `configs/rpc-profiles/` |
+| Bootnode configs (mainnet, testnet) | ✅ Done | `configs/bootnodes-*.json` |
+| Snapshot configs | ✅ Done | `configs/snapshots.json` |
 
 ---
 
-## Phase 3: Multi-Node Orchestration (v3.0)
+## Phase 3: Advanced Masternode Features (Q1 2026)
 
-**Goal:** Manage fleets of XDC nodes across multiple servers from one place.
+### 3.1 Reward Analytics
+- [ ] Historical reward tracking with graphs
+- [ ] Reward vs. expected comparison
+- [ ] APY calculation with actual data
+- [ ] Missed block analysis and reporting
+- [ ] Slashing event detection and alerts
 
-### 3.1 Node Discovery & Registration
-- [ ] Agent-based: lightweight daemon on each node reports to central manager
-- [ ] Agentless: SSH-based health checks (current approach, enhanced)
-- [ ] Auto-discovery of XDC nodes on local network
-- [ ] Node registration API with authentication tokens
+### 3.2 Masternode Clustering
+- [ ] Multi-node masternode management
+- [ ] Failover between backup nodes
+- [ ] Coordinated key management
+- [ ] Cross-node monitoring dashboard
+- [ ] Automated recovery procedures
 
-### 3.2 Fleet Management
-- [ ] Rolling updates across fleet (test → staging → production)
-- [ ] Canary deployments: update 1 node, verify, proceed
-- [ ] Rollback on failure: automatic revert to last known good version
-- [ ] Scheduled maintenance windows
-- [ ] Node grouping by role (validator, RPC, archive) and region
-
-### 3.3 Load Balancer Integration
-- [ ] Automatic Nginx/HAProxy config generation for RPC endpoints
-- [ ] Health-check-based routing (exclude unhealthy nodes)
-- [ ] Geographic DNS routing support
-- [ ] Weighted load balancing (prioritize faster nodes)
-
-### 3.4 Ansible Playbooks
-- [ ] `playbooks/deploy-node.yml` — Deploy new XDC node
-- [ ] `playbooks/security-harden.yml` — Apply security standards
-- [ ] `playbooks/update-client.yml` — Rolling client update
-- [ ] `playbooks/setup-monitoring.yml` — Deploy monitoring stack
-- [ ] `playbooks/backup-restore.yml` — Backup and restore operations
-- [ ] Inventory templates for different fleet sizes
+### 3.3 Stake Management
+- [ ] Stake delegation monitoring
+- [ ] Auto-compound rewards
+- [ ] Withdrawal planning tools
+- [ ] Tax reporting export
 
 ---
 
-## Phase 4: Advanced Monitoring (v4.0)
+## Phase 4: XDPoS v2 Deep Integration (Q2 2026)
 
-**Goal:** Enterprise-grade observability with predictive analytics.
+### 4.1 Consensus Monitoring
+- [ ] Real-time epoch visualization
+- [ ] Masternode rotation tracking
+- [ ] Vote tracking and analysis
+- [ ] Block finality monitoring
+- [ ] Penalty prediction
 
-### 4.1 Enhanced Metrics
-- [ ] Block propagation time tracking
-- [ ] Transaction pool monitoring (pending/queued counts)
-- [ ] RPC request latency per method
-- [ ] Chain reorganization detection
-- [ ] Epoch/round tracking for XDPoS
-- [ ] Masternode status monitoring (stake, rewards, penalties)
+### 4.2 Network Participation
+- [ ] Validator performance rankings
+- [ ] Network-wide stats aggregation
+- [ ] Peer reputation system
+- [ ] Geographic diversity scoring
+- [ ] Client diversity incentives
 
-### 4.2 Predictive Analytics
-- [ ] Disk space prediction: "Disk full in X days" based on growth rate
-- [ ] Sync ETA calculation based on block processing speed
-- [ ] Anomaly detection: unusual peer drops, block time spikes
-- [ ] Performance baseline comparison (current vs 7-day average)
+### 4.3 Governance Tools
+- [ ] Proposal tracking
+- [ ] Voting interface
+- [ ] Impact analysis
+- [ ] Community sentiment tracking
 
-### 4.3 Log Aggregation
-- [ ] Centralized log collection (Loki or ELK stack)
-- [ ] Log-based alerting (error patterns, crash detection)
-- [ ] Searchable log interface in dashboard
-- [ ] Log retention policies with automated cleanup
+---
 
-### 4.4 SLA Monitoring
-- [ ] Uptime percentage tracking (99.9%, 99.99%)
-- [ ] Response time SLA monitoring for RPC endpoints
-- [ ] Monthly SLA reports (PDF generation)
+## Phase 5: Enterprise Features (Q3 2026)
+
+### 5.1 Multi-Region Deployment
+- [ ] One-click multi-region setup
+- [ ] Global load balancing
+- [ ] Latency-optimized routing
+- [ ] Disaster recovery automation
+- [ ] Region health monitoring
+
+### 5.2 SLA Monitoring
+- [ ] Uptime tracking (99.9%/99.99%/99.999%)
+- [ ] Response time monitoring
+- [ ] Automated SLA reports
 - [ ] SLA breach alerting
+- [ ] Performance degradation detection
+
+### 5.3 Compliance Automation
+- [ ] Automated compliance scans
+- [ ] Evidence collection
+- [ ] Audit trail generation
+- [ ] Report scheduling
+- [ ] Remediation tracking
 
 ---
 
-## Phase 5: Security & Compliance (v5.0)
+## Phase 6: Developer Experience (Q4 2026)
 
-**Goal:** Automated compliance checking and security hardening at enterprise level.
-
-### 5.1 CIS Benchmark Automation
-- [ ] Full CIS Ubuntu benchmark implementation (150+ checks)
-- [ ] Automated remediation for failed checks
-- [ ] CIS score tracking over time
-- [ ] PDF compliance report generation
-
-### 5.2 Intrusion Detection
-- [ ] OSSEC/Wazuh integration for real-time threat detection
-- [ ] File integrity monitoring (FIM) for critical binaries
-- [ ] Rootkit detection (rkhunter/chkrootkit)
-- [ ] Network intrusion detection (Suricata rules for blockchain traffic)
-
-### 5.3 Secret Management
-- [ ] HashiCorp Vault integration for key storage
-- [ ] Automated secret rotation
-- [ ] Encrypted environment variable management
-- [ ] Key ceremony documentation for masternodes
-
-### 5.4 Audit Trail
-- [ ] Immutable audit log (append-only, signed entries)
-- [ ] Who-did-what tracking for all admin actions
-- [ ] Audit log export for compliance reviews
-- [ ] Integration with SIEM platforms (Splunk, Datadog)
-
----
-
-## Phase 6: Disaster Recovery (v6.0)
-
-**Goal:** Zero-downtime recovery and high availability.
-
-### 6.1 Automated Failover
-- [ ] Primary/secondary node pairs with automatic failover
-- [ ] Health-check-triggered failover (< 30 second switchover)
-- [ ] Split-brain prevention for consensus nodes
-- [ ] Failover testing automation (chaos engineering)
-
-### 6.2 Backup Improvements
-- [ ] Snapshot-based backups (LVM/ZFS snapshots)
-- [ ] Cross-region backup replication
-- [ ] Point-in-time recovery for chain data
-- [ ] Automated backup testing (restore + verify block height)
-
-### 6.3 Disaster Recovery Plan
-- [ ] Documented DR procedures (RTO/RPO targets)
-- [ ] Automated DR testing (monthly)
-- [ ] Multi-region deployment templates
-- [ ] Data center failover playbooks
-
----
-
-## Phase 7: Developer Experience (v7.0)
-
-**Goal:** Make it dead simple for anyone to run an XDC node.
-
-### 7.1 CLI Tool (`xdc-node`)
-- [ ] `xdc-node init` — Interactive setup wizard
-- [ ] `xdc-node status` — Quick node status
-- [ ] `xdc-node update` — Update client version
-- [ ] `xdc-node backup` — Trigger backup
-- [ ] `xdc-node health` — Run health check
-- [ ] `xdc-node security` — Run security audit
-- [ ] `xdc-node logs` — Tail node logs
-- [ ] `xdc-node restart` — Graceful restart
-- [ ] Shell completions (bash, zsh, fish)
-
-### 7.2 Terraform Provider
+### 6.1 Terraform Provider
 - [ ] `terraform-provider-xdc-node`
-- [ ] Resources: `xdc_node`, `xdc_monitoring`, `xdc_backup`
-- [ ] Support for AWS, GCP, Azure, Hetzner, DigitalOcean
-- [ ] Example configs for single node and HA cluster
+- [ ] AWS/GCP/Azure modules
+- [ ] Hetzner/DigitalOcean support
+- [ ] Example configurations
+- [ ] State management best practices
 
-### 7.3 Kubernetes Operator
-- [ ] `xdc-node-operator` for K8s deployments
-- [ ] Custom Resource Definition (CRD): `XDCNode`
-- [ ] Auto-scaling based on RPC load
-- [ ] Rolling updates with zero downtime
-- [ ] Helm chart for easy installation
+### 6.2 Kubernetes Operator
+- [ ] Custom Resource Definition (CRD)
+- [ ] Helm chart
+- [ ] Auto-scaling based on load
+- [ ] Rolling updates
+- [ ] Backup integration
 
-### 7.4 One-Click Cloud Deploy
+### 6.3 One-Click Cloud Deploy
 - [ ] AWS CloudFormation template
 - [ ] DigitalOcean 1-Click App
-- [ ] Hetzner Cloud init script
-- [ ] Google Cloud Deployment Manager template
+- [ ] Google Cloud Deploy Manager
 - [ ] Azure ARM template
+- [ ] Hetzner Cloud init
 
 ---
 
-## Phase 8: Community & Ecosystem (v8.0)
+## Phase 7: Community & Ecosystem (Ongoing)
 
-**Goal:** Build a community around XDC node operations.
+### 7.1 Plugin System
+- [ ] Plugin API specification
+- [ ] Custom health check plugins
+- [ ] Custom notification channels
+- [ ] Custom metrics exporters
+- [ ] Plugin marketplace
 
-### 8.1 Plugin System
-- [ ] Plugin API for custom health checks
-- [ ] Plugin API for custom notification channels (Discord, Slack, PagerDuty)
-- [ ] Plugin API for custom metrics exporters
-- [ ] Plugin marketplace / registry
+### 7.2 Network Dashboard
+- [ ] Public XDC network stats
+- [ ] Global node map
+- [ ] Real-time block explorer integration
+- [ ] Network health dashboard
+- [ ] Client version distribution
 
-### 8.2 Network Intelligence
-- [ ] XDC network health overview (aggregate all public nodes)
-- [ ] Geographic node distribution map
-- [ ] Network upgrade readiness tracker
-- [ ] Client diversity statistics
-- [ ] Peer quality scoring
-
-### 8.3 Documentation
-- [ ] Interactive setup guide (step-by-step with screenshots)
-- [ ] Video tutorials for each feature
+### 7.3 Documentation & Education
+- [ ] Interactive tutorials
+- [ ] Video guides
 - [ ] Troubleshooting decision tree
-- [ ] FAQ database
 - [ ] Community forum integration
-
-### 8.4 Testing & CI
-- [ ] GitHub Actions CI pipeline
-- [ ] Automated script testing (shellcheck + bats)
-- [ ] Docker-based integration tests
-- [ ] Release automation (semantic versioning)
-- [ ] Changelog generation
+- [ ] Localization (multi-language)
 
 ---
 
 ## Priority Matrix
 
-| Phase | Impact | Effort | Priority | Timeline |
-|-------|--------|--------|----------|----------|
-| **Phase 2**: Web Dashboard | 🔴 High | 🟡 Medium | **P0** | 2 weeks |
-| **Phase 3**: Multi-Node | 🔴 High | 🔴 High | **P1** | 4 weeks |
-| **Phase 4**: Adv. Monitoring | 🟡 Medium | 🟡 Medium | **P1** | 3 weeks |
-| **Phase 5**: Security | 🟡 Medium | 🟡 Medium | **P2** | 3 weeks |
-| **Phase 6**: Disaster Recovery | 🟡 Medium | 🔴 High | **P2** | 4 weeks |
-| **Phase 7**: Developer Experience | 🔴 High | 🔴 High | **P1** | 6 weeks |
-| **Phase 8**: Community | 🟡 Medium | 🟡 Medium | **P3** | Ongoing |
+| Phase | Impact | Effort | Status | Timeline |
+|-------|--------|--------|--------|----------|
+| Core Infrastructure | 🔴 High | 🔴 High | ✅ Complete | Done |
+| XDC-Specific Features | 🔴 High | 🟡 Medium | ✅ Complete | Done |
+| Advanced Masternode | 🔴 High | 🟡 Medium | ⏳ In Progress | Q1 2026 |
+| XDPoS v2 Integration | 🟡 Medium | 🟡 Medium | 📋 Planned | Q2 2026 |
+| Enterprise Features | 🟡 Medium | 🔴 High | 📋 Planned | Q3 2026 |
+| Developer Experience | 🔴 High | 🔴 High | 📋 Planned | Q4 2026 |
+| Community & Ecosystem | 🟡 Medium | 🟡 Medium | 📋 Ongoing | Ongoing |
 
 ---
 
-## Competitive Analysis
+## Unique Differentiators
 
-| Feature | XDC Node Setup | Dappnode | Stereum | Sedge |
-|---------|---------------|----------|---------|-------|
-| One-line install | ✅ | ✅ | ✅ | ✅ |
-| Security hardening | ✅ | ❌ | ❌ | ❌ |
-| Security scorecard | ✅ | ❌ | ❌ | ❌ |
-| Version auto-update | ✅ | ✅ | ✅ | ❌ |
-| Multi-channel alerts | ✅ | ❌ | ❌ | ❌ |
-| Email notifications | ✅ | ❌ | ❌ | ❌ |
-| Backup system | ✅ | ❌ | ❌ | ❌ |
-| Compliance docs | ✅ | ❌ | ❌ | ❌ |
-| Web dashboard | 🔜 Phase 2 | ✅ | ✅ | ❌ |
-| Multi-node fleet | 🔜 Phase 3 | ❌ | ❌ | ❌ |
-| CLI tool | 🔜 Phase 7 | ✅ | ❌ | ✅ |
-| K8s operator | 🔜 Phase 7 | ❌ | ❌ | ❌ |
-| Terraform | 🔜 Phase 7 | ❌ | ❌ | ❌ |
-| Plugin system | 🔜 Phase 8 | ✅ | ❌ | ❌ |
+What sets XDC Node Setup apart:
 
-**Our differentiators:**
-1. **Security-first** — No other tool provides security scoring + compliance mapping
-2. **Enterprise notifications** — Platform API with email, TG, digest, quiet hours
-3. **XDC-specific** — Built for XDPoS consensus, not generic Ethereum tooling
-4. **Compliance-ready** — 108-item compliance matrix mapped to implementations
+| Feature | XDC Node Setup | Others |
+|---------|----------------|--------|
+| **Masternode wizard** | ✅ Full automation | ❌ Manual |
+| **Epoch/reward tracking** | ✅ Built-in | ❌ None |
+| **Fork detection** | ✅ Multi-RPC comparison | ❌ None |
+| **Bootnode optimization** | ✅ Latency-based | ❌ Static |
+| **Snapshot management** | ✅ Download + create | ❌ Basic |
+| **RPC security profiles** | ✅ 4 profiles | ❌ None |
+| **Network intelligence** | ✅ Peer/client analysis | ❌ None |
+| **Security scorecard** | ✅ 100-point scale | ❌ None |
+| **Multi-channel alerts** | ✅ Platform + TG + Email | ❌ Basic |
+| **Compliance docs** | ✅ 108-item matrix | ❌ None |
 
 ---
 
 ## Contributing
 
-Want to help? Pick an item from any phase, open a PR, and reference this roadmap.
+Want to help? Here's how:
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+1. Pick an item from any phase
+2. Open an issue to discuss approach
+3. Submit a PR with your implementation
+4. Reference this roadmap in your PR
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
+
+---
+
+## Changelog
+
+### v2.1.0 (February 2026)
+- Added masternode setup wizard
+- Added bootnode optimizer with latency testing
+- Added snapshot manager (download/create/verify)
+- Added XDC monitor (epoch, rewards, fork detection)
+- Added sync optimizer with ETA calculation
+- Added RPC security hardening
+- Added network intelligence tools
+- Added comprehensive masternode guide
+- Added sync troubleshooting guide
+- Added RPC profiles for different use cases
+- Updated CLI with new commands
+- Updated documentation with new sections
+
+### v2.0.0 (January 2026)
+- Initial public release
+- Core infrastructure complete
+- Security hardening implemented
+- Monitoring stack deployed
+- CLI tool available
 
 ---
 

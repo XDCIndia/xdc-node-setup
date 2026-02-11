@@ -1026,5 +1026,229 @@ notify_report "daily_health" "Health Report" "$report_content"
 
 ---
 
+## 10. Masternode Operations
+
+> **Implementing script:** [`scripts/masternode-setup.sh`](../scripts/masternode-setup.sh)
+> **Guide:** [`docs/MASTERNODE-GUIDE.md`](./MASTERNODE-GUIDE.md)
+
+### Masternode Requirements
+
+| Requirement | Value | Notes |
+|-------------|-------|-------|
+| **XDC Stake** | 10,000,000 XDC | Locked during masternode operation |
+| **KYC** | Required | Complete at master.xinfin.network |
+| **Hardware** | 16+ cores, 32GB+ RAM, 1TB NVMe | See hardware requirements |
+| **Uptime** | 99.9%+ | Missed blocks affect reputation |
+
+### Masternode Setup Wizard
+
+The setup wizard automates the entire masternode configuration:
+
+```bash
+./scripts/masternode-setup.sh
+```
+
+Steps performed:
+1. System requirements verification
+2. XDC balance check (10M+ required)
+3. Keystore generation or import
+4. Coinbase address configuration
+5. Static peer optimization
+6. Registration guidance
+7. Validator service setup
+8. Monitoring configuration
+
+### Epoch and Round Tracking
+
+XDC uses XDPoS consensus with epochs:
+
+- **Epoch Length**: 900 blocks (~30 minutes)
+- **Block Time**: ~2 seconds
+- **Masternode Count**: 108 validators
+
+Monitor epochs with:
+
+```bash
+./scripts/xdc-monitor.sh --epoch
+```
+
+### Reward Monitoring
+
+```bash
+# Check masternode rewards and status
+./scripts/xdc-monitor.sh --rewards
+
+# Continuous monitoring
+./scripts/xdc-monitor.sh --continuous
+```
+
+### Slashing Prevention
+
+Avoid penalties by:
+- Maintaining 99.9%+ uptime
+- Keeping software updated
+- Never running duplicate validators
+- Monitoring for missed blocks
+
+---
+
+## 11. Sync Optimization
+
+> **Implementing script:** [`scripts/sync-optimizer.sh`](../scripts/sync-optimizer.sh)
+> **Guide:** [`docs/SYNC-GUIDE.md`](./SYNC-GUIDE.md)
+
+### Sync Mode Selection
+
+| Mode | Disk Space | Sync Time | Use Case |
+|------|------------|-----------|----------|
+| **Snap** | ~300GB | Hours | Quick setup, RPC nodes |
+| **Full** | ~500GB | Days | Validators, production RPC |
+| **Archive** | 1-2TB+ | Weeks | Explorers, historical queries |
+
+Auto-recommend based on your hardware:
+
+```bash
+./scripts/sync-optimizer.sh recommend
+```
+
+### Sync Progress Monitoring
+
+```bash
+# Check sync status with ETA
+./scripts/sync-optimizer.sh status
+
+# Auto-refresh every 30 seconds
+./scripts/sync-optimizer.sh watch
+```
+
+### Snapshot Management
+
+Skip initial sync by downloading verified snapshots:
+
+```bash
+# List available snapshots
+./scripts/snapshot-manager.sh list
+
+# Download and install
+./scripts/snapshot-manager.sh download mainnet-full
+
+# Create snapshot from running node
+./scripts/snapshot-manager.sh create /backup/snapshots
+```
+
+### Chaindata Pruning
+
+When disk space is limited:
+
+```bash
+./scripts/sync-optimizer.sh prune
+```
+
+### Multi-Client Comparison
+
+If running multiple clients:
+
+```bash
+./scripts/sync-optimizer.sh compare
+```
+
+---
+
+## 12. Network Intelligence
+
+> **Implementing script:** [`scripts/network-intel.sh`](../scripts/network-intel.sh)
+
+### Peer Geographic Distribution
+
+Map your connected peers by location:
+
+```bash
+./scripts/network-intel.sh peers
+```
+
+Identifies geographic concentration risks (>66% in one country).
+
+### Upgrade Readiness
+
+Check if your node is ready for upgrades:
+
+```bash
+./scripts/network-intel.sh upgrade
+```
+
+Verifies:
+- Current vs latest client version
+- Hard fork block configuration
+- Chain ID correctness
+- Sync status
+- Peer connectivity
+
+### Client Diversity Analysis
+
+Monitor network client distribution:
+
+```bash
+./scripts/network-intel.sh diversity
+```
+
+Warns if >66% of peers run the same client (centralization risk).
+
+### Network Health Monitoring
+
+```bash
+./scripts/network-intel.sh health
+```
+
+Reports:
+- Average block time (last 100 blocks)
+- Block production rate
+- Transaction pool status
+- Comparison with public RPCs
+
+### Fork Detection
+
+Detect if your node is on a wrong fork:
+
+```bash
+./scripts/xdc-monitor.sh --fork
+```
+
+Compares local block hashes with multiple public RPCs:
+- erpc.xinfin.network
+- rpc.xinfin.network
+- rpc.xdc.org
+
+### Bootnode Optimization
+
+Improve peer connectivity:
+
+```bash
+# Optimize mainnet peers
+./scripts/bootnode-optimize.sh
+
+# Optimize testnet peers
+./scripts/bootnode-optimize.sh --testnet
+
+# Check for NAT issues
+./scripts/bootnode-optimize.sh --nat-check
+```
+
+### RPC Security
+
+Harden your RPC endpoint:
+
+```bash
+# List available security profiles
+./scripts/rpc-security.sh profiles
+
+# Generate Nginx config for public RPC
+./scripts/rpc-security.sh generate public
+
+# Audit keystore security
+./scripts/rpc-security.sh audit
+```
+
+---
+
 *Last updated: February 11, 2026*
 *Maintained by: [AnilChinchawale](https://github.com/AnilChinchawale)*

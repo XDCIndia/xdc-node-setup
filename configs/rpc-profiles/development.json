@@ -1,0 +1,33 @@
+{
+  "profile": "development",
+  "description": "Development mode - all methods enabled, no rate limits",
+  "allowed_methods": [
+    "eth_*",
+    "net_*",
+    "web3_*",
+    "admin_*",
+    "debug_*",
+    "personal_*",
+    "miner_*",
+    "txpool_*",
+    "XDPoS_*",
+    "trace_*"
+  ],
+  "blocked_methods": [],
+  "rate_limits": {
+    "default": "unlimited"
+  },
+  "max_batch_size": 1000,
+  "max_response_size": "100MB",
+  "warnings": [
+    "DO NOT USE IN PRODUCTION",
+    "All admin methods are exposed",
+    "Personal methods allow account manipulation",
+    "No rate limiting - vulnerable to DoS",
+    "Use only on localhost for development"
+  ],
+  "recommended_flags": [
+    "--rpcaddr 127.0.0.1",
+    "--rpcapi eth,net,web3,admin,debug,personal,txpool,XDPoS"
+  ]
+}
