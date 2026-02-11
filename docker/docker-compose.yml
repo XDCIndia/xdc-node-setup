@@ -1,5 +1,3 @@
-version: '3.8'
-
 #==============================================================================
 # XDC Node Docker Compose Configuration
 # Implements monitoring standards from XDC-NODE-STANDARDS.md

@@ -146,10 +146,10 @@ spinner() {
 run_with_spinner() {
     local message="$1"
     shift
-    "$@" &
+    "$@" > /dev/null 2>&1 &
     local pid=$!
     spinner "$pid" "$message"
-    wait $pid || return $?
+    wait "$pid" 2>/dev/null || return $?
 }
 
 #==============================================================================
@@ -629,7 +629,7 @@ setup_docker_compose() {
     mkdir -p "$INSTALL_DIR/docker"
     
     # Determine Docker image and flags based on node type
-    local xdc_image="xinfinorg/xinfin:latest"
+    local xdc_image="xinfinorg/xinfinnetwork:v1.4.7"
     local extra_flags=""
     
     case "$NODE_TYPE" in
@@ -649,8 +649,6 @@ setup_docker_compose() {
     
     # Create docker-compose.yml
     cat > "$INSTALL_DIR/docker/docker-compose.yml" << EOF
-version: '3.8'
-
 services:
   xdc-node:
     image: $xdc_image
@@ -1113,7 +1111,7 @@ uninstall_node() {
     log "XDC node uninstalled successfully"
     echo ""
     echo -e "${GREEN}Uninstall complete.${NC}"
-    echo "Note: Docker images were not removed. To remove: docker rmi xinfinorg/xinfin:latest"
+    echo "Note: Docker images were not removed. To remove: docker rmi xinfinorg/xinfinnetwork:v1.4.7"
 }
 
 #==============================================================================
