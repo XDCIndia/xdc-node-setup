@@ -1,10 +1,10 @@
 #!/bin/bash
 #==============================================================================
-# XDC Node Startup Script - Production Grade
+# XDC Testnet (Apothem) Node Startup Script - Production Grade
 # 
 # This script is called by the official entry.sh after it creates the
 # XDC binary symlink. It handles node initialization, configuration,
-# and graceful shutdown.
+# and graceful shutdown for the XDC testnet.
 #==============================================================================
 
 # Strict error handling - exit on any error, undefined vars, pipe failures
@@ -14,16 +14,16 @@ set -euo pipefail
 # Configuration via Environment Variables
 #------------------------------------------------------------------------------
 
-# Network configuration (defaults to mainnet if not set via entry.sh)
-NETWORK="${NETWORK:-mainnet}"
-INSTANCE_NAME="${INSTANCE_NAME:-xdc-mainnet-node}"
+# Network configuration (defaults to testnet)
+NETWORK="${NETWORK:-testnet}"
+INSTANCE_NAME="${INSTANCE_NAME:-xdc-testnet-node}"
 
 # Sync and storage configuration
 SYNC_MODE="${SYNC_MODE:-full}"           # full or fast
 GC_MODE="${GC_MODE:-archive}"            # full or archive
 LOG_LEVEL="${LOG_LEVEL:-2}"              # 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail
 
-# RPC configuration (enabled by default for production nodes)
+# RPC configuration (enabled by default)
 ENABLE_RPC="${ENABLE_RPC:-true}"
 RPC_ADDR="${RPC_ADDR:-0.0.0.0}"
 RPC_PORT="${RPC_PORT:-8545}"
@@ -119,7 +119,7 @@ trap 'shutdown_handler SIGINT' SIGINT
 #------------------------------------------------------------------------------
 
 initialize_node() {
-    echo "[INFO] Initializing XDC node..."
+    echo "[INFO] Initializing XDC testnet node..."
     echo "[INFO] Network: ${NETWORK}"
     echo "[INFO] Sync Mode: ${SYNC_MODE}"
     echo "[INFO] GC Mode: ${GC_MODE}"
@@ -239,12 +239,12 @@ build_node_args() {
     local wallet=$1
     local args=()
     
-    # Get instance IP for ethstats
+    # Get instance IP for ethstats (Apothem testnet stats server)
     local instance_ip
     instance_ip=$(curl -s --max-time 5 https://checkip.amazonaws.com 2>/dev/null || echo "unknown")
-    local netstats="${INSTANCE_NAME}:xinfin_xdpos_hybrid_network_stats@stats.xinfin.network:3000"
+    local netstats="${INSTANCE_NAME}:xdc_xinfin_apothem_network_stats@stats.apothem.network:3000"
     
-    # Core node arguments
+    # Core node arguments - testnet uses networkid 51
     args+=(
         --ethstats "${netstats}"
         --bootnodes "${BOOTNODES}"
@@ -252,7 +252,7 @@ build_node_args() {
         --gcmode "${GC_MODE}"
         --datadir /work/xdcchain
         --XDCx.datadir /work/xdcchain/XDCx
-        --networkid 50
+        --networkid 51
         --port "${PORT}"
         --nat "${NAT}"
         --unlock "${wallet}"
@@ -281,7 +281,7 @@ build_node_args() {
         )
     fi
     
-    # Add RPC/WebSocket arguments (enabled by default for production)
+    # Add RPC/WebSocket arguments (enabled by default)
     if [[ "${ENABLE_RPC}" == "true" ]]; then
         args+=(
             --rpc
@@ -308,7 +308,7 @@ build_node_args() {
 
 main() {
     echo "=============================================================================="
-    echo "XDC Node Startup - $(date)"
+    echo "XDC Testnet (Apothem) Node Startup - $(date)"
     echo "=============================================================================="
     
     # Initialize node (creates wallet if needed)
@@ -334,20 +334,17 @@ main() {
     local node_args
     node_args=$(build_node_args "${wallet}")
     
-    echo "[INFO] Starting XDC node with arguments:"
+    echo "[INFO] Starting XDC testnet node with arguments:"
     echo "       ${node_args}"
     echo "=============================================================================="
     
     # Start the node in the background and capture PID
-    # Use exec to replace this shell process, but we need signal handling
-    # So we run in background and wait
     XDC ${node_args} 2>&1 | tee -a "${LOG_FILE}" &
     XDC_PID=$!
     
-    echo "[INFO] XDC node started with PID: ${XDC_PID}"
+    echo "[INFO] XDC testnet node started with PID: ${XDC_PID}"
     
     # Wait for the node process
-    # The wait will be interrupted by signals, which are handled by our trap
     wait ${XDC_PID} || true
     
     # If we get here without shutdown being requested, the node crashed

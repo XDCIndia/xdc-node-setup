@@ -1,12 +1,13 @@
 #==============================================================================
-# XDC Node Docker Compose Configuration
+# XDC Node Docker Compose Configuration - Production Grade
 # Implements monitoring standards from XDC-NODE-STANDARDS.md
-# Features: Network isolation, health checks, proper volumes
+# Features: Network isolation, health checks, proper volumes, security hardening
 #==============================================================================
 
 services:
   #--------------------------------------------------------------------------
   # XDC Node - Main blockchain client
+  # Uses official entrypoint flow: entry.sh -> start.sh
   #--------------------------------------------------------------------------
   xdc-node:
     image: xinfinorg/xdposchain:v2.6.8
@@ -19,25 +20,19 @@ services:
       - "8546:8546"
     volumes:
       - ./mainnet/xdcchain:/work/xdcchain
-      - ./mainnet/genesis.json:/work/genesis.json
-      - ./mainnet/start-node.sh:/work/start.sh
-      - ./mainnet/bootnodes.list:/work/bootnodes.list
-      - ./mainnet/.pwd:/work/.pwd
+      - ./mainnet/genesis.json:/work/genesis.json:ro
+      - ./mainnet/start-node.sh:/work/start.sh:ro
+      - ./mainnet/bootnodes.list:/work/bootnodes.list:ro
+      - ./mainnet/.pwd:/work/.pwd:ro
+      - ./mainnet/.env:/work/.env:ro
       - /etc/localtime:/etc/localtime:ro
     env_file:
       - ./mainnet/.env
-    entrypoint: /work/start.sh
-      --wsport 8546
-      --wsorigins "*"
-      --wsapi eth,net,web3,XDPoS
-      --port 30303
-      --nat any
-      --metrics
-      --metrics.addr 0.0.0.0
-      --metrics.port 6060
-      --pprof
-      --pprof.addr 0.0.0.0
-      --pprof.port 6060
+    environment:
+      # Network must be set for official entry.sh to create correct symlink
+      - NETWORK=${NETWORK:-mainnet}
+    # Use official entrypoint flow - entry.sh creates symlink then calls start.sh
+    entrypoint: ["/work/entry.sh"]
     networks:
       - xdc-network
       - xdc-monitoring
@@ -186,17 +181,18 @@ services:
 
   #--------------------------------------------------------------------------
   # Grafana - Visualization
+  # Exposed on 0.0.0.0:3000 - restrict via firewall in production
   #--------------------------------------------------------------------------
   grafana:
     image: grafana/grafana:10.2.3
     container_name: xdc-grafana
     restart: unless-stopped
-    # Only accessible via localhost for security
+    # Exposed on all interfaces - restrict via firewall in production
     ports:
-      - "127.0.0.1:3000:3000"
+      - "0.0.0.0:3000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-changeme}
       - GF_SECURITY_SECRET_KEY=${GRAFANA_SECRET_KEY:-xdc-grafana-secret}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_USERS_AUTO_ASSIGN_ORG=true
@@ -258,6 +254,7 @@ services:
 
   #--------------------------------------------------------------------------
   # Dashboard - Web UI for monitoring
+  # Exposed on 0.0.0.0:3001 - restrict via firewall in production
   #--------------------------------------------------------------------------
   dashboard:
     build:
@@ -267,7 +264,7 @@ services:
     container_name: xdc-dashboard
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3001:3000"
+      - "0.0.0.0:3001:3000"
     volumes:
       - ../reports:/app/reports:ro
       - ../configs:/app/configs:ro
