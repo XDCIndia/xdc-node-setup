@@ -66,11 +66,37 @@
 
 ## 🚀 Quick Start
 
-### One-Line Installer
+### Quick Start (Simple)
+
+The simplest way to get started - just run and go:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/AnilChinchawale/XDC-Node-Setup/main/setup.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/setup.sh | sudo bash
 ```
+
+This will:
+- Auto-detect your OS (Linux/macOS)
+- Install Docker if missing
+- Pull the XDC Docker image
+- Start a full node on mainnet with sensible defaults
+- Set up basic monitoring (Grafana + Prometheus)
+- Install the `xdc-node` CLI tool
+
+### Advanced Setup
+
+For more control over your node configuration:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/setup.sh | sudo bash -s -- --advanced
+```
+
+This interactive mode lets you configure:
+- Network: mainnet / testnet (Apothem)
+- Node type: Full / Archive / RPC / Masternode
+- Sync mode: full / snap
+- Data directory location
+- RPC and P2P ports
+- Monitoring, security, notifications, auto-updates
 
 ### Manual Installation
 
@@ -80,11 +106,27 @@ cd XDC-Node-Setup
 sudo ./setup.sh
 ```
 
-### Non-Interactive Mode
+### Environment Variables
+
+Configure via environment variables (works in both modes):
 
 ```bash
-sudo NODE_TYPE=full NETWORK=mainnet ./setup.sh --non-interactive
+# Simple mode with custom settings
+sudo NODE_TYPE=archive NETWORK=mainnet RPC_PORT=8545 ./setup.sh
+
+# Advanced mode with pre-configured values
+sudo NODE_TYPE=rpc NETWORK=testnet ENABLE_MONITORING=true ./setup.sh --advanced
 ```
+
+Available variables:
+- `NODE_TYPE`: full, archive, rpc, masternode (default: full)
+- `NETWORK`: mainnet, testnet (default: mainnet)
+- `DATA_DIR`: Data directory path
+- `RPC_PORT`: RPC port (default: 8545)
+- `P2P_PORT`: P2P port (default: 30303)
+- `ENABLE_MONITORING`: true/false (default: true)
+- `ENABLE_SECURITY`: true/false (default: true, Linux only)
+- `ENABLE_UPDATES`: true/false (default: true)
 
 ### Implement All Standards
 
