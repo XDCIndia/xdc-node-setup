@@ -87,7 +87,7 @@ Within each round, validators take turns proposing blocks:
 
 ```bash
 # Monitor checkpoint status
-xdc-node consensus finality
+xdc consensus finality
 ```
 
 ---
@@ -115,20 +115,20 @@ xdc-node consensus finality
 
 ```bash
 # Check stake requirements
-xdc-node masternode setup
+xdc masternode setup
 
 # Register as candidate (requires 10M XDC)
-xdc-node masternode register
+xdc masternode register
 
 # Check registration status
-xdc-node masternode status
+xdc masternode status
 ```
 
 ### Validator Set Size
 
 - **Maximum**: 108 masternodes
 - **Minimum**: 21 masternodes
-- **Current**: Varies (check with `xdc-node consensus rotation`)
+- **Current**: Varies (check with `xdc consensus rotation`)
 
 ---
 
@@ -162,10 +162,10 @@ Epoch N:
 
 ```bash
 # Show current rotation schedule
-xdc-node consensus rotation
+xdc consensus rotation
 
 # Watch rotation in real-time
-xdc-node consensus --watch
+xdc consensus --watch
 ```
 
 **Output Example:**
@@ -213,13 +213,13 @@ Double Signing:   100% stake slashed + permanent ban
 
 ```bash
 # Check for penalties
-xdc-node consensus penalties
+xdc consensus penalties
 
 # Monitor for slashing events
-xdc-node rewards slashing
+xdc rewards slashing
 
 # Check missed blocks
-xdc-node rewards missed
+xdc rewards missed
 ```
 
 ### Avoiding Penalties
@@ -282,16 +282,16 @@ XDC Network uses on-chain governance for protocol upgrades and parameter changes
 
 ```bash
 # List active proposals
-xdc-node governance proposals
+xdc governance proposals
 
 # View proposal details
-xdc-node governance impact --id 123
+xdc governance impact --id 123
 
 # Cast vote (requires masternode)
-xdc-node governance vote --id 123 --vote yes
+xdc governance vote --id 123 --vote yes
 
 # View voting history
-xdc-node governance history
+xdc governance history
 ```
 
 ### Participation Requirements
@@ -361,37 +361,37 @@ XDPoS v2 does **not** have uncle/orphan blocks like Ethereum. Each block has exa
 
 ```bash
 # Show all consensus info
-xdc-node consensus
+xdc consensus
 
 # Watch mode (updates every 5 seconds)
-xdc-node consensus --watch
+xdc consensus --watch
 
 # Specific metrics
-xdc-node consensus epoch       # Epoch progress
-xdc-node consensus rounds      # Round tracking
-xdc-node consensus votes       # Vote counts
-xdc-node consensus finality    # Checkpoint status
-xdc-node consensus rotation    # Masternode schedule
-xdc-node consensus penalties   # Active penalties
+xdc consensus epoch       # Epoch progress
+xdc consensus rounds      # Round tracking
+xdc consensus votes       # Vote counts
+xdc consensus finality    # Checkpoint status
+xdc consensus rotation    # Masternode schedule
+xdc consensus penalties   # Active penalties
 ```
 
 ### Network Statistics
 
 ```bash
 # Validator rankings
-xdc-node network-stats rankings
+xdc network-stats rankings
 
 # Network aggregates
-xdc-node network-stats aggregate
+xdc network-stats aggregate
 
 # Peer reputation
-xdc-node network-stats reputation
+xdc network-stats reputation
 
 # Geographic distribution
-xdc-node network-stats geo
+xdc network-stats geo
 
 # Client diversity
-xdc-node network-stats clients
+xdc network-stats clients
 ```
 
 ### Dashboard
@@ -400,7 +400,7 @@ Access the web dashboard for visual monitoring:
 
 ```bash
 # Start dashboard
-xdc-node dashboard
+xdc dashboard
 
 # Access at http://localhost:3000
 ```
@@ -523,21 +523,21 @@ See `/opt/xdc-node/configs/xdpos-v2.json`:
 
 ### Node Not Producing Blocks
 
-1. Check if in validator set: `xdc-node consensus rotation`
-2. Verify stake is locked: `xdc-node masternode status`
-3. Ensure sync complete: `xdc-node sync status`
-4. Check for penalties: `xdc-node consensus penalties`
+1. Check if in validator set: `xdc consensus rotation`
+2. Verify stake is locked: `xdc masternode status`
+3. Ensure sync complete: `xdc sync status`
+4. Check for penalties: `xdc consensus penalties`
 
 ### Sync Stuck at Epoch Boundary
 
-1. Restart node: `xdc-node restart`
-2. Check peers: `xdc-node network peers`
+1. Restart node: `xdc restart`
+2. Check peers: `xdc network peers`
 3. Verify network config: `cat /etc/xdc-node/xdc.conf`
 
 ### Governance Vote Not Counting
 
-1. Verify masternode is active: `xdc-node masternode status`
-2. Check vote was submitted: `xdc-node governance history`
+1. Verify masternode is active: `xdc masternode status`
+2. Check vote was submitted: `xdc governance history`
 3. Ensure within voting period
 
 ---

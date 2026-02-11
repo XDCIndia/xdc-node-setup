@@ -194,8 +194,8 @@ systemctl status xdc-node
 docker ps | grep xdc-node
 
 # Check logs
-journalctl -u xdc-node -f
-docker logs xdc-node --tail 100
+journalctl -u xdc -f
+docker logs xdc --tail 100
 
 # Restart if needed
 docker compose -f /opt/xdc-node/docker/docker-compose.yml restart

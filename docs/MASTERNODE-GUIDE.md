@@ -244,7 +244,7 @@ If you're missing blocks (not validating when scheduled):
 4. **Review logs** for errors:
 
 ```bash
-xdc-node logs -f | grep -i error
+xdc logs -f | grep -i error
 ```
 
 #### Node Offline Alert
@@ -309,7 +309,7 @@ sudo nano /etc/xdc-node/notify.conf
 ./scripts/version-check.sh
 
 # Update when available
-xdc-node update --apply
+xdc update --apply
 ```
 
 ### 5. Hardware Redundancy
@@ -393,19 +393,19 @@ At current infrastructure costs (~$150/mo = $1,800/year):
 
 ```bash
 # Check masternode status
-xdc-node masternode status
+xdc masternode status
 
 # View rewards
 ./scripts/xdc-monitor.sh --rewards
 
 # Check sync
-xdc-node sync status
+xdc sync status
 
 # View logs
-xdc-node logs -f
+xdc logs -f
 
 # Restart node
-sudo xdc-node restart --graceful
+sudo xdc restart --graceful
 ```
 
 ---

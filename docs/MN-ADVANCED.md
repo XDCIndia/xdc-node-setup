@@ -37,19 +37,19 @@ The XDC Masternode Rewards System tracks historical rewards, calculates APY, and
 
 ```bash
 # Show current reward summary
-xdc-node rewards
+xdc rewards
 
 # Show reward history for last 30 days
-xdc-node rewards history --days 30
+xdc rewards history --days 30
 
 # Calculate APY
-xdc-node rewards apy
+xdc rewards apy
 
 # Show missed blocks report
-xdc-node rewards missed
+xdc rewards missed
 
 # Export to CSV
-xdc-node rewards export csv
+xdc rewards export csv
 ```
 
 ### Database Schema
@@ -70,10 +70,10 @@ Add to your notification config to receive reward alerts:
 
 ```bash
 # Notify when rewards are below expected
-xdc-node notify --send "Reward below expected threshold" --level warning
+xdc notify --send "Reward below expected threshold" --level warning
 
 # Notify on slashing events
-xdc-node notify --send "Masternode slashing detected" --level critical
+xdc notify --send "Masternode slashing detected" --level critical
 ```
 
 ---
@@ -119,10 +119,10 @@ On your primary node:
 
 ```bash
 # Initialize cluster with custom ID
-xdc-node cluster init --cluster-id xdc-mn-prod-001
+xdc cluster init --cluster-id xdc-mn-prod-001
 
 # Or use auto-generated ID
-xdc-node cluster init
+xdc cluster init
 ```
 
 This creates:
@@ -134,10 +134,10 @@ This creates:
 
 ```bash
 # Add a backup node
-xdc-node cluster add-node 192.168.1.100 --user xdc
+xdc cluster add-node 192.168.1.100 --user xdc
 
 # Add with specific SSH key
-xdc-node cluster add-node 192.168.1.101 --user xdc --ssh-key /path/to/key
+xdc cluster add-node 192.168.1.101 --user xdc --ssh-key /path/to/key
 ```
 
 #### 3. Configure SSH Keys
@@ -153,14 +153,14 @@ ssh-copy-id -i ~/.ssh/xdc_cluster.pub xdc@192.168.1.100
 ssh-copy-id -i ~/.ssh/xdc_cluster.pub xdc@192.168.1.101
 
 # Update cluster config
-xdc-node cluster config set SSH_KEY_PATH /home/xdc/.ssh/xdc_cluster
+xdc cluster config set SSH_KEY_PATH /home/xdc/.ssh/xdc_cluster
 ```
 
 #### 4. Sync Keystore
 
 ```bash
 # Sync masternode keys to all nodes
-xdc-node cluster sync-keys
+xdc cluster sync-keys
 ```
 
 This distributes:
@@ -172,26 +172,26 @@ This distributes:
 
 ```bash
 # Set current node as primary
-xdc-node cluster promote $(hostname -I | awk '{print $1}')
+xdc cluster promote $(hostname -I | awk '{print $1}')
 ```
 
 ### Cluster Commands
 
 ```bash
 # Check cluster status
-xdc-node cluster status
+xdc cluster status
 
 # Check health of all nodes
-xdc-node cluster health
+xdc cluster health
 
 # Manual failover to specific node
-xdc-node cluster failover --node 192.168.1.100
+xdc cluster failover --node 192.168.1.100
 
 # Remove a node
-xdc-node cluster remove-node 192.168.1.100
+xdc cluster remove-node 192.168.1.100
 
 # View configuration
-xdc-node cluster config
+xdc cluster config
 ```
 
 ### Health Check & Auto-Failover
@@ -200,7 +200,7 @@ The cluster includes automatic health monitoring:
 
 ```bash
 # Check health (runs automatically via cron)
-xdc-node cluster health
+xdc cluster health
 
 # View health check logs
 tail -f /var/log/xdc-node/cluster-health.log
@@ -237,16 +237,16 @@ Auto-compounding automatically restakes your rewards, increasing your total stak
 
 ```bash
 # Enable with default threshold (1000 XDC)
-xdc-node stake compound --enable
+xdc stake compound --enable
 
 # Enable with custom threshold
-xdc-node stake compound --enable --threshold 5000
+xdc stake compound --enable --threshold 5000
 
 # Check status
-xdc-node stake compound-status
+xdc stake compound-status
 
 # Trigger manually
-xdc-node stake compound-now
+xdc stake compound-now
 ```
 
 ### Threshold Recommendations
@@ -275,7 +275,7 @@ crontab -l | grep compound
 ### Disabling Auto-Compound
 
 ```bash
-xdc-node stake compound --disable
+xdc stake compound --disable
 ```
 
 ---
@@ -290,13 +290,13 @@ The tax reporting feature generates CSV exports suitable for tax filing, includi
 
 ```bash
 # Generate report for current year
-xdc-node stake tax-report
+xdc stake tax-report
 
 # Generate for specific year
-xdc-node stake tax-report --year 2025
+xdc stake tax-report --year 2025
 
 # Save to specific file
-xdc-node stake tax-report --year 2025 --output xdc-taxes-2025.csv
+xdc stake tax-report --year 2025 --output xdc-taxes-2025.csv
 ```
 
 ### Report Format
@@ -339,7 +339,7 @@ Capital Gain: $2.00 (long-term or short-term depending on holding period)
 
 ```bash
 # View your cost basis
-xdc-node stake cost-basis
+xdc stake cost-basis
 ```
 
 This shows:
@@ -365,10 +365,10 @@ This shows:
 
 ```bash
 # Monitor uptime
-xdc-node status --watch
+xdc status --watch
 
 # Setup alerting for downtime
-xdc-node notify --test
+xdc notify --test
 ```
 
 **Impact**: 99.9% vs 95% uptime = ~5% difference in rewards
@@ -377,10 +377,10 @@ xdc-node notify --test
 
 ```bash
 # Check peer connections
-xdc-node network peers
+xdc network peers
 
 # Optimize bootnodes
-xdc-node peers optimize
+xdc peers optimize
 ```
 
 **Target**: 25+ peers for optimal block propagation
@@ -401,10 +401,10 @@ See [Auto-Compound Setup](#auto-compound-setup) section.
 
 ```bash
 # Check penalty status
-xdc-node consensus penalties
+xdc consensus penalties
 
 # Monitor missed blocks
-xdc-node rewards missed
+xdc rewards missed
 ```
 
 **Penalty Risks:**
@@ -415,7 +415,7 @@ xdc-node rewards missed
 
 ```bash
 # Get withdrawal recommendations
-xdc-node stake withdraw-plan
+xdc stake withdraw-plan
 ```
 
 Factors to consider:
@@ -429,7 +429,7 @@ Estimate your returns:
 
 ```bash
 # Estimate 90-day rewards
-xdc-node stake estimate-rewards --days 90
+xdc stake estimate-rewards --days 90
 ```
 
 **Formula:**
@@ -445,10 +445,10 @@ Track your masternode performance over time:
 
 ```bash
 # Compare actual vs expected rewards
-xdc-node rewards compare
+xdc rewards compare
 
 # View APY history
-xdc-node rewards apy --days 90
+xdc rewards apy --days 90
 ```
 
 ### Advanced: Multi-Masternode Strategy
@@ -474,7 +474,7 @@ For operators with 20M+ XDC:
 
 ```bash
 # Initialize database
-xdc-node rewards --init-db
+xdc rewards --init-db
 
 # Check database exists
 ls -la /var/lib/xdc-node/rewards.db
@@ -484,7 +484,7 @@ ls -la /var/lib/xdc-node/rewards.db
 
 ```bash
 # Check SSH connectivity
-xdc-node cluster health
+xdc cluster health
 
 # Verify heartbeat cron
 crontab -l | grep cluster
@@ -497,7 +497,7 @@ tail -f /var/log/xdc-node/cluster.log
 
 ```bash
 # Check compound status
-xdc-node stake compound-status
+xdc stake compound-status
 
 # Verify cron job
 crontab -l | grep compound

@@ -255,12 +255,12 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
 - `docs/XDPOS-V2.md` — XDPoS v2 deep dive
 
 **CLI Commands Added:**
-- `xdc-node rewards` — Rewards analytics
-- `xdc-node cluster` — Cluster management
-- `xdc-node stake` — Stake management
-- `xdc-node consensus` — Consensus monitoring
-- `xdc-node network-stats` — Network statistics
-- `xdc-node governance` — Governance participation
+- `xdc rewards` — Rewards analytics
+- `xdc cluster` — Cluster management
+- `xdc stake` — Stake management
+- `xdc consensus` — Consensus monitoring
+- `xdc network-stats` — Network statistics
+- `xdc governance` — Governance participation
 
 **Monitoring Updates:**
 - Added XDPoS-specific alerts (epoch change, penalties, etc.)

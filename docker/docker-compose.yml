@@ -292,6 +292,47 @@ services:
     profiles:
       - dashboard
 
+  #--------------------------------------------------------------------------
+  # XDC Owner Metrics Collector - Collects owner-focused metrics via RPC
+  # Runs every 60 seconds and writes to node-exporter textfile collector
+  #--------------------------------------------------------------------------
+  xdc-metrics-collector:
+    image: alpine:latest
+    container_name: xdc-metrics-collector
+    restart: unless-stopped
+    environment:
+      - RPC_URL=http://xdc-node:8545
+      - DATADIR=/work/xdcchain
+      - TEXTFILE_DIR=/textfile_collector
+      - COLLECTION_INTERVAL=60
+    volumes:
+      - /var/lib/node_exporter/textfile_collector:/textfile_collector:rw
+      - ../scripts/node-owner-metrics.sh:/usr/local/bin/node-owner-metrics.sh:ro
+      - ./mainnet/xdcchain:/work/xdcchain:ro
+    command:
+      - /bin/sh
+      - -c
+      - |
+        apk add --no-cache curl jq bc bash coreutils dc 2>/dev/null || apk add --no-cache curl jq bash coreutils
+        chmod +x /usr/local/bin/node-owner-metrics.sh
+        echo "Starting XDC metrics collector..."
+        echo "RPC_URL: $$RPC_URL"
+        echo "Collection interval: $$COLLECTION_INTERVAL seconds"
+        while true; do
+          /usr/local/bin/node-owner-metrics.sh || echo "Metrics collection failed, retrying..."
+          sleep $$COLLECTION_INTERVAL
+        done
+    networks:
+      - xdc-monitoring
+    depends_on:
+      - xdc-node
+      - node-exporter
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 #==============================================================================
 # Networks
 #==============================================================================

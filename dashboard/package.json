@@ -1,7 +1,6 @@
 {
-  "name": "xdc-node-dashboard",
-  "version": "1.0.0",
-  "description": "Web dashboard for XDC Node monitoring and management",
+  "name": "dashboard",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -10,21 +9,20 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "next": "14.2.3",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "recharts": "^2.12.7",
-    "ws": "^8.17.0",
-    "glob": "^10.3.12"
+    "@amcharts/amcharts5": "^5.15.6",
+    "@amcharts/amcharts5-geodata": "^5.1.5",
+    "echarts": "^6.0.0",
+    "lucide-react": "^0.563.0",
+    "next": "14.2.35",
+    "react": "^18",
+    "react-dom": "^18"
   },
   "devDependencies": {
-    "@types/node": "^20.12.12",
-    "@types/react": "^18.3.2",
-    "@types/react-dom": "^18.3.0",
-    "@types/ws": "^8.5.10",
-    "autoprefixer": "^10.4.19",
-    "postcss": "^8.4.38",
-    "tailwindcss": "^3.4.3",
-    "typescript": "^5.4.5"
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
   }
 }

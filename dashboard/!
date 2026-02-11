@@ -1,0 +1,39 @@
+Failed to compile.
+
+./components/PeerMap.tsx
+Error: 
+  [31mx[0m the name `PeerMapContent` is defined multiple times
+    ,-[[36;1;4m/root/.openclaw/workspace/XDC-Node-Setup/dashboard/components/PeerMap.tsx[0m:6:1]
+ [2m 6[0m | import type { PeersData, PeerInfo } from '@/lib/types';
+ [2m 7[0m | 
+ [2m 8[0m | // Dynamically import echarts to avoid SSR issues
+ [2m 9[0m | const PeerMapContent = dynamic(() => import('./PeerMapContent'), { 
+    : [31;1m      ^^^^^^^|^^^^^^[0m
+    :              [31;1m`-- [31;1mprevious definition of `PeerMapContent` here[0m[0m
+ [2m10[0m |   ssr: false,
+ [2m11[0m |   loading: () => (
+ [2m12[0m |     <div className="flex items-center justify-center h-[450px]">
+ [2m13[0m |       <div className="w-12 h-12 border-4 border-[#1E90FF] border-t-transparent rounded-full animate-spin"></div>
+ [2m14[0m |     </div>
+ [2m15[0m |   )
+ [2m16[0m | });
+ [2m17[0m | 
+ [2m18[0m | interface PeerMapProps {
+ [2m19[0m |   peers: PeersData;
+ [2m20[0m | }
+ [2m21[0m | 
+ [2m22[0m | // Export the component for the dynamic import
+ [2m23[0m | export function PeerMapContent({ peers }: { peers: PeersData }) {
+    : [33;1m                ^^^^^^^|^^^^^^[0m
+    :                        [33;1m`-- [33;1m`PeerMapContent` redefined here[0m[0m
+ [2m24[0m |   const chartRef = useRef<HTMLDivElement>(null);
+ [2m25[0m |   const chartInstanceRef = useRef<ECharts | null>(null);
+ [2m26[0m |   const [worldJson, setWorldJson] = useState<any>(null);
+    `----
+
+Import trace for requested module:
+./components/PeerMap.tsx
+./app/page.tsx
+
+
+> Build failed because of webpack errors

@@ -42,7 +42,7 @@ curl -X POST http://localhost:8545 \
   -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' | jq
 
 # View node logs
-docker logs xdc-node --tail 100 -f
+docker logs xdc --tail 100 -f
 ```
 
 ### Solutions
@@ -124,7 +124,7 @@ ufw reload
 **2. Check Port Forwarding (if behind NAT)**
 ```bash
 # Verify NAT configuration
-docker exec xdc-node XDC --nat extip:$(curl -s ifconfig.me)
+docker exec xdc XDC --nat extip:$(curl -s ifconfig.me)
 ```
 
 **3. Add Static Peers**
@@ -425,7 +425,7 @@ curl -X POST http://<server-ip>:8545 \
 **1. Verify RPC is Enabled**
 ```bash
 # Check node is started with RPC flags
-docker logs xdc-node | grep -i "rpc"
+docker logs xdc | grep -i "rpc"
 ```
 
 **2. Use SSH Tunnel for Remote Access**

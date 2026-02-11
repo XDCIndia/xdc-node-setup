@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XDC Node Status</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a1a;
+            --bg-secondary: #111128;
+            --bg-card: #151530;
+            --bg-hover: #1a1a40;
+            --accent: #1E90FF;
+            --accent-glow: rgba(30, 144, 255, 0.3);
+            --healthy: #00ff88;
+            --warning: #ffaa00;
+            --error: #ff4444;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0c0;
+            --text-muted: #606080;
+            --border: #2a2a50;
+            --grid-gap: 20px;
+            --radius: 12px;
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .header-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .logo {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent) 0%, #00a8ff 100%);
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .header-title {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .refresh-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .refresh-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--healthy);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .refresh-dot.updating {
+            animation: spin 1s linear infinite;
+            background: var(--accent);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--healthy); }
+            50% { opacity: 0.7; box-shadow: 0 0 0 8px transparent; }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge.online {
+            background: rgba(0, 255, 136, 0.15);
+            color: var(--healthy);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+
+        .status-badge.offline {
+            background: rgba(255, 68, 68, 0.15);
+            color: var(--error);
+            border: 1px solid rgba(255, 68, 68, 0.3);
+        }
+
+        .status-badge.warning {
+            background: rgba(255, 170, 0, 0.15);
+            color: var(--warning);
+            border: 1px solid rgba(255, 170, 0, 0.3);
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: var(--grid-gap);
+        }
+
+        /* Section Styling */
+        .section {
+            margin-bottom: var(--grid-gap);
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 16px;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+
+        /* Grid Layouts */
+        .client-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: var(--grid-gap);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--grid-gap);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            transition: var(--transition);
+        }
+
+        .card:hover {
+            border-color: var(--accent);
+            box-shadow: 0 0 30px rgba(30, 144, 255, 0.1);
+        }
+
+        .client-card {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .client-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent) 0%, var(--healthy) 100%);
+        }
+
+        .client-card.offline::before {
+            background: var(--error);
+        }
+
+        .client-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+
+        .client-name {
+            font-size: 18px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .client-version {
+            font-size: 12px;
+            color: var(--text-muted);
+            background: var(--bg-secondary);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .client-status {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .client-status.online { background: var(--healthy); box-shadow: 0 0 10px var(--healthy); }
+        .client-status.offline { background: var(--error); }
+        .client-status.syncing { background: var(--warning); animation: pulse 1.5s infinite; }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .metric-value {
+            font-size: 14px;
+            font-weight: 600;
+            font-family: 'SF Mono', Monaco, monospace;
+            transition: var(--transition);
+        }
+
+        .metric-value.updated {
+            animation: valueUpdate 0.5s ease;
+        }
+
+        @keyframes valueUpdate {
+            0% { color: var(--accent); text-shadow: 0 0 10px var(--accent-glow); }
+            100% { color: var(--text-primary); }
+        }
+
+        .metric-value.success { color: var(--healthy); }
+        .metric-value.warning { color: var(--warning); }
+        .metric-value.error { color: var(--error); }
+
+        /* Progress Bars */
+        .progress-container {
+            margin: 10px 0;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            margin-bottom: 6px;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent) 0%, var(--healthy) 100%);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .progress-fill.warning {
+            background: linear-gradient(90deg, var(--warning) 0%, #ff8800 100%);
+        }
+
+        .progress-fill.error {
+            background: linear-gradient(90deg, var(--error) 0%, #cc0000 100%);
+        }
+
+        /* Sparklines */
+        .sparkline-container {
+            width: 100%;
+            height: 60px;
+            margin-top: 10px;
+        }
+
+        .sparkline {
+            width: 100%;
+            height: 100%;
+        }
+
+        .sparkline path {
+            fill: none;
+            stroke: var(--accent);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .sparkline-area {
+            fill: url(#sparklineGradient);
+            opacity: 0.3;
+        }
+
+        /* Stats Box */
+        .stat-box {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            border: 1px solid transparent;
+            transition: var(--transition);
+        }
+
+        .stat-box:hover {
+            border-color: var(--border);
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            font-family: 'SF Mono', Monaco, monospace;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Gauges */
+        .gauge-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 15px;
+        }
+
+        .gauge {
+            width: 120px;
+            height: 60px;
+            position: relative;
+        }
+
+        .gauge-bg {
+            fill: none;
+            stroke: var(--bg-secondary);
+            stroke-width: 12;
+        }
+
+        .gauge-fill {
+            fill: none;
+            stroke: var(--accent);
+            stroke-width: 12;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.5s ease;
+        }
+
+        .gauge-fill.warning { stroke: var(--warning); }
+        .gauge-fill.error { stroke: var(--error); }
+
+        .gauge-value {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 20px;
+            font-weight: 700;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 30px;
+            border-top: 1px solid var(--border);
+            margin-top: 40px;
+        }
+
+        .footer-text {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .footer-link {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .footer-link:hover {
+            text-decoration: underline;
+        }
+
+        .version {
+            margin-top: 10px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Error States */
+        .error-message {
+            background: rgba(255, 68, 68, 0.1);
+            border: 1px solid var(--error);
+            border-radius: var(--radius);
+            padding: 15px;
+            color: var(--error);
+            text-align: center;
+        }
+
+        .loading-skeleton {
+            background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-hover) 50%, var(--bg-secondary) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 4px;
+            height: 20px;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .client-grid, .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .container {
+                padding: 15px;
+            }
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: relative;
+        }
+
+        .tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            z-index: 1000;
+            border: 1px solid var(--border);
+        }
+
+        /* Connection status */
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .connection-status.connected {
+            background: rgba(0, 255, 136, 0.1);
+            color: var(--healthy);
+        }
+
+        .connection-status.disconnected {
+            background: rgba(255, 68, 68, 0.1);
+            color: var(--error);
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="header-left">
+                <div class="logo">🔷</div>
+                <h1 class="header-title">XDC Node Status</h1>
+            </div>
+            <div class="header-meta">
+                <div class="connection-status" id="connectionStatus">
+                    <span id="connectionDot">●</span>
+                    <span id="connectionText">Connecting...</span>
+                </div>
+                <div class="refresh-indicator">
+                    <div class="refresh-dot" id="refreshDot"></div>
+                    <span id="lastUpdated">--:--:--</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Section 1: Blockchain Info (Priority) -->
+        <section class="section">
+            <h2 class="section-title">⛓️ Blockchain</h2>
+            <div class="client-grid" id="clientGrid">
+                <!-- XDC Geth card inserted here -->
+            </div>
+        </section>
+
+        <!-- Section 2: XDPoS Consensus -->
+        <section class="section">
+            <h2 class="section-title">👑 XDPoS Consensus</h2>
+            <div class="metrics-grid" id="consensusGrid">
+                <div class="card">
+                    <div class="metric-row">
+                        <span class="metric-label">Current Epoch</span>
+                        <span class="metric-value" id="epochNumber">N/A</span>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-header">
+                            <span>Epoch Progress</span>
+                            <span id="epochProgressText">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="epochProgressBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="metric-row">
+                        <span class="metric-label">Masternode Status</span>
+                        <span class="metric-value" id="masternodeStatus">N/A</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Signing Rate</span>
+                        <span class="metric-value" id="signingRate">N/A</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="metric-row">
+                        <span class="metric-label">Stake Amount</span>
+                        <span class="metric-value" id="stakeAmount">N/A</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Wallet Balance</span>
+                        <span class="metric-value" id="walletBalance">N/A</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="metric-row">
+                        <span class="metric-label">Total Rewards</span>
+                        <span class="metric-value success" id="totalRewards">N/A</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Penalties</span>
+                        <span class="metric-value" id="penalties">N/A</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: Sync & Performance -->
+        <section class="section">
+            <h2 class="section-title">🔄 Sync & Performance</h2>
+            <div class="metrics-grid">
+                <div class="card">
+                    <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 15px;">Block Height Trend</h3>
+                    <svg class="sparkline" id="blockHeightSparkline" viewBox="0 0 300 60" preserveAspectRatio="none">
+                        <defs>
+                            <linearGradient id="sparklineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" style="stop-color:#1E90FF;stop-opacity:0.5" />
+                                <stop offset="100%" style="stop-color:#1E90FF;stop-opacity:0" />
+                            </linearGradient>
+                        </defs>
+                        <path class="sparkline-area" id="sparklineArea" d=""></path>
+                        <path class="sparkline" id="sparklinePath" d=""></path>
+                    </svg>
+                </div>
+                <div class="card">
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-value" id="syncRate">N/A</div>
+                            <div class="stat-label">Blocks/min</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value" id="estimatedTime">N/A</div>
+                            <div class="stat-label">Est. Time to Sync</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value" id="reorgsCount">N/A</div>
+                            <div class="stat-label">Chain Reorgs</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: Transaction Pool -->
+        <section class="section">
+            <h2 class="section-title">📝 Transaction Pool</h2>
+            <div class="metrics-grid">
+                <div class="card">
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-value" id="pendingTxs">N/A</div>
+                            <div class="stat-label">Pending TXs</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value" id="queuedTxs">N/A</div>
+                            <div class="stat-label">Queued TXs</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value" id="txPoolSlots">N/A</div>
+                            <div class="stat-label">Pool Slots Used</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="metric-row">
+                        <span class="metric-label">Valid Transactions</span>
+                        <span class="metric-value success" id="validTxs">N/A</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Invalid Transactions</span>
+                        <span class="metric-value error" id="invalidTxs">N/A</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Underpriced</span>
+                        <span class="metric-value warning" id="underpricedTxs">N/A</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 5: Server Stats -->
+        <section class="section">
+            <h2 class="section-title">🖥️ Server Stats</h2>
+            <div class="metrics-grid">
+                <div class="card">
+                    <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 15px;">CPU Usage</h3>
+                    <div class="gauge-container">
+                        <div class="gauge">
+                            <svg viewBox="0 0 120 60">
+                                <path class="gauge-bg" d="M 10 60 A 50 50 0 0 1 110 60"></path>
+                                <path class="gauge-fill" id="cpuGauge" d="M 10 60 A 50 50 0 0 1 110 60" stroke-dasharray="157" stroke-dashoffset="157"></path>
+                            </svg>
+                            <div class="gauge-value" id="cpuGaugeValue">0%</div>
+                        </div>
+                    </div>
+                    <div class="metric-row" style="margin-top: 10px;">
+                        <span class="metric-label">System Load</span>
+                        <span class="metric-value" id="sysLoad">N/A</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Process Load</span>
+                        <span class="metric-value" id="procLoad">N/A</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="metric-row">
+                        <span class="metric-label">Memory Used</span>
+                        <span class="metric-value" id="memoryUsed">N/A</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Memory Total</span>
+                        <span class="metric-value" id="memoryTotal">N/A</span>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-header">
+                            <span>Memory Usage</span>
+                            <span id="memoryPercent">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="memoryBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="metric-row">
+                        <span class="metric-label">Disk Usage</span>
+                        <span class="metric-value" id="diskUsagePercent">N/A</span>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="diskUsageBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="metric-row" style="margin-top: 10px;">
+                        <span class="metric-label">Chain Data Size</span>
+                        <span class="metric-value" id="chainDataSize">N/A</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Est. Days Until Full</span>
+                        <span class="metric-value" id="daysUntilFull">N/A</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-value" id="goroutines">N/A</div>
+                            <div class="stat-label">Goroutines</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value" id="gcRate">N/A</div>
+                            <div class="stat-label">GC Pauses/min</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 6: Storage & Database -->
+        <section class="section">
+            <h2 class="section-title">💾 Storage & Database</h2>
+            <div class="metrics-grid">
+                <div class="card">
+                    <div class="metric-row">
+                        <span class="metric-label">Disk Read Rate</span>
+                        <span class="metric-value" id="diskReadRate">N/A</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Disk Write Rate</span>
+                        <span class="metric-value" id="diskWriteRate">N/A</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Compaction Time</span>
+                        <span class="metric-value" id="compactTime">N/A</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="metric-row">
+                        <span class="metric-label">Trie Cache Hit Rate</span>
+                        <span class="metric-value" id="trieCacheHit">N/A</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Clean Cache Miss</span>
+                        <span class="metric-value" id="trieCacheMiss">N/A</span>
+                    </div>
+                    <div class="gauge-container">
+                        <div class="gauge">
+                            <svg viewBox="0 0 120 60">
+                                <path class="gauge-bg" d="M 10 60 A 50 50 0 0 1 110 60"></path>
+                                <path class="gauge-fill" id="cacheHitGauge" d="M 10 60 A 50 50 0 0 1 110 60" stroke-dasharray="157" stroke-dashoffset="157"></path>
+                            </svg>
+                            <div class="gauge-value" id="cacheHitGaugeValue">0%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 7: P2P Network -->
+        <section class="section">
+            <h2 class="section-title">🌐 P2P Network</h2>
+            <div class="metrics-grid">
+                <div class="card">
+                    <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 15px;">Peer Connections</h3>
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-value" id="totalPeers">N/A</div>
+                            <div class="stat-label">Total Peers</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value" id="inboundPeers">N/A</div>
+                            <div class="stat-label">Inbound</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value" id="outboundPeers">N/A</div>
+                            <div class="stat-label">Outbound</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="metric-row">
+                        <span class="metric-label">Dial Success Rate</span>
+                        <span class="metric-value" id="dialSuccessRate">N/A</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Inbound Traffic</span>
+                        <span class="metric-value" id="inboundTraffic">N/A</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Outbound Traffic</span>
+                        <span class="metric-value" id="outboundTraffic">N/A</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 15px;">Protocol Traffic</h3>
+                    <div class="metric-row">
+                        <span class="metric-label">eth/100</span>
+                        <span class="metric-value" id="eth100Traffic">N/A</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">eth/63</span>
+                        <span class="metric-value" id="eth63Traffic">N/A</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Connection Errors</span>
+                        <span class="metric-value error" id="connectionErrors">N/A</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <p class="footer-text">
+            Powered by <a href="https://github.com/AnilChinchawale/xdc-node-setup" class="footer-link" target="_blank">XDC Node Setup Toolkit</a>
+        </p>
+        <p class="version">Dashboard v1.0.0 | XDC Network Monitoring</p>
+    </footer>
+
+    <script>
+        // Configuration
+        const urlParams = new URLSearchParams(window.location.search);
+        const PROMETHEUS_URL = urlParams.get('prometheus') || (window.location.origin + '/prometheus');
+        const REFRESH_INTERVAL = parseInt(urlParams.get('refresh')) || 30;
+        const MAX_DATA_POINTS = 60;
+
+        // Historical data for sparklines
+        const history = {
+            blockHeight: [],
+            timestamps: []
+        };
+
+        // Client definitions — XDC Stable (official Docker image)
+        const clients = [
+            {
+                id: 'xdc-geth',
+                name: 'XDC Geth',
+                type: 'xinfinorg/xdposchain:v2.6.8',
+                job: 'xdc-node',
+                icon: '⚡'
+            }
+        ];
+
+        // Utility functions
+        function formatNumber(num) {
+            if (num === null || num === undefined || isNaN(num)) return 'N/A';
+            return num.toLocaleString('en-US');
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === null || bytes === undefined || isNaN(bytes)) return 'N/A';
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            let unitIndex = 0;
+            while (bytes >= 1024 && unitIndex < units.length - 1) {
+                bytes /= 1024;
+                unitIndex++;
+            }
+            return `${bytes.toFixed(2)} ${units[unitIndex]}`;
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds || seconds < 0) return 'N/A';
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            if (days > 0) return `${days}d ${hours}h`;
+            if (hours > 0) return `${hours}h ${minutes}m`;
+            return `${minutes}m`;
+        }
+
+        function formatPercent(value) {
+            if (value === null || value === undefined || isNaN(value)) return 'N/A';
+            return `${value.toFixed(2)}%`;
+        }
+
+        function formatXDC(value) {
+            if (value === null || value === undefined || isNaN(value)) return 'N/A';
+            return `${formatNumber(parseInt(value))} XDC`;
+        }
+
+        function setGauge(elementId, value) {
+            const maxOffset = 157; // Half circle circumference
+            const offset = maxOffset - (value / 100) * maxOffset;
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.style.strokeDashoffset = offset;
+                element.classList.remove('warning', 'error');
+                if (value > 80) element.classList.add('error');
+                else if (value > 60) element.classList.add('warning');
+            }
+        }
+
+        function setProgressBar(elementId, value) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.style.width = `${Math.min(100, Math.max(0, value))}%`;
+                element.classList.remove('warning', 'error');
+                if (value > 90) element.classList.add('error');
+                else if (value > 70) element.classList.add('warning');
+            }
+        }
+
+        function updateElement(id, value, formatter = null) {
+            const element = document.getElementById(id);
+            if (element) {
+                const formattedValue = formatter ? formatter(value) : value;
+                if (element.textContent !== String(formattedValue)) {
+                    element.textContent = formattedValue;
+                    element.classList.add('updated');
+                    setTimeout(() => element.classList.remove('updated'), 500);
+                }
+            }
+        }
+
+        function updateSparkline(data, containerId, pathId, areaId) {
+            if (!data || data.length < 2) return;
+            
+            const container = document.getElementById(containerId);
+            const pathElement = document.getElementById(pathId);
+            const areaElement = document.getElementById(areaId);
+            
+            if (!container || !pathElement) return;
+
+            const width = 300;
+            const height = 60;
+            const min = Math.min(...data);
+            const max = Math.max(...data);
+            const range = max - min || 1;
+            
+            const points = data.map((value, index) => {
+                const x = (index / (data.length - 1)) * width;
+                const y = height - ((value - min) / range) * (height - 10) - 5;
+                return `${x},${y}`;
+            });
+
+            const pathD = `M ${points.join(' L ')}`;
+            const areaD = `M ${points[0]} L ${points.join(' L ')} L ${width},${height} L 0,${height} Z`;
+            
+            pathElement.setAttribute('d', pathD);
+            if (areaElement) areaElement.setAttribute('d', areaD);
+        }
+
+        // Prometheus API functions
+        async function queryPrometheus(query) {
+            const url = `${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(query)}`;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                return data.data?.result || [];
+            } catch (error) {
+                console.warn(`Query failed: ${query}`, error);
+                return [];
+            }
+        }
+
+        async function queryAll(queries) {
+            const results = {};
+            await Promise.all(
+                Object.entries(queries).map(async ([key, query]) => {
+                    results[key] = await queryPrometheus(query);
+                })
+            );
+            return results;
+        }
+
+        function getValue(results, metricName, labels = {}) {
+            const result = results.find(r => {
+                if (r.metric.__name__ !== metricName) return false;
+                return Object.entries(labels).every(([k, v]) => r.metric[k] === v);
+            });
+            return result ? parseFloat(result.value[1]) : null;
+        }
+
+        function getValueByJob(results, metricName, job) {
+            const result = results.find(r => 
+                r.metric.__name__ === metricName && 
+                (!job || r.metric.job === job)
+            );
+            return result ? parseFloat(result.value[1]) : null;
+        }
+
+        // Client card creation
+        function createClientCard(client, data) {
+            const blockHeight = getValueByJob(data, 'chain_head_block', client.job) || 
+                              getValueByJob(data, 'xdc_node_block_height', client.job);
+            const highestBlock = getValueByJob(data, 'xdc_node_highest_block', client.job);
+            const syncPercent = getValueByJob(data, 'xdc_node_sync_percent', client.job);
+            const peers = getValueByJob(data, 'p2p_peers', client.job) || 
+                         getValueByJob(data, 'xdc_node_peer_count', client.job);
+            const inboundPeers = getValueByJob(data, 'xdc_node_peer_inbound', client.job);
+            const outboundPeers = getValueByJob(data, 'xdc_node_peer_outbound', client.job);
+            const uptime = getValueByJob(data, 'xdc_node_uptime_seconds', client.job);
+            const isSyncing = getValueByJob(data, 'xdc_node_is_syncing', client.job);
+
+            const isOnline = blockHeight !== null || peers !== null;
+            const statusClass = !isOnline ? 'offline' : (isSyncing ? 'syncing' : 'online');
+            const statusText = !isOnline ? 'Offline' : (isSyncing ? 'Syncing' : 'Online');
+
+            return `
+                <div class="card client-card ${!isOnline ? 'offline' : ''}" id="client-${client.id}">
+                    <div class="client-header">
+                        <div class="client-name">
+                            <span class="client-status ${statusClass}"></span>
+                            ${client.icon} ${client.name}
+                            <span class="client-version">${client.type}</span>
+                        </div>
+                        <span class="status-badge ${isOnline ? 'online' : 'offline'}">${statusText}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Block</span>
+                        <span class="metric-value">${formatNumber(blockHeight)}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Network</span>
+                        <span class="metric-value">${formatNumber(highestBlock)}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Sync</span>
+                        <span class="metric-value ${syncPercent && syncPercent < 100 ? 'warning' : 'success'}">${formatPercent(syncPercent)}</span>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${syncPercent || 0}%"></div>
+                        </div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Peers</span>
+                        <span class="metric-value">${formatNumber(peers)} (${formatNumber(outboundPeers)} out / ${formatNumber(inboundPeers)} in)</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Uptime</span>
+                        <span class="metric-value">${formatDuration(uptime)}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Main data fetching
+        async function fetchData() {
+            const refreshDot = document.getElementById('refreshDot');
+            refreshDot.classList.add('updating');
+
+            try {
+                // Query all metrics in parallel
+                const queries = {
+                    // Client metrics
+                    chainHeadBlock: 'chain_head_block',
+                    blockHeight: 'xdc_node_block_height',
+                    highestBlock: 'xdc_node_highest_block',
+                    syncPercent: 'xdc_node_sync_percent',
+                    peers: 'p2p_peers',
+                    peerCount: 'xdc_node_peer_count',
+                    peerInbound: 'xdc_node_peer_inbound',
+                    peerOutbound: 'xdc_node_peer_outbound',
+                    isSyncing: 'xdc_node_is_syncing',
+                    uptime: 'xdc_node_uptime_seconds',
+                    
+                    // Consensus metrics
+                    epochNumber: 'xdc_chain_epoch_number',
+                    epochProgress: 'xdc_chain_epoch_progress',
+                    masternodeStatus: 'xdc_masternode_status',
+                    signingRate: 'xdc_masternode_signing_rate',
+                    stakeAmount: 'xdc_masternode_stake_xdc',
+                    walletBalance: 'xdc_masternode_balance_xdc',
+                    totalRewards: 'xdc_masternode_rewards_total',
+                    penalties: 'xdc_masternode_penalties',
+                    
+                    // P2P metrics
+                    inboundTraffic: 'p2p_InboundTraffic',
+                    outboundTraffic: 'p2p_OutboundTraffic',
+                    dials: 'p2p_dials',
+                    dialsSuccess: 'p2p_dials_success',
+                    dialsError: 'sum(p2p_dials_error_*)',
+                    eth100Egress: 'sum(p2p_egress_eth_100_*)',
+                    eth100Ingress: 'sum(p2p_ingress_eth_100_*)',
+                    eth63Egress: 'sum(p2p_egress_eth_63_*)',
+                    eth63Ingress: 'sum(p2p_ingress_eth_63_*)',
+                    
+                    // TX Pool
+                    txPending: 'txpool_pending',
+                    txQueued: 'txpool_queued',
+                    txSlots: 'txpool_slots',
+                    txValid: 'txpool_valid',
+                    txInvalid: 'txpool_invalid',
+                    
+                    // Storage
+                    chainDataSize: 'eth_db_chaindata_disk_size',
+                    diskRead: 'system_disk_readbytes',
+                    diskWrite: 'system_disk_writebytes',
+                    compactTime: 'eth_db_chaindata_compact_time',
+                    trieHit: 'trie_memcache_clean_hit',
+                    trieMiss: 'trie_memcache_clean_miss',
+                    diskChainBytes: 'xdc_node_disk_chain_bytes',
+                    
+                    // System
+                    goroutines: 'system_cpu_goroutines',
+                    sysLoad: 'system_cpu_sysload',
+                    procLoad: 'system_cpu_procload',
+                    memUsed: 'system_memory_used',
+                    memHeld: 'system_memory_held',
+                    
+                    // Node exporter
+                    nodeMemTotal: 'node_memory_MemTotal_bytes',
+                    nodeMemAvail: 'node_memory_MemAvailable_bytes',
+                    fsSize: 'node_filesystem_size_bytes',
+                    fsAvail: 'node_filesystem_avail_bytes',
+                    
+                    // Reorgs
+                    reorgAdd: 'chain_reorg_add',
+                    reorgDrop: 'chain_reorg_drop'
+                };
+
+                const results = await queryAll(queries);
+
+                // Update connection status
+                const hasData = Object.values(results).some(r => r.length > 0);
+                const connStatus = document.getElementById('connectionStatus');
+                const connDot = document.getElementById('connectionDot');
+                const connText = document.getElementById('connectionText');
+                
+                if (hasData) {
+                    connStatus.className = 'connection-status connected';
+                    connDot.style.color = 'var(--healthy)';
+                    connText.textContent = 'Connected';
+                } else {
+                    connStatus.className = 'connection-status disconnected';
+                    connDot.style.color = 'var(--error)';
+                    connText.textContent = 'Disconnected';
+                }
+
+                // Update client cards
+                const clientGrid = document.getElementById('clientGrid');
+                let clientCardsHTML = '';
+                
+                // Combine all results for client detection
+                const allResults = Object.values(results).flat();
+                
+                for (const client of clients) {
+                    clientCardsHTML += createClientCard(client, allResults);
+                }
+                clientGrid.innerHTML = clientCardsHTML;
+
+                // Update consensus section
+                const epochNum = getValue(results.epochNumber, 'xdc_chain_epoch_number');
+                const epochProg = getValue(results.epochProgress, 'xdc_chain_epoch_progress');
+                const masternodeStat = getValue(results.masternodeStatus, 'xdc_masternode_status');
+                const signingRt = getValue(results.signingRate, 'xdc_masternode_signing_rate');
+                const stakeAmt = getValue(results.stakeAmount, 'xdc_masternode_stake_xdc');
+                const walletBal = getValue(results.walletBalance, 'xdc_masternode_balance_xdc');
+                const rewards = getValue(results.totalRewards, 'xdc_masternode_rewards_total');
+                const penaltyCount = getValue(results.penalties, 'xdc_masternode_penalties');
+
+                updateElement('epochNumber', epochNum, formatNumber);
+                updateElement('epochProgressText', epochProg, v => formatPercent(v));
+                setProgressBar('epochProgressBar', epochProg || 0);
+                
+                const statusMap = { '1': 'Active', '2': 'Inactive', '3': 'Slashed' };
+                updateElement('masternodeStatus', statusMap[masternodeStat] || 'Unknown');
+                updateElement('signingRate', signingRt, formatPercent);
+                updateElement('stakeAmount', stakeAmt, formatXDC);
+                updateElement('walletBalance', walletBal, formatXDC);
+                updateElement('totalRewards', rewards, formatXDC);
+                updateElement('penalties', penaltyCount, formatNumber);
+
+                // Update block height history for sparkline
+                const currentBlock = getValue(results.blockHeight, 'xdc_node_block_height') || 
+                                   getValue(results.chainHeadBlock, 'chain_head_block');
+                if (currentBlock) {
+                    history.blockHeight.push(currentBlock);
+                    history.timestamps.push(Date.now());
+                    if (history.blockHeight.length > MAX_DATA_POINTS) {
+                        history.blockHeight.shift();
+                        history.timestamps.shift();
+                    }
+                    updateSparkline(history.blockHeight, 'blockHeightSparkline', 'sparklinePath', 'sparklineArea');
+                }
+
+                // Calculate sync rate
+                let syncRate = 0;
+                if (history.blockHeight.length >= 2) {
+                    const blocksDiff = history.blockHeight[history.blockHeight.length - 1] - history.blockHeight[0];
+                    const timeDiff = (history.timestamps[history.timestamps.length - 1] - history.timestamps[0]) / 60000; // minutes
+                    syncRate = timeDiff > 0 ? blocksDiff / timeDiff : 0;
+                }
+                updateElement('syncRate', syncRate, v => `${v.toFixed(2)}`);
+
+                // Estimate time to sync
+                const highest = getValue(results.highestBlock, 'xdc_node_highest_block');
+                const syncPct = getValue(results.syncPercent, 'xdc_node_sync_percent');
+                let estTime = 'N/A';
+                if (highest && currentBlock && syncRate > 0) {
+                    const remaining = highest - currentBlock;
+                    const minutes = remaining / syncRate;
+                    estTime = formatDuration(minutes * 60);
+                } else if (syncPct >= 99.9) {
+                    estTime = 'Synced';
+                }
+                updateElement('estimatedTime', estTime);
+
+                // Reorgs count
+                const reorgs = (getValue(results.reorgAdd, 'chain_reorg_add') || 0) + 
+                              (getValue(results.reorgDrop, 'chain_reorg_drop') || 0);
+                updateElement('reorgsCount', reorgs, formatNumber);
+
+                // Update P2P section
+                const peerCnt = getValue(results.peers, 'p2p_peers') || 
+                              getValue(results.peerCount, 'xdc_node_peer_count');
+                const inbound = getValue(results.peerInbound, 'xdc_node_peer_inbound');
+                const outbound = getValue(results.peerOutbound, 'xdc_node_peer_outbound');
+                
+                updateElement('totalPeers', peerCnt, formatNumber);
+                updateElement('inboundPeers', inbound, formatNumber);
+                updateElement('outboundPeers', outbound, formatNumber);
+
+                const dials = getValue(results.dials, 'p2p_dials') || 0;
+                const dialsSuccess = getValue(results.dialsSuccess, 'p2p_dials_success') || 0;
+                const dialRate = dials > 0 ? (dialsSuccess / dials) * 100 : 0;
+                updateElement('dialSuccessRate', dialRate, formatPercent);
+
+                const inboundTraf = getValue(results.inboundTraffic, 'p2p_InboundTraffic');
+                const outboundTraf = getValue(results.outboundTraffic, 'p2p_OutboundTraffic');
+                updateElement('inboundTraffic', inboundTraf, formatBytes);
+                updateElement('outboundTraffic', outboundTraf, formatBytes);
+
+                const eth100 = (getValue(results.eth100Egress, 'p2p_egress_eth_100_*') || 0) + 
+                              (getValue(results.eth100Ingress, 'p2p_ingress_eth_100_*') || 0);
+                const eth63 = (getValue(results.eth63Egress, 'p2p_egress_eth_63_*') || 0) + 
+                             (getValue(results.eth63Ingress, 'p2p_ingress_eth_63_*') || 0);
+                updateElement('eth100Traffic', eth100, formatBytes);
+                updateElement('eth63Traffic', eth63, formatBytes);
+
+                const connErrs = getValue(results.dialsError, 'p2p_dials_error_*') || 0;
+                updateElement('connectionErrors', connErrs, formatNumber);
+
+                // Update TX Pool section
+                const pending = getValue(results.txPending, 'txpool_pending');
+                const queued = getValue(results.txQueued, 'txpool_queued');
+                const slots = getValue(results.txSlots, 'txpool_slots');
+                const valid = getValue(results.txValid, 'txpool_valid');
+                const invalid = getValue(results.txInvalid, 'txpool_invalid');
+                
+                updateElement('pendingTxs', pending, formatNumber);
+                updateElement('queuedTxs', queued, formatNumber);
+                updateElement('txPoolSlots', slots, formatNumber);
+                updateElement('validTxs', valid, formatNumber);
+                updateElement('invalidTxs', invalid, formatNumber);
+                updateElement('underpricedTxs', null); // Not directly available in metrics
+
+                // Update Storage section
+                const chainSize = getValue(results.chainDataSize, 'eth_db_chaindata_disk_size') || 
+                                 getValue(results.diskChainBytes, 'xdc_node_disk_chain_bytes');
+                const diskRead = getValue(results.diskRead, 'system_disk_readbytes');
+                const diskWrite = getValue(results.diskWrite, 'system_disk_writebytes');
+                const compact = getValue(results.compactTime, 'eth_db_chaindata_compact_time');
+                
+                updateElement('chainDataSize', chainSize, formatBytes);
+                updateElement('diskReadRate', diskRead, formatBytes);
+                updateElement('diskWriteRate', diskWrite, formatBytes);
+                updateElement('compactTime', compact, v => `${v ? v.toFixed(2) : 'N/A'} ms`);
+
+                // Trie cache hit rate
+                const trieHit = getValue(results.trieHit, 'trie_memcache_clean_hit') || 0;
+                const trieMiss = getValue(results.trieMiss, 'trie_memcache_clean_miss') || 0;
+                const hitRate = (trieHit + trieMiss) > 0 ? (trieHit / (trieHit + trieMiss)) * 100 : 0;
+                
+                updateElement('trieCacheHit', hitRate, formatPercent);
+                updateElement('trieCacheMiss', trieMiss, formatNumber);
+                updateElement('cacheHitGaugeValue', hitRate, v => `${v.toFixed(1)}%`);
+                setGauge('cacheHitGauge', hitRate);
+
+                // Disk usage
+                const fsSize = getValue(results.fsSize, 'node_filesystem_size_bytes');
+                const fsAvail = getValue(results.fsAvail, 'node_filesystem_avail_bytes');
+                const diskUsed = fsSize && fsAvail ? fsSize - fsAvail : null;
+                const diskPct = fsSize && diskUsed ? (diskUsed / fsSize) * 100 : null;
+                
+                updateElement('diskUsagePercent', diskPct, formatPercent);
+                setProgressBar('diskUsageBar', diskPct || 0);
+                
+                // Estimate days until full (simplified)
+                let daysUntilFull = 'N/A';
+                if (diskPct && syncRate > 0) {
+                    const growthRate = 0.5; // GB per day estimate
+                    const remainingGB = (fsAvail || 0) / (1024 * 1024 * 1024);
+                    daysUntilFull = Math.floor(remainingGB / growthRate);
+                }
+                updateElement('daysUntilFull', daysUntilFull, v => typeof v === 'number' ? `${v} days` : v);
+
+                // Update System Resources section
+                const goroutineCnt = getValue(results.goroutines, 'system_cpu_goroutines');
+                const systemLoad = getValue(results.sysLoad, 'system_cpu_sysload');
+                const processLoad = getValue(results.procLoad, 'system_cpu_procload');
+                const memUsedVal = getValue(results.memUsed, 'system_memory_used') || 
+                                  (results.nodeMemTotal?.[0] && results.nodeMemAvail?.[0] ? 
+                                   getValue(results.nodeMemTotal, 'node_memory_MemTotal_bytes') - 
+                                   getValue(results.nodeMemAvail, 'node_memory_MemAvailable_bytes') : null);
+                const memTotalVal = getValue(results.memHeld, 'system_memory_held') || 
+                                   getValue(results.nodeMemTotal, 'node_memory_MemTotal_bytes');
+                
+                const cpuUsage = processLoad || systemLoad || 0;
+                const memPercent = memTotalVal && memUsedVal ? (memUsedVal / memTotalVal) * 100 : 0;
+
+                updateElement('cpuGaugeValue', cpuUsage, v => `${v.toFixed(1)}%`);
+                setGauge('cpuGauge', cpuUsage * 100); // Assuming load is 0-1
+                
+                updateElement('memoryUsed', memUsedVal, formatBytes);
+                updateElement('memoryTotal', memTotalVal, formatBytes);
+                updateElement('memoryPercent', memPercent, formatPercent);
+                setProgressBar('memoryBar', memPercent);
+                
+                updateElement('goroutines', goroutineCnt, formatNumber);
+                updateElement('gcRate', 'N/A'); // Not directly available
+                updateElement('sysLoad', systemLoad, v => v ? v.toFixed(2) : 'N/A');
+                updateElement('procLoad', processLoad, v => v ? v.toFixed(2) : 'N/A');
+
+                // Update timestamp
+                document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
+
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                document.getElementById('connectionStatus').className = 'connection-status disconnected';
+                document.getElementById('connectionText').textContent = 'Error';
+            } finally {
+                refreshDot.classList.remove('updating');
+            }
+        }
+
+        // Initialize and start auto-refresh
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchData();
+            setInterval(fetchData, REFRESH_INTERVAL * 1000);
+        });
+    </script>
+</body>
+</html>

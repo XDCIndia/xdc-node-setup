@@ -27,8 +27,8 @@ A comprehensive guide for on-call engineers managing XDC Network nodes.
 systemctl status xdc-node
 
 # View logs
-journalctl -u xdc-node -f
-journalctl -u xdc-node --since "1 hour ago"
+journalctl -u xdc -f
+journalctl -u xdc --since "1 hour ago"
 
 # Check sync status
 curl -s -X POST -H "Content-Type: application/json" \
@@ -90,7 +90,7 @@ PEERS=$(curl -s -X POST localhost:8545 -H "Content-Type: application/json" \
 echo "Peers: $((16#${PEERS:2}))"
 
 # 4. Check for errors in logs
-journalctl -u xdc-node --since "1 hour ago" | grep -i "error\|failed\|timeout"
+journalctl -u xdc --since "1 hour ago" | grep -i "error\|failed\|timeout"
 
 # 5. Check disk I/O
 iostat -x 1 5
@@ -165,7 +165,7 @@ sleep 600
 systemctl status xdc-node
 
 # 2. Check recent logs
-journalctl -u xdc-node -n 500 --no-pager
+journalctl -u xdc -n 500 --no-pager
 
 # 3. Look for OOM kill
 dmesg | grep -i "out of memory\|oom\|killed"
@@ -205,7 +205,7 @@ ls -la /var/crash/
 systemctl start xdc-node
 
 # If crashes repeatedly, collect logs and escalate
-journalctl -u xdc-node > /tmp/crash-logs-$(date +%Y%m%d).txt
+journalctl -u xdc > /tmp/crash-logs-$(date +%Y%m%d).txt
 ```
 
 **If config error:**
@@ -471,7 +471,7 @@ curl -s -X POST localhost:8545 -H "Content-Type: application/json" \
 ./scripts/version-check.sh --check-only
 
 # 3. Check peer protocol versions
-journalctl -u xdc-node | grep -i "protocol"
+journalctl -u xdc | grep -i "protocol"
 ```
 
 ### Resolution
@@ -518,7 +518,7 @@ ps aux --sort=-%mem | head -10
 watch -n 5 'free -h; echo "---"; ps aux --sort=-%mem | head -5'
 
 # 3. Check node memory specifically
-systemctl show xdc-node | grep Memory
+systemctl show xdc | grep Memory
 
 # 4. Check for known issues
 # Review XDC GitHub issues

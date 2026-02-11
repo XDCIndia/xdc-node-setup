@@ -1,0 +1,84 @@
+# XDC Node Status Dashboard - Docker Compose Service
+# Add this to your docker-compose.yml or use as a standalone compose file
+
+version: '3.8'
+
+services:
+  xdc-dashboard:
+    image: nginx:alpine
+    container_name: xdc-dashboard
+    hostname: xdc-dashboard
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Ports
+    ports:
+      - "8080:80"  # Map host port 8080 to container port 80
+      # - "8443:443"  # Uncomment for HTTPS
+    
+    # Volumes
+    volumes:
+      # Mount the static HTML file
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+      
+      # Custom nginx configuration (optional - uses default if not mounted)
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      
+      # SSL certificates (if using HTTPS)
+      # - ./ssl/cert.crt:/etc/nginx/ssl/cert.crt:ro
+      # - ./ssl/private.key:/etc/nginx/ssl/private.key:ro
+      
+      # Nginx logs
+      - ./logs:/var/log/nginx
+    
+    # Environment variables
+    environment:
+      - NGINX_ENTRYPOINT_QUIET_LOGS=1
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Labels
+    labels:
+      - "com.xdc-node-setup.service=dashboard"
+      - "com.xdc-node-setup.version=1.0.0"
+
+# Optional: Create a network for XDC services
+networks:
+  default:
+    name: xdc-network
+    driver: bridge
+    
+# Optional: Named volumes
+volumes:
+  xdc-dashboard-logs:
+    driver: local
+
+# Usage:
+# 1. Place this file in the same directory as index.html and nginx.conf
+# 2. Run: docker-compose up -d
+# 3. Access dashboard at http://localhost:8080
+# 4. For custom Prometheus URL: http://localhost:8080/?prometheus=http://your-prom:9090

@@ -22,13 +22,18 @@ scrape_configs:
     scrape_interval: 30s
 
   # Node Exporter - System metrics + XDC textfile metrics
+  # This includes:
+  #   - xdc_node_* metrics (sync, peers, uptime, chain data, disk)
+  #   - xdc_masternode_* metrics (status, rewards, penalties, ROI)
+  #   - xdc_chain_* metrics (epoch info)
+  # Written by scripts/node-owner-metrics.sh via textfile collector
   - job_name: 'node-exporter'
     static_configs:
       - targets: ['node-exporter:9100']
     scrape_interval: 15s
-    # This will include xdc_* metrics from textfile collector
+    # Textfile collector metrics from /var/lib/node_exporter/textfile_collector/xdc_owner.prom
 
-  # XDC Node metrics endpoint
+  # XDC Node metrics endpoint (native metrics from XDC client)
   - job_name: 'xdc-node'
     static_configs:
       - targets: ['xdc-node:6060']
@@ -47,3 +52,10 @@ scrape_configs:
       - targets: ['grafana:3000']
     metrics_path: /metrics
     scrape_interval: 30s
+
+  # XDC Owner Metrics Collector (optional - if running standalone)
+  # This job can scrape metrics directly if not using textfile collector
+  # - job_name: 'xdc-owner-metrics'
+  #   static_configs:
+  #     - targets: ['xdc-metrics-collector:9090']
+  #   scrape_interval: 60s

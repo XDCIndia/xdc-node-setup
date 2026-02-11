@@ -80,7 +80,7 @@ This will:
 - Pull the XDC Docker image
 - Start a full node on mainnet with sensible defaults
 - Set up basic monitoring (Grafana + Prometheus)
-- Install the `xdc-node` CLI tool
+- Install the `xdc` CLI tool
 
 ### Advanced Setup
 
@@ -177,9 +177,9 @@ Test your notifications:
 
 ---
 
-## 🖥️ CLI Tool (`xdc-node`)
+## 🖥️ CLI Tool (`xdc`)
 
-The `xdc-node` CLI provides a unified command interface for all node management tasks.
+The `xdc` CLI provides a unified command interface for all node management tasks.
 
 ### CLI Installation
 
@@ -189,15 +189,15 @@ cd XDC-Node-Setup
 sudo ./cli/install.sh
 
 # Or manually create a symlink
-sudo ln -s $(pwd)/cli/xdc-node /usr/local/bin/xdc-node
+sudo ln -s $(pwd)/cli/xdc /usr/local/bin/xdc-node
 ```
 
 ### CLI Commands
 
 ```
-xdc-node — XDC Network Node Management CLI
+xdc — XDC Network Node Management CLI
 
-Usage: xdc-node <command> [options]
+Usage: xdc <command> [options]
 
 Commands:
   init          Interactive setup wizard (wraps setup.sh)
@@ -228,70 +228,70 @@ Global Options:
 
 ```bash
 # Initialize a new node
-xdc-node init
+xdc init
 
 # Quick setup with defaults
-xdc-node init --quick
+xdc init --quick
 
 # Check node status
-xdc-node status
+xdc status
 
 # Monitor status in real-time (refreshes every 5s)
-xdc-node status --watch
+xdc status --watch
 
 # Get status as JSON (for scripting)
-xdc-node status --json
+xdc status --json
 
 # Run full health check with notifications
-xdc-node health --full --notify
+xdc health --full --notify
 
 # Security audit only (no changes)
-xdc-node security --audit-only
+xdc security --audit-only
 
 # Apply security fixes
-sudo xdc-node security --fix
+sudo xdc security --fix
 
 # Check for updates
-xdc-node update --check
+xdc update --check
 
 # Apply updates
-sudo xdc-node update --apply
+sudo xdc update --apply
 
 # Create encrypted backup
-sudo xdc-node backup --encrypt
+sudo xdc backup --encrypt
 
 # List available backups
-xdc-node backup --list
+xdc backup --list
 
 # Restore from backup
-sudo xdc-node restore /backup/xdc-node/daily/xdc-backup-2024-01-15.tar.gz
+sudo xdc restore /backup/xdc-node/daily/xdc-backup-2024-01-15.tar.gz
 
 # Follow logs in real-time
-xdc-node logs --follow
+xdc logs --follow
 
 # View last 100 lines
-xdc-node logs --lines 100
+xdc logs --lines 100
 
 # Graceful restart
-sudo xdc-node restart --graceful
+sudo xdc restart --graceful
 
 # View configuration
-xdc-node config list
+xdc config list
 
 # Get specific config value
-xdc-node config get network
+xdc config get network
 
 # Set config value
-sudo xdc-node config set telegram_enabled true
+sudo xdc config set telegram_enabled true
 
 # Test notifications
-xdc-node notify --test
+xdc notify --test
 
 # Send custom alert
-xdc-node notify --send "Maintenance starting" --level warning
+xdc notify --send "Maintenance starting" --level warning
 
 # Show version info
-xdc-node version
+xdc version
 ```
 
 ### Shell Completions
@@ -522,10 +522,10 @@ docker run -p 3000:3000 -v $(pwd)/../reports:/app/reports:ro xdc-dashboard
 
 ```bash
 # Start dashboard via CLI
-xdc-node dashboard
+xdc dashboard
 
 # Start with custom port
-xdc-node dashboard --port 8080
+xdc dashboard --port 8080
 ```
 
 See [dashboard/README.md](dashboard/README.md) for full documentation.
