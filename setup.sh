@@ -1195,7 +1195,7 @@ main() {
     show_banner
     
     log "Starting XDC Node Setup v$SCRIPT_VERSION"
-    log "Mode: ${MODE^^}"
+    log "Mode: $(echo "$MODE" | tr '[:lower:]' '[:upper:]')"
     log "OS: $OS"
     
     # Checks
