@@ -133,6 +133,139 @@ Test your notifications:
 
 ---
 
+## 🖥️ CLI Tool (`xdc-node`)
+
+The `xdc-node` CLI provides a unified command interface for all node management tasks.
+
+### CLI Installation
+
+```bash
+# Install the CLI (creates symlink to /usr/local/bin)
+cd XDC-Node-Setup
+sudo ./cli/install.sh
+
+# Or manually create a symlink
+sudo ln -s $(pwd)/cli/xdc-node /usr/local/bin/xdc-node
+```
+
+### CLI Commands
+
+```
+xdc-node — XDC Network Node Management CLI
+
+Usage: xdc-node <command> [options]
+
+Commands:
+  init          Interactive setup wizard (wraps setup.sh)
+  status        Quick node status overview
+  health        Run health check (wraps node-health-check.sh)
+  security      Run security audit (wraps security-harden.sh)
+  update        Check and apply version updates (wraps version-check.sh)
+  backup        Trigger backup (wraps backup.sh)
+  restore       Restore from backup
+  logs          Tail node logs
+  restart       Graceful node restart
+  stop          Stop node
+  start         Start node
+  config        View/edit configuration
+  notify        Test notifications or send custom alert
+  dashboard     Start web dashboard
+  version       Show CLI and client versions
+  help          Show help
+
+Global Options:
+  --json        Output in JSON format
+  --quiet       Suppress non-essential output
+  --verbose     Show detailed output
+  --no-color    Disable colored output
+```
+
+### CLI Examples
+
+```bash
+# Initialize a new node
+xdc-node init
+
+# Quick setup with defaults
+xdc-node init --quick
+
+# Check node status
+xdc-node status
+
+# Monitor status in real-time (refreshes every 5s)
+xdc-node status --watch
+
+# Get status as JSON (for scripting)
+xdc-node status --json
+
+# Run full health check with notifications
+xdc-node health --full --notify
+
+# Security audit only (no changes)
+xdc-node security --audit-only
+
+# Apply security fixes
+sudo xdc-node security --fix
+
+# Check for updates
+xdc-node update --check
+
+# Apply updates
+sudo xdc-node update --apply
+
+# Create encrypted backup
+sudo xdc-node backup --encrypt
+
+# List available backups
+xdc-node backup --list
+
+# Restore from backup
+sudo xdc-node restore /backup/xdc-node/daily/xdc-backup-2024-01-15.tar.gz
+
+# Follow logs in real-time
+xdc-node logs --follow
+
+# View last 100 lines
+xdc-node logs --lines 100
+
+# Graceful restart
+sudo xdc-node restart --graceful
+
+# View configuration
+xdc-node config list
+
+# Get specific config value
+xdc-node config get network
+
+# Set config value
+sudo xdc-node config set telegram_enabled true
+
+# Test notifications
+xdc-node notify --test
+
+# Send custom alert
+xdc-node notify --send "Maintenance starting" --level warning
+
+# Show version info
+xdc-node version
+```
+
+### Shell Completions
+
+The CLI supports bash and zsh completions for enhanced productivity:
+
+```bash
+# Bash: Add to ~/.bashrc
+source /etc/bash_completion.d/xdc-node
+
+# Zsh: Completions are auto-loaded if installed to site-functions
+# Or add to ~/.zshrc:
+fpath=(/usr/local/share/zsh/site-functions $fpath)
+autoload -Uz compinit && compinit
+```
+
+---
+
 ## 🏗️ Architecture
 
 ```

@@ -1,0 +1,333 @@
+---
+# Backup and Restore Playbook for XDC Nodes
+# Manages backup operations and optional restore from backup
+#
+# Usage:
+#   Backup:  ansible-playbook -i inventory/hosts.yml playbooks/backup-restore.yml
+#   Restore: ansible-playbook -i inventory/hosts.yml playbooks/backup-restore.yml -e "restore=true backup_file=/path/to/backup.tar.gz"
+
+- name: XDC Node Backup and Restore
+  hosts: xdc_nodes
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    backup_dir: /root/backups
+    xdc_data_dir: "{{ data_dir | default('/root/XDC-Node') }}"
+    restore_mode: "{{ restore | default(false) | bool }}"
+    backup_retention_days: 7
+    backup_compression: gzip
+    
+  pre_tasks:
+    - name: Display operation info
+      ansible.builtin.debug:
+        msg: |
+          XDC Node {{ 'Restore' if restore_mode else 'Backup' }} Operation
+          Host: {{ inventory_hostname }}
+          Data Directory: {{ xdc_data_dir }}
+          Backup Directory: {{ backup_dir }}
+          {% if restore_mode %}
+          Restore From: {{ backup_file | default('NOT SPECIFIED') }}
+          {% endif %}
+
+    - name: Validate restore parameters
+      ansible.builtin.assert:
+        that:
+          - backup_file is defined
+          - backup_file | length > 0
+        fail_msg: "For restore operation, 'backup_file' must be specified"
+      when: restore_mode
+
+  tasks:
+    # =========================================================================
+    # BACKUP OPERATIONS
+    # =========================================================================
+    - name: Backup Operations
+      when: not restore_mode
+      tags: [backup]
+      block:
+        - name: Create backup directory
+          ansible.builtin.file:
+            path: "{{ backup_dir }}"
+            state: directory
+            mode: '0750'
+
+        - name: Get current block number before backup
+          ansible.builtin.uri:
+            url: "http://localhost:{{ rpc_port | default(8545) }}"
+            method: POST
+            body_format: json
+            body:
+              jsonrpc: "2.0"
+              method: eth_blockNumber
+              params: []
+              id: 1
+            return_content: yes
+          register: current_block
+          failed_when: false
+
+        - name: Set backup filename
+          ansible.builtin.set_fact:
+            backup_filename: "xdc-backup-{{ inventory_hostname }}-{{ ansible_date_time.date }}-{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}.tar.gz"
+            backup_block: "{{ current_block.json.result | default('unknown') }}"
+
+        - name: Check if backup script exists
+          ansible.builtin.stat:
+            path: "{{ xdc_data_dir }}/scripts/backup.sh"
+          register: backup_script
+
+        - name: Run backup script if available
+          when: backup_script.stat.exists
+          block:
+            - name: Execute backup script
+              ansible.builtin.command:
+                cmd: "{{ xdc_data_dir }}/scripts/backup.sh"
+              register: backup_script_result
+              changed_when: backup_script_result.rc == 0
+
+            - name: Display backup script output
+              ansible.builtin.debug:
+                msg: "{{ backup_script_result.stdout }}"
+
+        - name: Perform manual backup if script not available
+          when: not backup_script.stat.exists
+          block:
+            - name: Check if node is running
+              ansible.builtin.systemd:
+                name: xdc-node
+              register: node_status
+              failed_when: false
+
+            - name: Stop node for consistent backup (optional)
+              ansible.builtin.systemd:
+                name: xdc-node
+                state: stopped
+              when: 
+                - node_status.status.ActiveState == 'active'
+                - stop_for_backup | default(false) | bool
+              register: node_stopped
+
+            - name: Create backup archive
+              ansible.builtin.archive:
+                path:
+                  - "{{ xdc_data_dir }}/XDC/chaindata"
+                  - "{{ xdc_data_dir }}/XDC/nodes"
+                  - "{{ xdc_data_dir }}/keystore"
+                  - "{{ xdc_data_dir }}/.env"
+                dest: "{{ backup_dir }}/{{ backup_filename }}"
+                format: gz
+                mode: '0640'
+              register: archive_result
+
+            - name: Restart node if it was stopped
+              ansible.builtin.systemd:
+                name: xdc-node
+                state: started
+              when: node_stopped is defined and node_stopped.changed
+
+        - name: Get backup file info
+          ansible.builtin.stat:
+            path: "{{ backup_dir }}/{{ backup_filename }}"
+          register: backup_stat
+
+        - name: Calculate backup checksum
+          ansible.builtin.command:
+            cmd: "sha256sum {{ backup_dir }}/{{ backup_filename }}"
+          register: backup_checksum
+          changed_when: false
+
+        - name: Create backup metadata
+          ansible.builtin.copy:
+            dest: "{{ backup_dir }}/{{ backup_filename }}.meta"
+            mode: '0640'
+            content: |
+              {
+                "hostname": "{{ inventory_hostname }}",
+                "timestamp": "{{ ansible_date_time.iso8601 }}",
+                "block_number": "{{ backup_block }}",
+                "size_bytes": {{ backup_stat.stat.size }},
+                "checksum_sha256": "{{ backup_checksum.stdout.split()[0] }}",
+                "client": "{{ client }}",
+                "network": "{{ xdc_network | default('mainnet') }}",
+                "data_dir": "{{ xdc_data_dir }}"
+              }
+
+        # =====================================================================
+        # Verify Backup
+        # =====================================================================
+        - name: Verify backup integrity
+          ansible.builtin.command:
+            cmd: "tar -tzf {{ backup_dir }}/{{ backup_filename }}"
+          register: backup_verify
+          changed_when: false
+          failed_when: backup_verify.rc != 0
+
+        - name: Display backup summary
+          ansible.builtin.debug:
+            msg: |
+              ============================================
+              Backup Completed Successfully!
+              ============================================
+              File: {{ backup_dir }}/{{ backup_filename }}
+              Size: {{ (backup_stat.stat.size / 1024 / 1024 / 1024) | round(2) }} GB
+              Block: {{ backup_block }}
+              Checksum: {{ backup_checksum.stdout.split()[0][:16] }}...
+              ============================================
+
+        # =====================================================================
+        # Cleanup Old Backups
+        # =====================================================================
+        - name: Find old backups
+          ansible.builtin.find:
+            paths: "{{ backup_dir }}"
+            patterns: "xdc-backup-*.tar.gz"
+            age: "{{ backup_retention_days }}d"
+          register: old_backups
+
+        - name: Remove old backups
+          ansible.builtin.file:
+            path: "{{ item.path }}"
+            state: absent
+          loop: "{{ old_backups.files }}"
+          when: old_backups.matched > 0
+
+        - name: Remove old backup metadata
+          ansible.builtin.file:
+            path: "{{ item.path }}.meta"
+            state: absent
+          loop: "{{ old_backups.files }}"
+          when: old_backups.matched > 0
+          failed_when: false
+
+    # =========================================================================
+    # RESTORE OPERATIONS
+    # =========================================================================
+    - name: Restore Operations
+      when: restore_mode
+      tags: [restore]
+      block:
+        - name: Check backup file exists
+          ansible.builtin.stat:
+            path: "{{ backup_file }}"
+          register: backup_exists
+
+        - name: Fail if backup file not found
+          ansible.builtin.fail:
+            msg: "Backup file not found: {{ backup_file }}"
+          when: not backup_exists.stat.exists
+
+        - name: Read backup metadata if available
+          ansible.builtin.slurp:
+            src: "{{ backup_file }}.meta"
+          register: backup_meta_raw
+          failed_when: false
+
+        - name: Parse backup metadata
+          ansible.builtin.set_fact:
+            backup_meta: "{{ backup_meta_raw.content | b64decode | from_json }}"
+          when: backup_meta_raw is succeeded
+          failed_when: false
+
+        - name: Display backup metadata
+          ansible.builtin.debug:
+            msg: |
+              Restoring from backup:
+              {{ backup_meta | default({'info': 'Metadata not available'}) | to_nice_yaml }}
+          when: backup_meta is defined
+
+        - name: Verify backup integrity before restore
+          ansible.builtin.command:
+            cmd: "tar -tzf {{ backup_file }}"
+          register: restore_verify
+          changed_when: false
+
+        - name: Confirm restore operation
+          ansible.builtin.pause:
+            prompt: |
+              
+              WARNING: This will overwrite existing data!
+              
+              Backup file: {{ backup_file }}
+              Target host: {{ inventory_hostname }}
+              Data directory: {{ xdc_data_dir }}
+              
+              Press ENTER to continue or Ctrl+C to abort
+          when: not skip_confirm | default(false) | bool
+
+        - name: Stop XDC node
+          ansible.builtin.systemd:
+            name: xdc-node
+            state: stopped
+          register: node_stopped
+
+        - name: Wait for node to fully stop
+          ansible.builtin.wait_for:
+            port: "{{ rpc_port | default(8545) }}"
+            state: stopped
+            timeout: 60
+          failed_when: false
+
+        - name: Backup current data before restore
+          ansible.builtin.archive:
+            path: "{{ xdc_data_dir }}"
+            dest: "{{ backup_dir }}/pre-restore-{{ ansible_date_time.epoch }}.tar.gz"
+            format: gz
+          when: backup_before_restore | default(true) | bool
+
+        - name: Clear existing chaindata
+          ansible.builtin.file:
+            path: "{{ xdc_data_dir }}/XDC/chaindata"
+            state: absent
+          when: clear_chaindata | default(true) | bool
+
+        - name: Extract backup
+          ansible.builtin.unarchive:
+            src: "{{ backup_file }}"
+            dest: "{{ xdc_data_dir }}"
+            remote_src: yes
+            extra_opts:
+              - --strip-components=1
+
+        - name: Set correct permissions
+          ansible.builtin.file:
+            path: "{{ xdc_data_dir }}"
+            owner: root
+            group: root
+            recurse: yes
+
+        - name: Start XDC node
+          ansible.builtin.systemd:
+            name: xdc-node
+            state: started
+
+        - name: Wait for RPC to be available
+          ansible.builtin.wait_for:
+            port: "{{ rpc_port | default(8545) }}"
+            timeout: 120
+
+        - name: Verify node started successfully
+          ansible.builtin.uri:
+            url: "http://localhost:{{ rpc_port | default(8545) }}"
+            method: POST
+            body_format: json
+            body:
+              jsonrpc: "2.0"
+              method: eth_blockNumber
+              params: []
+              id: 1
+            return_content: yes
+          register: post_restore_block
+          retries: 10
+          delay: 10
+          until: post_restore_block.status == 200
+
+        - name: Display restore summary
+          ansible.builtin.debug:
+            msg: |
+              ============================================
+              Restore Completed Successfully!
+              ============================================
+              Restored from: {{ backup_file }}
+              Current block: {{ post_restore_block.json.result | int(base=16) }}
+              Node status: Running
+              ============================================

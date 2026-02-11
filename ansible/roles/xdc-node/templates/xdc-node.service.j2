@@ -1,0 +1,93 @@
+[Unit]
+Description=XDC Node ({{ client | default('XDPoSChain') }})
+Documentation=https://github.com/XinFinOrg/XDPoSChain
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile={{ xdc_data_dir | default('/root/XDC-Node') }}/.env
+WorkingDirectory={{ xdc_data_dir | default('/root/XDC-Node') }}
+
+{% if client == 'XDPoSChain' %}
+ExecStart=/usr/local/bin/XDC \
+    --{{ xdc_network | default('mainnet') }} \
+    --datadir {{ xdc_data_dir | default('/root/XDC-Node') }} \
+    --syncmode full \
+    --gcmode archive \
+    --http \
+    --http.addr {{ rpc_addr | default('127.0.0.1') }} \
+    --http.port {{ rpc_port | default(8545) }} \
+    --http.api {{ rpc_api | default('eth,net,web3,txpool') }} \
+{% if enable_public_rpc | default(false) | bool %}
+    --http.vhosts '*' \
+    --http.corsdomain '*' \
+{% endif %}
+    --ws \
+    --ws.addr {{ ws_addr | default('127.0.0.1') }} \
+    --ws.port {{ ws_port | default(8546) }} \
+    --ws.api {{ ws_api | default('eth,net,web3') }} \
+    --port {{ p2p_port | default(30303) }} \
+    --maxpeers {{ max_peers | default(100) }} \
+{% if enable_metrics | default(true) | bool %}
+    --metrics \
+    --metrics.addr 127.0.0.1 \
+    --metrics.port {{ metrics_port | default(6060) }} \
+{% endif %}
+{% if node_role == 'validator' and coinbase is defined %}
+    --mine \
+    --miner.etherbase {{ coinbase }} \
+{% if unlock_account is defined %}
+    --unlock {{ unlock_account }} \
+    --password {{ xdc_data_dir | default('/root/XDC-Node') }}/password.txt \
+{% endif %}
+{% endif %}
+    --verbosity {{ verbosity | default(3) }}
+{% else %}
+ExecStart=/usr/local/bin/erigon-xdc \
+    --chain {{ 'xdc-mainnet' if xdc_network | default('mainnet') == 'mainnet' else 'xdc-testnet' }} \
+    --datadir {{ xdc_data_dir | default('/root/XDC-Node') }} \
+    --http \
+    --http.addr {{ rpc_addr | default('127.0.0.1') }} \
+    --http.port {{ rpc_port | default(8545) }} \
+    --http.api {{ rpc_api | default('eth,net,web3,txpool,erigon') }} \
+{% if enable_public_rpc | default(false) | bool %}
+    --http.vhosts '*' \
+    --http.corsdomain '*' \
+{% endif %}
+    --ws \
+    --ws.port {{ ws_port | default(8546) }} \
+    --port {{ p2p_port | default(30303) }} \
+    --maxpeers {{ max_peers | default(100) }} \
+{% if enable_metrics | default(true) | bool %}
+    --metrics \
+    --metrics.addr 127.0.0.1 \
+    --metrics.port {{ metrics_port | default(6060) }} \
+{% endif %}
+    --log.console.verbosity {{ verbosity | default(3) }}
+{% endif %}
+
+ExecStop=/bin/kill -SIGTERM $MAINPID
+TimeoutStopSec=300
+
+Restart=always
+RestartSec=10
+
+# Security
+PrivateTmp=true
+ProtectSystem=full
+NoNewPrivileges=true
+
+# Resource Limits
+LimitNOFILE=65535
+LimitNPROC=65535
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=xdc-node
+
+[Install]
+WantedBy=multi-user.target

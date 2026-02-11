@@ -1,0 +1,7 @@
+---
+# XDC Common Role Handlers
+
+- name: Restart timesyncd
+  ansible.builtin.systemd:
+    name: systemd-timesyncd
+    state: restarted

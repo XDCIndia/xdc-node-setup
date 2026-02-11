@@ -1,0 +1,578 @@
+---
+# Monitoring Stack Deployment Playbook
+# Deploys Prometheus, Grafana, and exporters via Docker Compose
+#
+# Usage: ansible-playbook -i inventory/hosts.yml playbooks/setup-monitoring.yml
+
+- name: Deploy Monitoring Stack
+  hosts: xdc_nodes
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    monitoring_dir: /opt/monitoring
+    grafana_admin_password: "{{ lookup('env', 'GRAFANA_ADMIN_PASSWORD') | default('xdc-admin-changeme', true) }}"
+    prometheus_retention: 30d
+    grafana_port: 3000
+    prometheus_port: 9090
+    node_exporter_port: 9100
+    
+  pre_tasks:
+    - name: Display monitoring setup info
+      ansible.builtin.debug:
+        msg: |
+          Setting up monitoring for: {{ inventory_hostname }}
+          Monitoring Directory: {{ monitoring_dir }}
+          Grafana Port: {{ grafana_port }}
+          Prometheus Port: {{ prometheus_port }}
+
+  roles:
+    - role: xdc-monitoring
+      tags: [monitoring]
+
+  tasks:
+    # =========================================================================
+    # Install Docker
+    # =========================================================================
+    - name: Install Docker
+      tags: [docker]
+      block:
+        - name: Install required packages
+          ansible.builtin.apt:
+            name:
+              - apt-transport-https
+              - ca-certificates
+              - curl
+              - gnupg
+              - lsb-release
+            state: present
+            update_cache: yes
+
+        - name: Add Docker GPG key
+          ansible.builtin.apt_key:
+            url: https://download.docker.com/linux/ubuntu/gpg
+            state: present
+
+        - name: Add Docker repository
+          ansible.builtin.apt_repository:
+            repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+            state: present
+            filename: docker
+
+        - name: Install Docker packages
+          ansible.builtin.apt:
+            name:
+              - docker-ce
+              - docker-ce-cli
+              - containerd.io
+              - docker-compose-plugin
+            state: present
+            update_cache: yes
+
+        - name: Start and enable Docker
+          ansible.builtin.systemd:
+            name: docker
+            state: started
+            enabled: yes
+
+        - name: Install docker-compose standalone (for compatibility)
+          ansible.builtin.get_url:
+            url: "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64"
+            dest: /usr/local/bin/docker-compose
+            mode: '0755'
+
+    # =========================================================================
+    # Create Monitoring Directory Structure
+    # =========================================================================
+    - name: Create monitoring directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ monitoring_dir }}"
+        - "{{ monitoring_dir }}/prometheus"
+        - "{{ monitoring_dir }}/grafana"
+        - "{{ monitoring_dir }}/grafana/provisioning"
+        - "{{ monitoring_dir }}/grafana/provisioning/dashboards"
+        - "{{ monitoring_dir }}/grafana/provisioning/datasources"
+        - "{{ monitoring_dir }}/grafana/dashboards"
+        - "{{ monitoring_dir }}/alertmanager"
+      tags: [setup]
+
+    # =========================================================================
+    # Deploy Docker Compose Stack
+    # =========================================================================
+    - name: Create docker-compose.yml
+      ansible.builtin.copy:
+        dest: "{{ monitoring_dir }}/docker-compose.yml"
+        mode: '0644'
+        content: |
+          version: '3.8'
+          
+          services:
+            prometheus:
+              image: prom/prometheus:latest
+              container_name: prometheus
+              restart: unless-stopped
+              volumes:
+                - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+                - ./prometheus/alerts:/etc/prometheus/alerts:ro
+                - prometheus_data:/prometheus
+              command:
+                - '--config.file=/etc/prometheus/prometheus.yml'
+                - '--storage.tsdb.path=/prometheus'
+                - '--storage.tsdb.retention.time={{ prometheus_retention }}'
+                - '--web.console.libraries=/etc/prometheus/console_libraries'
+                - '--web.console.templates=/etc/prometheus/consoles'
+                - '--web.enable-lifecycle'
+              ports:
+                - "127.0.0.1:{{ prometheus_port }}:9090"
+              networks:
+                - monitoring
+              
+            grafana:
+              image: grafana/grafana:latest
+              container_name: grafana
+              restart: unless-stopped
+              volumes:
+                - ./grafana/provisioning:/etc/grafana/provisioning:ro
+                - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+                - grafana_data:/var/lib/grafana
+              environment:
+                - GF_SECURITY_ADMIN_USER=admin
+                - GF_SECURITY_ADMIN_PASSWORD={{ grafana_admin_password }}
+                - GF_USERS_ALLOW_SIGN_UP=false
+                - GF_SERVER_ROOT_URL=http://localhost:{{ grafana_port }}
+              ports:
+                - "127.0.0.1:{{ grafana_port }}:3000"
+              networks:
+                - monitoring
+              depends_on:
+                - prometheus
+                
+            node-exporter:
+              image: prom/node-exporter:latest
+              container_name: node-exporter
+              restart: unless-stopped
+              volumes:
+                - /proc:/host/proc:ro
+                - /sys:/host/sys:ro
+                - /:/rootfs:ro
+              command:
+                - '--path.procfs=/host/proc'
+                - '--path.rootfs=/rootfs'
+                - '--path.sysfs=/host/sys'
+                - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+              ports:
+                - "127.0.0.1:{{ node_exporter_port }}:9100"
+              networks:
+                - monitoring
+                
+            alertmanager:
+              image: prom/alertmanager:latest
+              container_name: alertmanager
+              restart: unless-stopped
+              volumes:
+                - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+                - alertmanager_data:/alertmanager
+              command:
+                - '--config.file=/etc/alertmanager/alertmanager.yml'
+                - '--storage.path=/alertmanager'
+              ports:
+                - "127.0.0.1:9093:9093"
+              networks:
+                - monitoring
+          
+          networks:
+            monitoring:
+              driver: bridge
+          
+          volumes:
+            prometheus_data:
+            grafana_data:
+            alertmanager_data:
+      tags: [compose]
+
+    # =========================================================================
+    # Configure Prometheus
+    # =========================================================================
+    - name: Create Prometheus configuration
+      ansible.builtin.copy:
+        dest: "{{ monitoring_dir }}/prometheus/prometheus.yml"
+        mode: '0644'
+        content: |
+          global:
+            scrape_interval: 15s
+            evaluation_interval: 15s
+            external_labels:
+              monitor: 'xdc-monitor'
+              node: '{{ inventory_hostname }}'
+          
+          alerting:
+            alertmanagers:
+              - static_configs:
+                  - targets:
+                      - alertmanager:9093
+          
+          rule_files:
+            - /etc/prometheus/alerts/*.yml
+          
+          scrape_configs:
+            - job_name: 'prometheus'
+              static_configs:
+                - targets: ['localhost:9090']
+          
+            - job_name: 'node-exporter'
+              static_configs:
+                - targets: ['node-exporter:9100']
+                  labels:
+                    instance: '{{ inventory_hostname }}'
+          
+            - job_name: 'xdc-node'
+              metrics_path: /debug/metrics/prometheus
+              static_configs:
+                - targets: ['host.docker.internal:{{ rpc_port | default(8545) }}']
+                  labels:
+                    instance: '{{ inventory_hostname }}'
+                    client: '{{ client }}'
+                    role: '{{ node_role }}'
+              relabel_configs:
+                - source_labels: [__address__]
+                  target_label: __address__
+                  regex: 'host.docker.internal:(.*)'
+                  replacement: '172.17.0.1:${1}'
+      tags: [prometheus]
+
+    - name: Create Prometheus alerts directory
+      ansible.builtin.file:
+        path: "{{ monitoring_dir }}/prometheus/alerts"
+        state: directory
+        mode: '0755'
+      tags: [prometheus]
+
+    - name: Create Prometheus alert rules
+      ansible.builtin.copy:
+        dest: "{{ monitoring_dir }}/prometheus/alerts/xdc-alerts.yml"
+        mode: '0644'
+        content: |
+          groups:
+            - name: xdc-node-alerts
+              rules:
+                - alert: XDCNodeDown
+                  expr: up{job="xdc-node"} == 0
+                  for: 5m
+                  labels:
+                    severity: critical
+                  annotations:
+                    summary: "XDC Node is down"
+                    description: "XDC node {{ '{{ $labels.instance }}' }} has been down for more than 5 minutes."
+          
+                - alert: XDCNodeNotSyncing
+                  expr: increase(eth_block_number[5m]) == 0
+                  for: 10m
+                  labels:
+                    severity: warning
+                  annotations:
+                    summary: "XDC Node not syncing"
+                    description: "XDC node {{ '{{ $labels.instance }}' }} block number has not increased in 10 minutes."
+          
+                - alert: XDCLowPeerCount
+                  expr: p2p_peers < 3
+                  for: 5m
+                  labels:
+                    severity: warning
+                  annotations:
+                    summary: "XDC Node has low peer count"
+                    description: "XDC node {{ '{{ $labels.instance }}' }} has only {{ '{{ $value }}' }} peers."
+          
+                - alert: HighCPUUsage
+                  expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+                  for: 10m
+                  labels:
+                    severity: warning
+                  annotations:
+                    summary: "High CPU usage detected"
+                    description: "CPU usage is above 80% on {{ '{{ $labels.instance }}' }}."
+          
+                - alert: HighMemoryUsage
+                  expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+                  for: 5m
+                  labels:
+                    severity: warning
+                  annotations:
+                    summary: "High memory usage detected"
+                    description: "Memory usage is above 85% on {{ '{{ $labels.instance }}' }}."
+          
+                - alert: DiskSpaceLow
+                  expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+                  for: 5m
+                  labels:
+                    severity: critical
+                  annotations:
+                    summary: "Low disk space"
+                    description: "Disk space is below 15% on {{ '{{ $labels.instance }}' }}."
+      tags: [prometheus]
+
+    # =========================================================================
+    # Configure Grafana
+    # =========================================================================
+    - name: Create Grafana datasource configuration
+      ansible.builtin.copy:
+        dest: "{{ monitoring_dir }}/grafana/provisioning/datasources/datasources.yml"
+        mode: '0644'
+        content: |
+          apiVersion: 1
+          
+          datasources:
+            - name: Prometheus
+              type: prometheus
+              access: proxy
+              url: http://prometheus:9090
+              isDefault: true
+              editable: false
+      tags: [grafana]
+
+    - name: Create Grafana dashboard provisioner
+      ansible.builtin.copy:
+        dest: "{{ monitoring_dir }}/grafana/provisioning/dashboards/dashboards.yml"
+        mode: '0644'
+        content: |
+          apiVersion: 1
+          
+          providers:
+            - name: 'XDC Dashboards'
+              orgId: 1
+              folder: 'XDC Node'
+              folderUid: ''
+              type: file
+              disableDeletion: false
+              updateIntervalSeconds: 10
+              allowUiUpdates: true
+              options:
+                path: /var/lib/grafana/dashboards
+      tags: [grafana]
+
+    # =========================================================================
+    # Import Grafana Dashboards
+    # =========================================================================
+    - name: Create XDC Node dashboard
+      ansible.builtin.copy:
+        dest: "{{ monitoring_dir }}/grafana/dashboards/xdc-node.json"
+        mode: '0644'
+        content: |
+          {
+            "annotations": {
+              "list": []
+            },
+            "editable": true,
+            "fiscalYearStartMonth": 0,
+            "graphTooltip": 0,
+            "id": null,
+            "links": [],
+            "liveNow": false,
+            "panels": [
+              {
+                "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+                "fieldConfig": {
+                  "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }
+                },
+                "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+                "id": 1,
+                "title": "Block Number",
+                "type": "stat",
+                "targets": [
+                  {
+                    "expr": "eth_block_number",
+                    "legendFormat": "Block"
+                  }
+                ]
+              },
+              {
+                "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+                "fieldConfig": {
+                  "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }
+                },
+                "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+                "id": 2,
+                "title": "Peer Count",
+                "type": "stat",
+                "targets": [
+                  {
+                    "expr": "p2p_peers",
+                    "legendFormat": "Peers"
+                  }
+                ]
+              },
+              {
+                "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+                "fieldConfig": {
+                  "defaults": { "color": { "mode": "palette-classic" }, "unit": "percent" }
+                },
+                "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+                "id": 3,
+                "title": "CPU Usage",
+                "type": "timeseries",
+                "targets": [
+                  {
+                    "expr": "100 - (avg by(instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+                    "legendFormat": "CPU %"
+                  }
+                ]
+              },
+              {
+                "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+                "fieldConfig": {
+                  "defaults": { "color": { "mode": "palette-classic" }, "unit": "bytes" }
+                },
+                "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+                "id": 4,
+                "title": "Memory Usage",
+                "type": "timeseries",
+                "targets": [
+                  {
+                    "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
+                    "legendFormat": "Used"
+                  },
+                  {
+                    "expr": "node_memory_MemTotal_bytes",
+                    "legendFormat": "Total"
+                  }
+                ]
+              },
+              {
+                "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+                "fieldConfig": {
+                  "defaults": { "color": { "mode": "palette-classic" }, "unit": "bytes" }
+                },
+                "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+                "id": 5,
+                "title": "Disk Usage",
+                "type": "timeseries",
+                "targets": [
+                  {
+                    "expr": "node_filesystem_size_bytes{mountpoint=\"/\"} - node_filesystem_avail_bytes{mountpoint=\"/\"}",
+                    "legendFormat": "Used"
+                  },
+                  {
+                    "expr": "node_filesystem_size_bytes{mountpoint=\"/\"}",
+                    "legendFormat": "Total"
+                  }
+                ]
+              }
+            ],
+            "refresh": "30s",
+            "schemaVersion": 38,
+            "tags": ["xdc", "blockchain"],
+            "templating": { "list": [] },
+            "time": { "from": "now-6h", "to": "now" },
+            "timepicker": {},
+            "timezone": "browser",
+            "title": "XDC Node Overview",
+            "uid": "xdc-node-overview",
+            "version": 1,
+            "weekStart": ""
+          }
+      tags: [grafana]
+
+    # =========================================================================
+    # Configure Alertmanager
+    # =========================================================================
+    - name: Create Alertmanager configuration
+      ansible.builtin.copy:
+        dest: "{{ monitoring_dir }}/alertmanager/alertmanager.yml"
+        mode: '0644'
+        content: |
+          global:
+            resolve_timeout: 5m
+          
+          route:
+            group_by: ['alertname', 'severity']
+            group_wait: 10s
+            group_interval: 10s
+            repeat_interval: 1h
+            receiver: 'default-receiver'
+            routes:
+              - match:
+                  severity: critical
+                receiver: 'critical-receiver'
+          
+          receivers:
+            - name: 'default-receiver'
+              # Configure your notification channels here
+              # webhook_configs:
+              #   - url: 'http://your-webhook-url'
+              
+            - name: 'critical-receiver'
+              # Configure critical alert notifications
+              # slack_configs:
+              #   - api_url: 'https://hooks.slack.com/services/xxx'
+              #     channel: '#alerts'
+          
+          inhibit_rules:
+            - source_match:
+                severity: 'critical'
+              target_match:
+                severity: 'warning'
+              equal: ['alertname', 'instance']
+      tags: [alertmanager]
+
+    # =========================================================================
+    # Start Monitoring Stack
+    # =========================================================================
+    - name: Start monitoring stack
+      ansible.builtin.command:
+        cmd: docker compose up -d
+        chdir: "{{ monitoring_dir }}"
+      register: compose_result
+      changed_when: "'Started' in compose_result.stdout or 'Created' in compose_result.stdout"
+      tags: [start]
+
+    # =========================================================================
+    # Verify Connectivity
+    # =========================================================================
+    - name: Wait for Prometheus to be ready
+      ansible.builtin.uri:
+        url: "http://localhost:{{ prometheus_port }}/-/ready"
+        status_code: 200
+      register: prometheus_ready
+      retries: 30
+      delay: 5
+      until: prometheus_ready.status == 200
+      tags: [verify]
+
+    - name: Wait for Grafana to be ready
+      ansible.builtin.uri:
+        url: "http://localhost:{{ grafana_port }}/api/health"
+        status_code: 200
+      register: grafana_ready
+      retries: 30
+      delay: 5
+      until: grafana_ready.status == 200
+      tags: [verify]
+
+    - name: Verify node-exporter metrics
+      ansible.builtin.uri:
+        url: "http://localhost:{{ node_exporter_port }}/metrics"
+        status_code: 200
+        return_content: yes
+      register: node_exporter_metrics
+      tags: [verify]
+
+    - name: Display monitoring status
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Monitoring Stack Deployed Successfully!
+          ============================================
+          Prometheus: http://{{ ansible_host }}:{{ prometheus_port }}
+          Grafana: http://{{ ansible_host }}:{{ grafana_port }}
+            Username: admin
+            Password: {{ grafana_admin_password }}
+          Node Exporter: http://{{ ansible_host }}:{{ node_exporter_port }}
+          Alertmanager: http://{{ ansible_host }}:9093
+          ============================================
+          Note: Services are bound to localhost only.
+          Use SSH tunnel to access: ssh -L 3000:localhost:3000 user@{{ ansible_host }}
+          ============================================
+      tags: [summary]

@@ -1,0 +1,64 @@
+# XDC Node Inventory Template
+# Copy to hosts.yml and customize for your environment
+#
+# Usage: cp hosts.yml.template hosts.yml && vim hosts.yml
+
+all:
+  vars:
+    ansible_user: root
+    ansible_python_interpreter: /usr/bin/python3
+    xdc_data_dir: /root/XDC-Node
+    xdc_network: mainnet
+    xdc_client_version: latest
+
+  children:
+    validators:
+      hosts:
+        prod-geth:
+          ansible_host: 65.21.27.213
+          ansible_port: 22
+          node_role: production
+          client: XDPoSChain
+          rpc_port: 8989
+          ws_port: 8990
+          p2p_port: 30303
+          
+    rpc_nodes:
+      hosts:
+        gcx-geth:
+          ansible_host: 175.110.113.12
+          ansible_port: 12141
+          node_role: rpc
+          client: XDPoSChain
+          rpc_port: 8545
+          ws_port: 8546
+          p2p_port: 30303
+          enable_public_rpc: true
+          
+    test_nodes:
+      hosts:
+        test-geth:
+          ansible_host: 95.217.56.168
+          ansible_port: 22
+          node_role: test
+          client: XDPoSChain
+          xdc_network: testnet
+          rpc_port: 8545
+          
+    erigon_nodes:
+      hosts:
+        test-erigon:
+          ansible_host: 95.217.56.168
+          ansible_port: 22
+          node_role: test
+          client: erigon-xdc
+          xdc_network: testnet
+          rpc_port: 8545
+
+    # Group all XDC nodes
+    xdc_nodes:
+      children:
+        validators:
+        rpc_nodes:
+        test_nodes:
+        erigon_nodes:

@@ -1,0 +1,252 @@
+---
+# Deploy XDC Node Playbook
+# Usage: ansible-playbook -i inventory/hosts.yml playbooks/deploy-node.yml --limit <host>
+#
+# Variables:
+#   - client: XDPoSChain or erigon-xdc
+#   - node_role: validator, rpc, or test
+#   - xdc_network: mainnet or testnet
+
+- name: Deploy XDC Node
+  hosts: xdc_nodes
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    xdc_user: xdc
+    xdc_data_dir: "{{ data_dir | default('/root/XDC-Node') }}"
+    xdc_client: "{{ client | default('XDPoSChain') }}"
+    xdc_network: "{{ network | default('mainnet') }}"
+    
+  pre_tasks:
+    - name: Validate required variables
+      ansible.builtin.assert:
+        that:
+          - client is defined
+          - node_role is defined
+        fail_msg: "Required variables 'client' and 'node_role' must be defined"
+        
+    - name: Display deployment info
+      ansible.builtin.debug:
+        msg: |
+          Deploying XDC Node:
+          - Host: {{ inventory_hostname }}
+          - Client: {{ xdc_client }}
+          - Role: {{ node_role }}
+          - Network: {{ xdc_network }}
+          - Data Directory: {{ xdc_data_dir }}
+
+  roles:
+    - role: xdc-common
+      tags: [common, setup]
+    - role: xdc-node
+      tags: [node, deploy]
+      
+  tasks:
+    # =========================================================================
+    # Install Dependencies
+    # =========================================================================
+    - name: Install required packages
+      ansible.builtin.apt:
+        name:
+          - git
+          - curl
+          - wget
+          - jq
+          - htop
+          - iotop
+          - screen
+          - tmux
+          - unzip
+          - build-essential
+          - golang-go
+        state: present
+        update_cache: yes
+      tags: [dependencies]
+
+    # =========================================================================
+    # Download/Build XDC Client
+    # =========================================================================
+    - name: Create XDC directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ xdc_data_dir }}"
+        - "{{ xdc_data_dir }}/keystore"
+        - "{{ xdc_data_dir }}/logs"
+        - /opt/xdc
+      tags: [setup]
+
+    - name: Download XDPoSChain binary (geth client)
+      when: xdc_client == 'XDPoSChain'
+      block:
+        - name: Clone XDPoSChain repository
+          ansible.builtin.git:
+            repo: https://github.com/XinFinOrg/XDPoSChain.git
+            dest: /opt/xdc/XDPoSChain
+            version: "{{ xdc_client_version | default('master') }}"
+            force: yes
+          
+        - name: Build XDPoSChain
+          ansible.builtin.command:
+            cmd: make all
+            chdir: /opt/xdc/XDPoSChain
+          register: build_result
+          changed_when: build_result.rc == 0
+          
+        - name: Install XDC binary
+          ansible.builtin.copy:
+            src: /opt/xdc/XDPoSChain/build/bin/XDC
+            dest: /usr/local/bin/XDC
+            mode: '0755'
+            remote_src: yes
+      tags: [build, xdposchain]
+
+    - name: Download Erigon-XDC binary
+      when: xdc_client == 'erigon-xdc'
+      block:
+        - name: Clone erigon-xdc repository
+          ansible.builtin.git:
+            repo: https://github.com/XinFinOrg/erigon-xdc.git
+            dest: /opt/xdc/erigon-xdc
+            version: "{{ xdc_client_version | default('main') }}"
+            force: yes
+            
+        - name: Build erigon-xdc
+          ansible.builtin.command:
+            cmd: make erigon
+            chdir: /opt/xdc/erigon-xdc
+          register: build_result
+          changed_when: build_result.rc == 0
+          
+        - name: Install erigon binary
+          ansible.builtin.copy:
+            src: /opt/xdc/erigon-xdc/build/bin/erigon
+            dest: /usr/local/bin/erigon-xdc
+            mode: '0755'
+            remote_src: yes
+      tags: [build, erigon]
+
+    # =========================================================================
+    # Configure Environment
+    # =========================================================================
+    - name: Create .env configuration
+      ansible.builtin.template:
+        src: ../templates/xdc-env.j2
+        dest: "{{ xdc_data_dir }}/.env"
+        mode: '0600'
+      notify: Restart XDC node
+      tags: [config]
+
+    - name: Download genesis file
+      ansible.builtin.get_url:
+        url: "https://raw.githubusercontent.com/XinFinOrg/XDPoSChain/master/genesis/{{ 'mainnet' if xdc_network == 'mainnet' else 'testnet' }}.json"
+        dest: "{{ xdc_data_dir }}/genesis.json"
+        mode: '0644'
+      tags: [config]
+
+    - name: Initialize data directory
+      ansible.builtin.command:
+        cmd: >
+          {% if xdc_client == 'XDPoSChain' %}
+          /usr/local/bin/XDC --datadir {{ xdc_data_dir }} init {{ xdc_data_dir }}/genesis.json
+          {% else %}
+          /usr/local/bin/erigon-xdc init --datadir {{ xdc_data_dir }} {{ xdc_data_dir }}/genesis.json
+          {% endif %}
+      args:
+        creates: "{{ xdc_data_dir }}/XDC/chaindata"
+      tags: [init]
+
+    # =========================================================================
+    # Create Systemd Service
+    # =========================================================================
+    - name: Create systemd service file
+      ansible.builtin.template:
+        src: ../templates/xdc-node.service.j2
+        dest: /etc/systemd/system/xdc-node.service
+        mode: '0644'
+      notify:
+        - Reload systemd
+        - Restart XDC node
+      tags: [systemd]
+
+    - name: Enable XDC node service
+      ansible.builtin.systemd:
+        name: xdc-node
+        enabled: yes
+        daemon_reload: yes
+      tags: [systemd]
+
+    # =========================================================================
+    # Start Node
+    # =========================================================================
+    - name: Start XDC node
+      ansible.builtin.systemd:
+        name: xdc-node
+        state: started
+      tags: [start]
+
+    # =========================================================================
+    # Verify Sync Started
+    # =========================================================================
+    - name: Wait for RPC to be available
+      ansible.builtin.wait_for:
+        port: "{{ rpc_port | default(8545) }}"
+        timeout: 120
+      tags: [verify]
+
+    - name: Check sync status
+      ansible.builtin.uri:
+        url: "http://localhost:{{ rpc_port | default(8545) }}"
+        method: POST
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: eth_syncing
+          params: []
+          id: 1
+        return_content: yes
+      register: sync_status
+      retries: 5
+      delay: 10
+      until: sync_status.status == 200
+      tags: [verify]
+
+    - name: Display sync status
+      ansible.builtin.debug:
+        msg: "Sync status: {{ sync_status.json.result }}"
+      tags: [verify]
+
+    - name: Get peer count
+      ansible.builtin.uri:
+        url: "http://localhost:{{ rpc_port | default(8545) }}"
+        method: POST
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: net_peerCount
+          params: []
+          id: 1
+        return_content: yes
+      register: peer_count
+      tags: [verify]
+
+    - name: Verify peers connected
+      ansible.builtin.assert:
+        that:
+          - peer_count.json.result != '0x0'
+        fail_msg: "No peers connected after startup"
+        success_msg: "Node connected to {{ peer_count.json.result | int(base=16) }} peers"
+      tags: [verify]
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Restart XDC node
+      ansible.builtin.systemd:
+        name: xdc-node
+        state: restarted

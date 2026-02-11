@@ -1,0 +1,409 @@
+---
+# Security Hardening Playbook for XDC Nodes
+# Applies CIS benchmark recommendations and security best practices
+#
+# Usage: ansible-playbook -i inventory/hosts.yml playbooks/security-harden.yml
+
+- name: Apply Security Hardening
+  hosts: xdc_nodes
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    ssh_port: "{{ ansible_port | default(22) }}"
+    allowed_ssh_users:
+      - root
+    fail2ban_bantime: 3600
+    fail2ban_findtime: 600
+    fail2ban_maxretry: 5
+    
+  pre_tasks:
+    - name: Display security hardening info
+      ansible.builtin.debug:
+        msg: |
+          Applying security hardening to: {{ inventory_hostname }}
+          SSH Port: {{ ssh_port }}
+
+  roles:
+    - role: xdc-security
+      tags: [security]
+
+  tasks:
+    # =========================================================================
+    # SSH Hardening
+    # =========================================================================
+    - name: SSH Hardening
+      tags: [ssh]
+      block:
+        - name: Configure SSH daemon
+          ansible.builtin.lineinfile:
+            path: /etc/ssh/sshd_config
+            regexp: "{{ item.regexp }}"
+            line: "{{ item.line }}"
+            state: present
+            validate: 'sshd -t -f %s'
+          loop:
+            - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin prohibit-password' }
+            - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication no' }
+            - { regexp: '^#?PermitEmptyPasswords', line: 'PermitEmptyPasswords no' }
+            - { regexp: '^#?X11Forwarding', line: 'X11Forwarding no' }
+            - { regexp: '^#?MaxAuthTries', line: 'MaxAuthTries 3' }
+            - { regexp: '^#?ClientAliveInterval', line: 'ClientAliveInterval 300' }
+            - { regexp: '^#?ClientAliveCountMax', line: 'ClientAliveCountMax 2' }
+            - { regexp: '^#?Protocol', line: 'Protocol 2' }
+            - { regexp: '^#?LoginGraceTime', line: 'LoginGraceTime 60' }
+            - { regexp: '^#?AllowAgentForwarding', line: 'AllowAgentForwarding no' }
+            - { regexp: '^#?AllowTcpForwarding', line: 'AllowTcpForwarding no' }
+          notify: Restart SSH
+
+        - name: Configure SSH key exchange algorithms
+          ansible.builtin.lineinfile:
+            path: /etc/ssh/sshd_config
+            regexp: '^#?KexAlgorithms'
+            line: 'KexAlgorithms curve25519-sha256@libssh.org,diffie-hellman-group-exchange-sha256'
+            state: present
+          notify: Restart SSH
+
+        - name: Configure SSH ciphers
+          ansible.builtin.lineinfile:
+            path: /etc/ssh/sshd_config
+            regexp: '^#?Ciphers'
+            line: 'Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com'
+            state: present
+          notify: Restart SSH
+
+    # =========================================================================
+    # UFW Firewall
+    # =========================================================================
+    - name: UFW Firewall Configuration
+      tags: [firewall, ufw]
+      block:
+        - name: Install UFW
+          ansible.builtin.apt:
+            name: ufw
+            state: present
+            update_cache: yes
+
+        - name: Reset UFW to defaults
+          community.general.ufw:
+            state: reset
+          when: ufw_reset | default(false) | bool
+
+        - name: Set default incoming policy to deny
+          community.general.ufw:
+            direction: incoming
+            policy: deny
+
+        - name: Set default outgoing policy to allow
+          community.general.ufw:
+            direction: outgoing
+            policy: allow
+
+        - name: Allow SSH
+          community.general.ufw:
+            rule: allow
+            port: "{{ ssh_port }}"
+            proto: tcp
+            comment: SSH access
+
+        - name: Allow XDC P2P port
+          community.general.ufw:
+            rule: allow
+            port: "{{ p2p_port | default(30303) }}"
+            proto: tcp
+            comment: XDC P2P
+
+        - name: Allow XDC P2P UDP
+          community.general.ufw:
+            rule: allow
+            port: "{{ p2p_port | default(30303) }}"
+            proto: udp
+            comment: XDC P2P UDP
+
+        - name: Allow RPC port (restricted)
+          community.general.ufw:
+            rule: allow
+            port: "{{ rpc_port | default(8545) }}"
+            proto: tcp
+            src: "{{ rpc_allowed_ips | default('127.0.0.1') }}"
+            comment: XDC RPC
+          when: enable_public_rpc is not defined or not enable_public_rpc
+
+        - name: Allow public RPC port
+          community.general.ufw:
+            rule: allow
+            port: "{{ rpc_port | default(8545) }}"
+            proto: tcp
+            comment: XDC RPC Public
+          when: enable_public_rpc | default(false) | bool
+
+        - name: Allow monitoring ports (local only)
+          community.general.ufw:
+            rule: allow
+            port: "{{ item.port }}"
+            proto: tcp
+            src: 127.0.0.1
+            comment: "{{ item.comment }}"
+          loop:
+            - { port: '9090', comment: 'Prometheus' }
+            - { port: '3000', comment: 'Grafana' }
+            - { port: '9100', comment: 'Node Exporter' }
+
+        - name: Enable UFW
+          community.general.ufw:
+            state: enabled
+
+    # =========================================================================
+    # Fail2ban
+    # =========================================================================
+    - name: Fail2ban Configuration
+      tags: [fail2ban]
+      block:
+        - name: Install fail2ban
+          ansible.builtin.apt:
+            name: fail2ban
+            state: present
+
+        - name: Configure fail2ban jail.local
+          ansible.builtin.copy:
+            dest: /etc/fail2ban/jail.local
+            mode: '0644'
+            content: |
+              [DEFAULT]
+              bantime = {{ fail2ban_bantime }}
+              findtime = {{ fail2ban_findtime }}
+              maxretry = {{ fail2ban_maxretry }}
+              backend = systemd
+              
+              [sshd]
+              enabled = true
+              port = {{ ssh_port }}
+              filter = sshd
+              logpath = /var/log/auth.log
+              maxretry = 3
+              bantime = 3600
+              
+              [sshd-ddos]
+              enabled = true
+              port = {{ ssh_port }}
+              filter = sshd-ddos
+              logpath = /var/log/auth.log
+              maxretry = 6
+              bantime = 7200
+          notify: Restart fail2ban
+
+        - name: Enable and start fail2ban
+          ansible.builtin.systemd:
+            name: fail2ban
+            state: started
+            enabled: yes
+
+    # =========================================================================
+    # Auditd
+    # =========================================================================
+    - name: Auditd Configuration
+      tags: [auditd, audit]
+      block:
+        - name: Install auditd
+          ansible.builtin.apt:
+            name:
+              - auditd
+              - audispd-plugins
+            state: present
+
+        - name: Configure audit rules
+          ansible.builtin.copy:
+            dest: /etc/audit/rules.d/xdc-node.rules
+            mode: '0640'
+            content: |
+              # XDC Node Audit Rules
+              
+              # Monitor authentication events
+              -w /etc/passwd -p wa -k identity
+              -w /etc/group -p wa -k identity
+              -w /etc/shadow -p wa -k identity
+              -w /etc/sudoers -p wa -k sudoers
+              -w /etc/sudoers.d/ -p wa -k sudoers
+              
+              # Monitor SSH configuration
+              -w /etc/ssh/sshd_config -p wa -k sshd_config
+              
+              # Monitor system calls for privilege escalation
+              -a always,exit -F arch=b64 -S execve -k exec
+              
+              # Monitor network configuration
+              -w /etc/hosts -p wa -k hosts
+              -w /etc/network/ -p wa -k network
+              
+              # Monitor XDC node directories
+              -w {{ xdc_data_dir | default('/root/XDC-Node') }} -p wa -k xdc_node
+              -w /etc/systemd/system/xdc-node.service -p wa -k xdc_service
+              
+              # Monitor cron
+              -w /etc/crontab -p wa -k cron
+              -w /etc/cron.d/ -p wa -k cron
+              -w /var/spool/cron/crontabs/ -p wa -k cron
+              
+              # Log all commands run by root
+              -a always,exit -F arch=b64 -F euid=0 -S execve -k root_commands
+          notify: Restart auditd
+
+        - name: Enable and start auditd
+          ansible.builtin.systemd:
+            name: auditd
+            state: started
+            enabled: yes
+
+    # =========================================================================
+    # Sysctl Tuning
+    # =========================================================================
+    - name: Sysctl Security Tuning
+      tags: [sysctl]
+      block:
+        - name: Apply security sysctl settings
+          ansible.posix.sysctl:
+            name: "{{ item.name }}"
+            value: "{{ item.value }}"
+            sysctl_set: yes
+            state: present
+            reload: yes
+          loop:
+            # Network security
+            - { name: 'net.ipv4.conf.all.accept_redirects', value: '0' }
+            - { name: 'net.ipv4.conf.default.accept_redirects', value: '0' }
+            - { name: 'net.ipv4.conf.all.send_redirects', value: '0' }
+            - { name: 'net.ipv4.conf.default.send_redirects', value: '0' }
+            - { name: 'net.ipv4.conf.all.accept_source_route', value: '0' }
+            - { name: 'net.ipv4.conf.default.accept_source_route', value: '0' }
+            - { name: 'net.ipv4.conf.all.log_martians', value: '1' }
+            - { name: 'net.ipv4.conf.default.log_martians', value: '1' }
+            - { name: 'net.ipv4.icmp_echo_ignore_broadcasts', value: '1' }
+            - { name: 'net.ipv4.icmp_ignore_bogus_error_responses', value: '1' }
+            - { name: 'net.ipv4.tcp_syncookies', value: '1' }
+            - { name: 'net.ipv4.conf.all.rp_filter', value: '1' }
+            - { name: 'net.ipv4.conf.default.rp_filter', value: '1' }
+            # IPv6 security
+            - { name: 'net.ipv6.conf.all.accept_redirects', value: '0' }
+            - { name: 'net.ipv6.conf.default.accept_redirects', value: '0' }
+            - { name: 'net.ipv6.conf.all.accept_source_route', value: '0' }
+            # Kernel security
+            - { name: 'kernel.randomize_va_space', value: '2' }
+            - { name: 'kernel.kptr_restrict', value: '2' }
+            - { name: 'kernel.dmesg_restrict', value: '1' }
+            # File system
+            - { name: 'fs.protected_hardlinks', value: '1' }
+            - { name: 'fs.protected_symlinks', value: '1' }
+            - { name: 'fs.suid_dumpable', value: '0' }
+
+    # =========================================================================
+    # Unattended Upgrades
+    # =========================================================================
+    - name: Unattended Upgrades Configuration
+      tags: [updates, unattended-upgrades]
+      block:
+        - name: Install unattended-upgrades
+          ansible.builtin.apt:
+            name:
+              - unattended-upgrades
+              - apt-listchanges
+            state: present
+
+        - name: Configure unattended-upgrades
+          ansible.builtin.copy:
+            dest: /etc/apt/apt.conf.d/50unattended-upgrades
+            mode: '0644'
+            content: |
+              Unattended-Upgrade::Allowed-Origins {
+                  "${distro_id}:${distro_codename}";
+                  "${distro_id}:${distro_codename}-security";
+                  "${distro_id}ESMApps:${distro_codename}-apps-security";
+                  "${distro_id}ESM:${distro_codename}-infra-security";
+              };
+              
+              Unattended-Upgrade::Package-Blacklist {
+              };
+              
+              Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+              Unattended-Upgrade::MinimalSteps "true";
+              Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+              Unattended-Upgrade::Remove-Unused-Dependencies "true";
+              Unattended-Upgrade::Automatic-Reboot "false";
+              Unattended-Upgrade::Automatic-Reboot-Time "03:00";
+              Unattended-Upgrade::SyslogEnable "true";
+              Unattended-Upgrade::SyslogFacility "daemon";
+
+        - name: Configure automatic updates
+          ansible.builtin.copy:
+            dest: /etc/apt/apt.conf.d/20auto-upgrades
+            mode: '0644'
+            content: |
+              APT::Periodic::Update-Package-Lists "1";
+              APT::Periodic::Unattended-Upgrade "1";
+              APT::Periodic::Download-Upgradeable-Packages "1";
+              APT::Periodic::AutocleanInterval "7";
+
+        - name: Enable unattended-upgrades timer
+          ansible.builtin.systemd:
+            name: apt-daily-upgrade.timer
+            state: started
+            enabled: yes
+
+    # =========================================================================
+    # Additional Hardening
+    # =========================================================================
+    - name: Additional Security Measures
+      tags: [additional]
+      block:
+        - name: Disable unused filesystems
+          ansible.builtin.copy:
+            dest: /etc/modprobe.d/disable-filesystems.conf
+            mode: '0644'
+            content: |
+              install cramfs /bin/true
+              install freevxfs /bin/true
+              install jffs2 /bin/true
+              install hfs /bin/true
+              install hfsplus /bin/true
+              install squashfs /bin/true
+              install udf /bin/true
+              install vfat /bin/true
+
+        - name: Set proper permissions on sensitive files
+          ansible.builtin.file:
+            path: "{{ item.path }}"
+            mode: "{{ item.mode }}"
+          loop:
+            - { path: '/etc/passwd', mode: '0644' }
+            - { path: '/etc/shadow', mode: '0640' }
+            - { path: '/etc/group', mode: '0644' }
+            - { path: '/etc/gshadow', mode: '0640' }
+            - { path: '/etc/ssh/sshd_config', mode: '0600' }
+
+        - name: Set login warning banner
+          ansible.builtin.copy:
+            dest: /etc/issue.net
+            mode: '0644'
+            content: |
+              **************************************************************************
+              *                                                                        *
+              * This system is for authorized users only.                              *
+              * All activities on this system are logged and monitored.                *
+              * Unauthorized access will be prosecuted to the full extent of the law.  *
+              *                                                                        *
+              **************************************************************************
+
+  handlers:
+    - name: Restart SSH
+      ansible.builtin.systemd:
+        name: sshd
+        state: restarted
+
+    - name: Restart fail2ban
+      ansible.builtin.systemd:
+        name: fail2ban
+        state: restarted
+
+    - name: Restart auditd
+      ansible.builtin.systemd:
+        name: auditd
+        state: restarted

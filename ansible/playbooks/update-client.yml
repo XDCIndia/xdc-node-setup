@@ -1,0 +1,281 @@
+---
+# Rolling Update Playbook for XDC Nodes
+# Updates XDC client one node at a time to maintain network availability
+#
+# Usage: ansible-playbook -i inventory/hosts.yml playbooks/update-client.yml
+#        ansible-playbook -i inventory/hosts.yml playbooks/update-client.yml -e "target_version=v2.0.0"
+
+- name: Rolling Update XDC Client
+  hosts: xdc_nodes
+  become: yes
+  gather_facts: yes
+  serial: 1  # One node at a time
+  max_fail_percentage: 0  # Stop if any node fails
+  
+  vars:
+    target_version: "{{ xdc_client_version | default('latest') }}"
+    health_check_retries: 30
+    health_check_delay: 10
+    graceful_stop_timeout: 300
+    
+  pre_tasks:
+    - name: Check current client version
+      ansible.builtin.command:
+        cmd: >
+          {% if client == 'XDPoSChain' %}
+          /usr/local/bin/XDC version
+          {% else %}
+          /usr/local/bin/erigon-xdc --version
+          {% endif %}
+      register: current_version
+      changed_when: false
+      failed_when: false
+      tags: [version]
+
+    - name: Display update info
+      ansible.builtin.debug:
+        msg: |
+          Rolling Update for: {{ inventory_hostname }}
+          Current Version: {{ current_version.stdout | default('Unknown') }}
+          Target Version: {{ target_version }}
+          Client: {{ client }}
+      tags: [info]
+
+    - name: Check node sync status before update
+      ansible.builtin.uri:
+        url: "http://localhost:{{ rpc_port | default(8545) }}"
+        method: POST
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: eth_syncing
+          params: []
+          id: 1
+        return_content: yes
+      register: pre_sync_status
+      failed_when: false
+      tags: [pre-check]
+
+    - name: Get current block number
+      ansible.builtin.uri:
+        url: "http://localhost:{{ rpc_port | default(8545) }}"
+        method: POST
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: eth_blockNumber
+          params: []
+          id: 1
+        return_content: yes
+      register: pre_block_number
+      failed_when: false
+      tags: [pre-check]
+
+    - name: Record pre-update state
+      ansible.builtin.set_fact:
+        pre_update_block: "{{ pre_block_number.json.result | default('0x0') | int(base=16) }}"
+      tags: [pre-check]
+
+  tasks:
+    # =========================================================================
+    # Download New Version
+    # =========================================================================
+    - name: Download new XDPoSChain version
+      when: client == 'XDPoSChain'
+      block:
+        - name: Pull latest XDPoSChain source
+          ansible.builtin.git:
+            repo: https://github.com/XinFinOrg/XDPoSChain.git
+            dest: /opt/xdc/XDPoSChain
+            version: "{{ target_version if target_version != 'latest' else 'master' }}"
+            force: yes
+          register: git_pull
+
+        - name: Build new XDPoSChain binary
+          ansible.builtin.command:
+            cmd: make all
+            chdir: /opt/xdc/XDPoSChain
+          when: git_pull.changed
+          register: build_result
+      tags: [download]
+
+    - name: Download new erigon-xdc version
+      when: client == 'erigon-xdc'
+      block:
+        - name: Pull latest erigon-xdc source
+          ansible.builtin.git:
+            repo: https://github.com/XinFinOrg/erigon-xdc.git
+            dest: /opt/xdc/erigon-xdc
+            version: "{{ target_version if target_version != 'latest' else 'main' }}"
+            force: yes
+          register: git_pull
+
+        - name: Build new erigon-xdc binary
+          ansible.builtin.command:
+            cmd: make erigon
+            chdir: /opt/xdc/erigon-xdc
+          when: git_pull.changed
+          register: build_result
+      tags: [download]
+
+    # =========================================================================
+    # Stop Node Gracefully
+    # =========================================================================
+    - name: Stop XDC node gracefully
+      block:
+        - name: Send SIGTERM to XDC node
+          ansible.builtin.systemd:
+            name: xdc-node
+            state: stopped
+          async: "{{ graceful_stop_timeout }}"
+          poll: 10
+          register: stop_result
+
+        - name: Wait for node to fully stop
+          ansible.builtin.wait_for:
+            port: "{{ rpc_port | default(8545) }}"
+            state: stopped
+            timeout: 60
+      tags: [stop]
+
+    # =========================================================================
+    # Install Update
+    # =========================================================================
+    - name: Install new XDPoSChain binary
+      when: client == 'XDPoSChain'
+      ansible.builtin.copy:
+        src: /opt/xdc/XDPoSChain/build/bin/XDC
+        dest: /usr/local/bin/XDC
+        mode: '0755'
+        backup: yes
+        remote_src: yes
+      tags: [install]
+
+    - name: Install new erigon-xdc binary
+      when: client == 'erigon-xdc'
+      ansible.builtin.copy:
+        src: /opt/xdc/erigon-xdc/build/bin/erigon
+        dest: /usr/local/bin/erigon-xdc
+        mode: '0755'
+        backup: yes
+        remote_src: yes
+      tags: [install]
+
+    # =========================================================================
+    # Start Node
+    # =========================================================================
+    - name: Start XDC node
+      ansible.builtin.systemd:
+        name: xdc-node
+        state: started
+        daemon_reload: yes
+      tags: [start]
+
+    - name: Wait for RPC to become available
+      ansible.builtin.wait_for:
+        port: "{{ rpc_port | default(8545) }}"
+        timeout: 120
+      tags: [start]
+
+    # =========================================================================
+    # Verify Health
+    # =========================================================================
+    - name: Verify node health after update
+      block:
+        - name: Check new version
+          ansible.builtin.command:
+            cmd: >
+              {% if client == 'XDPoSChain' %}
+              /usr/local/bin/XDC version
+              {% else %}
+              /usr/local/bin/erigon-xdc --version
+              {% endif %}
+          register: new_version
+          changed_when: false
+          tags: [verify]
+
+        - name: Display new version
+          ansible.builtin.debug:
+            msg: "Updated to version: {{ new_version.stdout }}"
+          tags: [verify]
+
+        - name: Wait for node to connect to peers
+          ansible.builtin.uri:
+            url: "http://localhost:{{ rpc_port | default(8545) }}"
+            method: POST
+            body_format: json
+            body:
+              jsonrpc: "2.0"
+              method: net_peerCount
+              params: []
+              id: 1
+            return_content: yes
+          register: peer_count
+          retries: "{{ health_check_retries }}"
+          delay: "{{ health_check_delay }}"
+          until: >
+            peer_count.status == 200 and 
+            peer_count.json.result | int(base=16) > 0
+          tags: [verify]
+
+        - name: Check sync status
+          ansible.builtin.uri:
+            url: "http://localhost:{{ rpc_port | default(8545) }}"
+            method: POST
+            body_format: json
+            body:
+              jsonrpc: "2.0"
+              method: eth_syncing
+              params: []
+              id: 1
+            return_content: yes
+          register: post_sync_status
+          tags: [verify]
+
+        - name: Get current block number after update
+          ansible.builtin.uri:
+            url: "http://localhost:{{ rpc_port | default(8545) }}"
+            method: POST
+            body_format: json
+            body:
+              jsonrpc: "2.0"
+              method: eth_blockNumber
+              params: []
+              id: 1
+            return_content: yes
+          register: post_block_number
+          retries: 10
+          delay: 10
+          until: post_block_number.status == 200
+          tags: [verify]
+
+        - name: Verify block progression
+          ansible.builtin.assert:
+            that:
+              - post_block_number.json.result | int(base=16) >= pre_update_block | int
+            fail_msg: "Block number has not progressed after update"
+            success_msg: "Node healthy - Block: {{ post_block_number.json.result | int(base=16) }}, Peers: {{ peer_count.json.result | int(base=16) }}"
+          tags: [verify]
+      tags: [health]
+
+  post_tasks:
+    - name: Update summary
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Update Complete: {{ inventory_hostname }}
+          ============================================
+          Previous Version: {{ current_version.stdout | default('Unknown') | trim }}
+          New Version: {{ new_version.stdout | trim }}
+          Block Number: {{ post_block_number.json.result | int(base=16) }}
+          Peer Count: {{ peer_count.json.result | int(base=16) }}
+          Sync Status: {{ 'Syncing' if post_sync_status.json.result else 'Synced' }}
+          ============================================
+      tags: [summary]
+
+    - name: Pause before next node
+      ansible.builtin.pause:
+        seconds: 30
+        prompt: "Waiting before updating next node..."
+      when: inventory_hostname != ansible_play_hosts[-1]
+      tags: [pause]

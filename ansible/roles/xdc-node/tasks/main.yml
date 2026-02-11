@@ -1,0 +1,194 @@
+---
+# XDC Node Role - Node installation and configuration
+# Handles client download, configuration, and service setup
+
+- name: Set client-specific variables
+  ansible.builtin.set_fact:
+    xdc_binary_name: "{{ 'XDC' if client == 'XDPoSChain' else 'erigon-xdc' }}"
+    xdc_binary_path: "{{ '/usr/local/bin/XDC' if client == 'XDPoSChain' else '/usr/local/bin/erigon-xdc' }}"
+    xdc_repo_url: "{{ 'https://github.com/XinFinOrg/XDPoSChain.git' if client == 'XDPoSChain' else 'https://github.com/XinFinOrg/erigon-xdc.git' }}"
+    xdc_build_cmd: "{{ 'make all' if client == 'XDPoSChain' else 'make erigon' }}"
+  tags: [vars]
+
+# =========================================================================
+# Download Client Binary
+# =========================================================================
+- name: Create build directory
+  ansible.builtin.file:
+    path: /opt/xdc/{{ client }}
+    state: directory
+    mode: '0755'
+  tags: [download]
+
+- name: Install Go (required for building)
+  ansible.builtin.apt:
+    name: golang-go
+    state: present
+  tags: [download]
+
+- name: Check if binary exists
+  ansible.builtin.stat:
+    path: "{{ xdc_binary_path }}"
+  register: binary_exists
+  tags: [download]
+
+- name: Clone XDC repository
+  ansible.builtin.git:
+    repo: "{{ xdc_repo_url }}"
+    dest: "/opt/xdc/{{ client }}"
+    version: "{{ xdc_client_version | default('master' if client == 'XDPoSChain' else 'main') }}"
+    force: yes
+  when: not binary_exists.stat.exists or force_rebuild | default(false) | bool
+  register: git_clone
+  tags: [download]
+
+- name: Build XDC client
+  ansible.builtin.command:
+    cmd: "{{ xdc_build_cmd }}"
+    chdir: "/opt/xdc/{{ client }}"
+  when: git_clone.changed or force_rebuild | default(false) | bool
+  register: build_result
+  environment:
+    GOPATH: /root/go
+    PATH: "{{ ansible_env.PATH }}:/usr/local/go/bin:/root/go/bin"
+  tags: [build]
+
+- name: Install XDC binary
+  ansible.builtin.copy:
+    src: "/opt/xdc/{{ client }}/build/bin/{{ xdc_binary_name }}"
+    dest: "{{ xdc_binary_path }}"
+    mode: '0755'
+    remote_src: yes
+  when: build_result.changed or not binary_exists.stat.exists
+  notify: Restart XDC node
+  tags: [install]
+
+# =========================================================================
+# Configure Node
+# =========================================================================
+- name: Create XDC data directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ xdc_data_dir | default('/root/XDC-Node') }}"
+    - "{{ xdc_data_dir | default('/root/XDC-Node') }}/XDC"
+    - "{{ xdc_data_dir | default('/root/XDC-Node') }}/keystore"
+    - "{{ xdc_data_dir | default('/root/XDC-Node') }}/logs"
+    - "{{ xdc_data_dir | default('/root/XDC-Node') }}/scripts"
+  tags: [config]
+
+- name: Create node environment file
+  ansible.builtin.template:
+    src: xdc-env.j2
+    dest: "{{ xdc_data_dir | default('/root/XDC-Node') }}/.env"
+    mode: '0600'
+  notify: Restart XDC node
+  tags: [config]
+
+- name: Download genesis file
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/XinFinOrg/XDPoSChain/master/genesis/{{ 'mainnet' if xdc_network | default('mainnet') == 'mainnet' else 'testnet' }}.json"
+    dest: "{{ xdc_data_dir | default('/root/XDC-Node') }}/genesis.json"
+    mode: '0644'
+  tags: [config]
+
+- name: Check if chaindata exists
+  ansible.builtin.stat:
+    path: "{{ xdc_data_dir | default('/root/XDC-Node') }}/XDC/chaindata"
+  register: chaindata_exists
+  tags: [init]
+
+- name: Initialize node (XDPoSChain)
+  ansible.builtin.command:
+    cmd: "{{ xdc_binary_path }} --datadir {{ xdc_data_dir | default('/root/XDC-Node') }} init {{ xdc_data_dir | default('/root/XDC-Node') }}/genesis.json"
+  when: 
+    - not chaindata_exists.stat.exists
+    - client == 'XDPoSChain'
+  tags: [init]
+
+- name: Initialize node (erigon-xdc)
+  ansible.builtin.command:
+    cmd: "{{ xdc_binary_path }} init --datadir {{ xdc_data_dir | default('/root/XDC-Node') }} {{ xdc_data_dir | default('/root/XDC-Node') }}/genesis.json"
+  when: 
+    - not chaindata_exists.stat.exists
+    - client == 'erigon-xdc'
+  tags: [init]
+
+# =========================================================================
+# Set Up Systemd
+# =========================================================================
+- name: Create systemd service file
+  ansible.builtin.template:
+    src: xdc-node.service.j2
+    dest: /etc/systemd/system/xdc-node.service
+    mode: '0644'
+  notify:
+    - Reload systemd
+    - Restart XDC node
+  tags: [systemd]
+
+- name: Create systemd drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/xdc-node.service.d
+    state: directory
+    mode: '0755'
+  tags: [systemd]
+
+- name: Create systemd resource limits drop-in
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/xdc-node.service.d/limits.conf
+    mode: '0644'
+    content: |
+      [Service]
+      LimitNOFILE=65535
+      LimitNPROC=65535
+  notify:
+    - Reload systemd
+    - Restart XDC node
+  tags: [systemd]
+
+# =========================================================================
+# Start and Enable
+# =========================================================================
+- name: Enable XDC node service
+  ansible.builtin.systemd:
+    name: xdc-node
+    enabled: yes
+    daemon_reload: yes
+  tags: [enable]
+
+- name: Start XDC node service
+  ansible.builtin.systemd:
+    name: xdc-node
+    state: started
+  tags: [start]
+
+- name: Wait for RPC to be available
+  ansible.builtin.wait_for:
+    port: "{{ rpc_port | default(8545) }}"
+    timeout: 120
+  tags: [verify]
+
+- name: Verify node is responding
+  ansible.builtin.uri:
+    url: "http://localhost:{{ rpc_port | default(8545) }}"
+    method: POST
+    body_format: json
+    body:
+      jsonrpc: "2.0"
+      method: web3_clientVersion
+      params: []
+      id: 1
+    return_content: yes
+  register: client_version
+  retries: 5
+  delay: 5
+  until: client_version.status == 200
+  tags: [verify]
+
+- name: Display client version
+  ansible.builtin.debug:
+    msg: "XDC Node started: {{ client_version.json.result }}"
+  tags: [verify]

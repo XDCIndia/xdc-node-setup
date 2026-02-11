@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground: #ffffff;
+  --background: #0a0a0f;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Fira Sans', system-ui, sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a2e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2a3e;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a4e;
+}
+
+/* Animation utilities */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.animate-slideIn {
+  animation: slideIn 0.3s ease-in-out;
+}
+
+/* Card hover effect */
+.card-hover {
+  @apply transition-all duration-200;
+}
+
+.card-hover:hover {
+  @apply border-xdc-primary shadow-lg shadow-xdc-primary/10;
+}
