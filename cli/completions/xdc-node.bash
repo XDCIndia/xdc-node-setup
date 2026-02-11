@@ -171,3 +171,44 @@ _xdc_node_completions() {
 
 # Register completion
 complete -F _xdc_node_completions xdc-node
+
+# XDC-specific commands
+_masternode_commands() {
+    local commands="setup status register"
+    COMPREPLY=( $(compgen -W "${commands}" -- ${cur}) )
+}
+
+_peers_commands() {
+    local commands="optimize list test"
+    local opts="--testnet --help"
+    COMPREPLY=( $(compgen -W "${commands} ${opts}" -- ${cur}) )
+}
+
+_snapshot_commands() {
+    local commands="download create verify list"
+    local opts="--type --testnet --help"
+    COMPREPLY=( $(compgen -W "${commands} ${opts}" -- ${cur}) )
+}
+
+_monitor_commands() {
+    local commands="epoch rewards fork txpool peers block-time all"
+    local opts="--testnet --watch --help"
+    COMPREPLY=( $(compgen -W "${commands} ${opts}" -- ${cur}) )
+}
+
+_sync_commands() {
+    local commands="status eta prune recommend compare"
+    local opts="--watch --help"
+    COMPREPLY=( $(compgen -W "${commands} ${opts}" -- ${cur}) )
+}
+
+_rpc_secure_commands() {
+    local commands="generate audit apply list"
+    local opts="--profile --help"
+    COMPREPLY=( $(compgen -W "${commands} ${opts}" -- ${cur}) )
+}
+
+_network_commands() {
+    local commands="peers diversity upgrade health map"
+    COMPREPLY=( $(compgen -W "${commands}" -- ${cur}) )
+}

@@ -97,7 +97,17 @@ $(c BOLD)xdc-node$(c NC) — XDC Network Node Management CLI
 $(c BOLD)USAGE:$(c NC)
     xdc-node <command> [options]
 
-$(c BOLD)COMMANDS:$(c NC)
+$(c BOLD)XDC-SPECIFIC COMMANDS:$(c NC)
+
+    $(c GREEN)masternode$(c NC)  Setup and manage masternode (stake check, keystore, registration)
+    $(c GREEN)peers$(c NC)       Optimize peer connections (latency ranking, NAT detection)
+    $(c GREEN)snapshot$(c NC)    Manage chain snapshots (download/create/verify)
+    $(c GREEN)monitor$(c NC)     XDC-specific monitoring (epoch, rewards, fork detection)
+    $(c GREEN)sync$(c NC)        Sync optimization (status, ETA, pruning)
+    $(c GREEN)rpc-secure$(c NC)  RPC security hardening (method filtering, rate limits)
+    $(c GREEN)network$(c NC)      Network intelligence (peer map, fork readiness, diversity)
+
+$(c BOLD)GENERAL COMMANDS:$(c NC)
     $(c GREEN)init$(c NC)          Interactive setup wizard (wraps setup.sh)
     $(c GREEN)status$(c NC)        Quick node status overview
     $(c GREEN)health$(c NC)        Run health check (wraps node-health-check.sh)
@@ -1574,6 +1584,238 @@ first_run_check() {
     fi
 }
 
+#------------------------------------------------------------------------------
+# XDC-Specific Commands
+#------------------------------------------------------------------------------
+
+cmd_masternode() {
+    local action=""
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            setup|status|register)
+                action="$1"
+                shift
+                ;;
+            --help|-h)
+                echo "xdc-node masternode — XDC Masternode Setup"
+                echo ""
+                echo "Usage:"
+                echo "  xdc-node masternode setup    Run interactive masternode setup"
+                echo "  xdc-node masternode status   Check masternode status"
+                echo "  xdc-node masternode register Register as masternode candidate"
+                echo ""
+                return 0
+                ;;
+            *) shift ;;
+        esac
+    done
+    
+    case "$action" in
+        setup|status|register)
+            run_script "masternode-setup.sh" "--$action"
+            ;;
+        *)
+            run_script "masternode-setup.sh"
+            ;;
+    esac
+}
+
+cmd_peers() {
+    local action="optimize"
+    local args=""
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            optimize|list|test)
+                action="$1"
+                shift
+                ;;
+            --testnet)
+                args="$args --testnet"
+                shift
+                ;;
+            --help|-h)
+                echo "xdc-node peers — Peer Connection Optimization"
+                echo ""
+                echo "Usage:"
+                echo "  xdc-node peers optimize [--testnet]  Optimize peer list by latency"
+                echo "  xdc-node peers list [--testnet]      List current peers"
+                echo "  xdc-node peers test [--testnet]      Test bootnode connectivity"
+                return 0
+                ;;
+            *) shift ;;
+        esac
+    done
+    
+    run_script "bootnode-optimize.sh" "--$action $args"
+}
+
+cmd_snapshot() {
+    local action=""
+    local type="full"
+    local args=""
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            download|create|verify|list)
+                action="$1"
+                shift
+                ;;
+            --type)
+                type="$2"
+                shift 2
+                ;;
+            --testnet)
+                args="$args --testnet"
+                shift
+                ;;
+            --help|-h)
+                echo "xdc-node snapshot — Chain Snapshot Management"
+                echo ""
+                echo "Usage:"
+                echo "  xdc-node snapshot download [--type full|archive] [--testnet]"
+                echo "  xdc-node snapshot create [--type full|archive]"
+                echo "  xdc-node snapshot verify"
+                echo "  xdc-node snapshot list"
+                return 0
+                ;;
+            *) shift ;;
+        esac
+    done
+    
+    [[ -z "$action" ]] && action="list"
+    run_script "snapshot-manager.sh" "--$action --type $type $args"
+}
+
+cmd_monitor() {
+    local action="all"
+    local args=""
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            epoch|rewards|fork|txpool|peers|block-time|all)
+                action="$1"
+                shift
+                ;;
+            --testnet)
+                args="$args --testnet"
+                shift
+                ;;
+            --watch)
+                args="$args --watch"
+                shift
+                ;;
+            --help|-h)
+                echo "xdc-node monitor — XDC-Specific Monitoring"
+                echo ""
+                echo "Usage:"
+                echo "  xdc-node monitor epoch       Show epoch and round info"
+                echo "  xdc-node monitor rewards     Track masternode rewards"
+                echo "  xdc-node monitor fork        Detect chain forks"
+                echo "  xdc-node monitor txpool      Monitor transaction pool"
+                echo "  xdc-node monitor peers       Analyze peer quality"
+                echo "  xdc-node monitor block-time  Measure block propagation"
+                echo "  xdc-node monitor all         Run all monitors"
+                return 0
+                ;;
+            *) shift ;;
+        esac
+    done
+    
+    run_script "xdc-monitor.sh" "--$action $args"
+}
+
+cmd_sync() {
+    local action="status"
+    local args=""
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            status|eta|prune|recommend|compare)
+                action="$1"
+                shift
+                ;;
+            --watch)
+                args="$args --watch"
+                shift
+                ;;
+            --help|-h)
+                echo "xdc-node sync — Sync Optimization"
+                echo ""
+                echo "Usage:"
+                echo "  xdc-node sync status      Show current sync status"
+                echo "  xdc-node sync eta         Calculate sync ETA"
+                echo "  xdc-node sync recommend   Get sync mode recommendation"
+                echo "  xdc-node sync prune       Prune chaindata"
+                echo "  xdc-node sync compare     Compare geth vs erigon"
+                return 0
+                ;;
+            *) shift ;;
+        esac
+    done
+    
+    run_script "sync-optimizer.sh" "--$action $args"
+}
+
+cmd_rpc_secure() {
+    local action="audit"
+    local profile="public"
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            generate|audit|apply|list)
+                action="$1"
+                shift
+                ;;
+            --profile)
+                profile="$2"
+                shift 2
+                ;;
+            --help|-h)
+                echo "xdc-node rpc-secure — RPC Security Hardening"
+                echo ""
+                echo "Usage:"
+                echo "  xdc-node rpc-secure generate [--profile public|validator|archive|dev]"
+                echo "  xdc-node rpc-secure audit"
+                echo "  xdc-node rpc-secure apply [--profile public]"
+                echo "  xdc-node rpc-secure list"
+                return 0
+                ;;
+            *) shift ;;
+        esac
+    done
+    
+    run_script "rpc-security.sh" "--$action --profile $profile"
+}
+
+cmd_network() {
+    local action="health"
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            peers|diversity|upgrade|health|map)
+                action="$1"
+                shift
+                ;;
+            --help|-h)
+                echo "xdc-node network — Network Intelligence"
+                echo ""
+                echo "Usage:"
+                echo "  xdc-node network peers      Analyze connected peers"
+                echo "  xdc-node network diversity  Show client diversity stats"
+                echo "  xdc-node network upgrade    Check hard fork readiness"
+                echo "  xdc-node network health     Network health metrics"
+                echo "  xdc-node network map        Peer geographic map"
+                return 0
+                ;;
+            *) shift ;;
+        esac
+    done
+    
+    run_script "network-intel.sh" "--$action"
+}
+
 #==============================================================================
 # Main Entry Point
 #==============================================================================
@@ -1604,6 +1846,16 @@ main() {
     shift
     
     case "$command" in
+        # XDC-specific commands
+        masternode) cmd_masternode "$@" ;;
+        peers)      cmd_peers "$@" ;;
+        snapshot)   cmd_snapshot "$@" ;;
+        monitor)    cmd_monitor "$@" ;;
+        sync)       cmd_sync "$@" ;;
+        rpc-secure) cmd_rpc_secure "$@" ;;
+        network)    cmd_network "$@" ;;
+        
+        # General commands
         init)       cmd_init "$@" ;;
         status)     cmd_status "$@" ;;
         health)     cmd_health "$@" ;;
