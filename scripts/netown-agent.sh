@@ -190,6 +190,101 @@ detect_node_info() {
 }
 
 #==============================================================================
+# Security Detection
+#==============================================================================
+detect_security() {
+    local score=100
+    local issues=""
+    local warnings=""
+    
+    # Check SSH port
+    local ssh_port=""
+    if [[ -f /etc/ssh/sshd_config ]]; then
+        ssh_port=$(grep -E "^Port " /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}')
+    fi
+    if [[ "$ssh_port" == "22" || -z "$ssh_port" ]]; then
+        score=$((score - 10))
+        issues="${issues}ssh_default_port,"
+        warnings="${warnings}SSH running on default port 22 — Change to non-standard port
+"
+    fi
+    
+    # Check root login
+    local root_login=""
+    if [[ -f /etc/ssh/sshd_config ]]; then
+        root_login=$(grep -E "^PermitRootLogin" /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}')
+    fi
+    if [[ "$root_login" != "no" && "$root_login" != "prohibit-password" ]]; then
+        score=$((score - 10))
+        issues="${issues}root_login_enabled,"
+        warnings="${warnings}Root login via SSH is enabled — Disable in /etc/ssh/sshd_config
+"
+    fi
+    
+    # Check UFW
+    if ! command -v ufw &>/dev/null || ! ufw status 2>/dev/null | grep -q "Status: active"; then
+        score=$((score - 15))
+        issues="${issues}no_firewall,"
+        warnings="${warnings}No active firewall (UFW) — Install and enable UFW
+"
+    else
+        warnings="${warnings}✅ Firewall active (UFW)
+"
+    fi
+    
+    # Check fail2ban
+    if ! systemctl is-active fail2ban &>/dev/null 2>&1 && ! service fail2ban status &>/dev/null 2>&1; then
+        score=$((score - 10))
+        issues="${issues}no_fail2ban,"
+        warnings="${warnings}Fail2ban is not running — Install fail2ban to protect against brute force
+"
+    else
+        warnings="${warnings}✅ Fail2ban running
+"
+    fi
+    
+    # Check unattended upgrades
+    if ! dpkg -l unattended-upgrades 2>/dev/null | grep -q "^ii"; then
+        score=$((score - 5))
+        issues="${issues}no_auto_updates,"
+        warnings="${warnings}Unattended upgrades not installed — Enable automatic security updates
+"
+    fi
+    
+    # Check RPC exposure (check common RPC ports)
+    if command -v ss &>/dev/null; then
+        if ss -tlnp 2>/dev/null | grep -E ":(8545|8989|30303)" | grep -q "0\.0\.0\.0"; then
+            score=$((score - 15))
+            issues="${issues}rpc_exposed,"
+            warnings="${warnings}RPC API exposed to all interfaces (0.0.0.0) — Bind to 127.0.0.1 only
+"
+        fi
+    elif command -v netstat &>/dev/null; then
+        if netstat -tlnp 2>/dev/null | grep -E ":(8545|8989|30303)" | grep -q "0\.0\.0\.0"; then
+            score=$((score - 15))
+            issues="${issues}rpc_exposed,"
+            warnings="${warnings}RPC API exposed to all interfaces (0.0.0.0) — Bind to 127.0.0.1 only
+"
+        fi
+    fi
+    
+    # Check Docker root
+    if command -v docker &>/dev/null; then
+        if docker info 2>/dev/null | grep -q "Root Dir.*var/lib/docker"; then
+            score=$((score - 5))
+            issues="${issues}docker_root,"
+            warnings="${warnings}Docker running as root — Consider rootless Docker mode
+"
+        fi
+    fi
+    
+    # Trim trailing comma from issues
+    issues="${issues%,}"
+    
+    echo "{\"score\": $score, \"issues\": \"$issues\", \"warnings\": \"$(echo -n "$warnings" | base64 -w 0)\"}"
+}
+
+#==============================================================================
 # Registration
 #==============================================================================
 register_node() {
@@ -399,6 +494,10 @@ collect_metrics() {
     rpc_end=$(date +%s%N)
     rpc_latency=$(( (rpc_end - rpc_start) / 1000000 ))
     
+    # Security scan
+    local security_json
+    security_json=$(detect_security)
+    
     # Build heartbeat payload
     cat <<EOF
 {
@@ -430,6 +529,7 @@ collect_metrics() {
         "diskUsedGb": $disk_used,
         "diskTotalGb": $disk_total
     },
+    "security": $security_json,
     "rpcLatencyMs": $rpc_latency,
     "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
