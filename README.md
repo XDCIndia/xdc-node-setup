@@ -90,6 +90,47 @@ sudo NODE_TYPE=full NETWORK=mainnet ./setup.sh --non-interactive
 sudo ./scripts/implement-standards.sh
 ```
 
+### Configure Notifications
+
+Set up alerts via the XDC Gateway platform (recommended) or direct Telegram:
+
+```bash
+# Copy the notification config template
+sudo mkdir -p /etc/xdc-node
+sudo cp configs/notify.conf.template /etc/xdc-node/notify.conf
+
+# Edit the config with your settings
+sudo nano /etc/xdc-node/notify.conf
+```
+
+**Option 1: XDC Gateway Platform (Recommended)**
+```bash
+NOTIFY_CHANNELS="platform"
+NOTIFY_PLATFORM_API_KEY="your-api-key-from-cloud.xdcrpc.com"
+```
+
+**Option 2: Direct Telegram**
+```bash
+NOTIFY_CHANNELS="telegram"
+NOTIFY_TELEGRAM_BOT_TOKEN="your-bot-token"
+NOTIFY_TELEGRAM_CHAT_ID="your-chat-id"
+```
+
+**Option 3: Email Notifications**
+```bash
+NOTIFY_CHANNELS="email"
+NOTIFY_EMAIL_ENABLED="true"
+NOTIFY_EMAIL_TO="admin@example.com"
+NOTIFY_EMAIL_SMTP_HOST="smtp.gmail.com"
+NOTIFY_EMAIL_SMTP_USER="your-email@gmail.com"
+NOTIFY_EMAIL_SMTP_PASS="your-app-password"
+```
+
+Test your notifications:
+```bash
+./scripts/notify-test.sh
+```
+
 ---
 
 ## 🏗️ Architecture

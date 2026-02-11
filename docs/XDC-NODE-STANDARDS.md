@@ -854,5 +854,177 @@ curl -s -X POST -H "Content-Type: application/json" \
 
 ---
 
+## 9. Notification System
+
+> **Implementing script:** [`scripts/lib/notify.sh`](../scripts/lib/notify.sh)
+> **Config template:** [`configs/notify.conf.template`](../configs/notify.conf.template)
+
+The XDC Node toolkit includes a comprehensive notification system supporting multiple channels with intelligent features like deduplication, quiet hours, and digest mode.
+
+### Notification Channels
+
+| Channel | Description | Configuration |
+|---------|-------------|---------------|
+| **Platform API** | XDC Gateway platform (recommended) | `NOTIFY_PLATFORM_API_KEY` |
+| **Telegram** | Direct Telegram bot | `NOTIFY_TELEGRAM_BOT_TOKEN`, `NOTIFY_TELEGRAM_CHAT_ID` |
+| **Email** | SMTP or platform-based | `NOTIFY_EMAIL_*` settings |
+
+### Platform API (Recommended)
+
+The XDC Gateway platform provides unified notifications without managing your own bot:
+
+1. Register your node at [cloud.xdcrpc.com](https://cloud.xdcrpc.com)
+2. Get your API key from the dashboard
+3. Set `NOTIFY_PLATFORM_API_KEY` in `/etc/xdc-node/notify.conf`
+
+```bash
+NOTIFY_CHANNELS="platform"
+NOTIFY_PLATFORM_URL="https://cloud.xdcrpc.com/api/v1/notifications"
+NOTIFY_PLATFORM_API_KEY="your-api-key-here"
+```
+
+### Direct Telegram Setup
+
+For users who prefer their own Telegram bot:
+
+1. Create a bot via [@BotFather](https://t.me/BotFather)
+2. Get your chat ID from [@userinfobot](https://t.me/userinfobot)
+3. Configure:
+
+```bash
+NOTIFY_CHANNELS="telegram"
+NOTIFY_TELEGRAM_BOT_TOKEN="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+NOTIFY_TELEGRAM_CHAT_ID="123456789"
+```
+
+### Email Configuration
+
+Email notifications support two modes:
+
+**Via Platform API:**
+```bash
+NOTIFY_CHANNELS="platform"
+NOTIFY_PLATFORM_API_KEY="your-key"
+# Platform handles email delivery
+```
+
+**Direct SMTP:**
+```bash
+NOTIFY_CHANNELS="email"
+NOTIFY_EMAIL_ENABLED="true"
+NOTIFY_EMAIL_TO="admin@example.com"
+NOTIFY_EMAIL_FROM="alerts@xdc.network"
+NOTIFY_EMAIL_SMTP_HOST="smtp.gmail.com"
+NOTIFY_EMAIL_SMTP_PORT="587"
+NOTIFY_EMAIL_SMTP_USER="your-email@gmail.com"
+NOTIFY_EMAIL_SMTP_PASS="your-app-password"
+```
+
+### Alert Levels
+
+| Level | Description | When Used |
+|-------|-------------|-----------|
+| **Critical** | Immediate attention required | Node offline, disk >95%, container down |
+| **Warning** | Should be addressed soon | Low peers, disk >85%, block behind |
+| **Info** | Informational | New version available, backup success |
+
+### Quiet Hours
+
+Configure quiet hours to batch non-critical alerts:
+
+```bash
+NOTIFY_QUIET_START="23:00"  # Start of quiet period
+NOTIFY_QUIET_END="07:00"    # End of quiet period
+NOTIFY_DIGEST_ENABLED="true"
+NOTIFY_DIGEST_INTERVAL="3600"  # Digest every hour
+```
+
+During quiet hours:
+- **Critical alerts** are sent immediately
+- **Warning/Info alerts** are batched into a digest
+- Digest is sent when quiet hours end
+
+### Alert Deduplication
+
+Prevents alert spam by tracking last alert time per type:
+
+```bash
+NOTIFY_ALERT_INTERVAL="300"  # 5 minutes between same alert type
+```
+
+State is tracked in `/var/lib/xdc-node/alert-state.json`.
+
+### Rate Limiting
+
+Protects against notification flooding:
+
+```bash
+NOTIFY_RATE_LIMIT_PER_HOUR="10"  # Max notifications per hour per channel
+```
+
+### Configuration File
+
+Create `/etc/xdc-node/notify.conf`:
+
+```bash
+# Notification channels (comma-separated)
+NOTIFY_CHANNELS="platform"
+
+# Platform API
+NOTIFY_PLATFORM_URL="https://cloud.xdcrpc.com/api/v1/notifications"
+NOTIFY_PLATFORM_API_KEY=""
+
+# Direct Telegram (fallback)
+NOTIFY_TELEGRAM_BOT_TOKEN=""
+NOTIFY_TELEGRAM_CHAT_ID=""
+
+# Email
+NOTIFY_EMAIL_ENABLED="false"
+NOTIFY_EMAIL_TO=""
+
+# Intervals
+NOTIFY_ALERT_INTERVAL="300"
+NOTIFY_REPORT_INTERVAL="86400"
+NOTIFY_DIGEST_ENABLED="true"
+NOTIFY_DIGEST_INTERVAL="3600"
+
+# Quiet hours
+NOTIFY_QUIET_START="23:00"
+NOTIFY_QUIET_END="07:00"
+
+# Rate limiting
+NOTIFY_RATE_LIMIT_PER_HOUR="10"
+```
+
+### Testing Notifications
+
+Test your configuration:
+
+```bash
+/opt/xdc-node/scripts/notify-test.sh
+```
+
+This tests all configured channels and reports which are working.
+
+### Notification Functions
+
+For script developers, the notification library provides:
+
+```bash
+# Source the library
+source /opt/xdc-node/scripts/lib/notify.sh
+
+# Critical alert (always sends immediately)
+notify_alert "critical" "Node Offline" "XDC node is not responding"
+
+# Standard notification (respects deduplication & quiet hours)
+notify "warning" "Low Peers" "Only 2 peers connected" "low_peers"
+
+# Periodic report (respects report interval)
+notify_report "daily_health" "Health Report" "$report_content"
+```
+
+---
+
 *Last updated: February 11, 2026*
 *Maintained by: [AnilChinchawale](https://github.com/AnilChinchawale)*

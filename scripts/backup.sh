@@ -7,6 +7,15 @@ set -euo pipefail
 # Features: Incremental rsync, GPG encryption, S3/FTP upload, retention
 #==============================================================================
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="${SCRIPT_DIR}/lib"
+
+# Source notification library
+# shellcheck source=/dev/null
+source "${LIB_DIR}/notify.sh" 2>/dev/null || {
+    echo "Warning: Notification library not found at ${LIB_DIR}/notify.sh"
+}
+
 # Configuration (can be overridden via /root/.xdc-backup.conf)
 BACKUP_DIR="${BACKUP_DIR:-/backup/xdc-node}"
 DATA_DIR="${DATA_DIR:-/root/xdcchain}"
@@ -45,6 +54,7 @@ BACKUP_SIZE=0
 BACKUP_START_TIME=0
 BACKUP_DURATION=0
 BACKUP_SUCCESS=false
+BACKUP_FILE=""
 
 #==============================================================================
 # Load Config File
@@ -500,6 +510,51 @@ EOF
 }
 
 #==============================================================================
+# Notification Functions
+#==============================================================================
+send_backup_success_notification() {
+    local backup_file="$1"
+    local size
+    size=$(du -h "$backup_file" 2>/dev/null | cut -f1 || echo "unknown")
+    
+    local message="✅ *Backup Completed Successfully*
+
+📂 File: \`$(basename "$backup_file")\`
+📊 Size: ${size}
+⏱ Duration: ${BACKUP_DURATION}s
+🖥 Node: \`${NOTIFY_NODE_HOST:-$(hostname)}\`
+📅 Time: $(date '+%Y-%m-%d %H:%M:%S UTC')
+
+Retention: ${RETENTION_DAILY}d / ${RETENTION_WEEKLY}w / ${RETENTION_MONTHLY}m"
+    
+    # Use new notification system if available
+    if [[ "$(type -t notify)" == "function" ]]; then
+        notify "info" "✅ Backup Completed" "$message" "backup_success"
+    fi
+}
+
+send_backup_failure_notification() {
+    local error_msg="$1"
+    
+    local message="❌ *Backup Failed*
+
+🖥 Node: \`${NOTIFY_NODE_HOST:-$(hostname)}\`
+📅 Time: $(date '+%Y-%m-%d %H:%M:%S UTC')
+⏱ Duration: ${BACKUP_DURATION}s
+
+*Error:*
+$error_msg
+
+*Action Required:*
+Check backup logs: $LOG_FILE"
+    
+    # Use new notification system if available
+    if [[ "$(type -t notify_alert)" == "function" ]]; then
+        notify_alert "critical" "❌ Backup Failed" "$message" "backup_failure"
+    fi
+}
+
+#==============================================================================
 # Main
 #==============================================================================
 main() {
@@ -532,10 +587,19 @@ main() {
     local chain_backup
     local keystore_backup
     local config_backup
+    local backup_error=""
     
-    chain_backup=$(backup_chain_data)
-    keystore_backup=$(backup_keystore)
-    config_backup=$(backup_configs)
+    chain_backup=$(backup_chain_data) || backup_error="Chain data backup failed"
+    keystore_backup=$(backup_keystore) || true  # Keystore may not exist
+    config_backup=$(backup_configs) || backup_error="Config backup failed"
+    
+    if [[ -n "$backup_error" ]]; then
+        error "$backup_error"
+        BACKUP_DURATION=$(($(date +%s) - BACKUP_START_TIME))
+        send_backup_failure_notification "$backup_error"
+        rm -rf "$temp_dir"
+        exit 1
+    fi
     
     # Copy to consolidate directory
     if [[ -n "$chain_backup" && -d "$chain_backup" ]]; then
@@ -552,7 +616,13 @@ main() {
     
     # Create consolidated backup
     log "Creating consolidated archive..."
-    tar -czf "$backup_archive" -C "$temp_dir" "xdc-backup-$timestamp" 2>> "$LOG_FILE"
+    tar -czf "$backup_archive" -C "$temp_dir" "xdc-backup-$timestamp" 2>> "$LOG_FILE" || {
+        error "Failed to create backup archive"
+        BACKUP_DURATION=$(($(date +%s) - BACKUP_START_TIME))
+        send_backup_failure_notification "Failed to create backup archive"
+        rm -rf "$temp_dir"
+        exit 1
+    }
     
     # Clean up temp directory
     rm -rf "$temp_dir"
@@ -563,26 +633,40 @@ main() {
     
     # Encrypt if configured
     if [[ -n "$ENCRYPTION_KEY" || -n "$GPG_RECIPIENT" ]]; then
-        backup_archive=$(encrypt_backup "$backup_archive")
+        backup_archive=$(encrypt_backup "$backup_archive") || {
+            BACKUP_DURATION=$(($(date +%s) - BACKUP_START_TIME))
+            send_backup_failure_notification "Encryption failed"
+            exit 1
+        }
     fi
     
     # Verify backup integrity
     if verify_backup "$backup_archive"; then
         BACKUP_SUCCESS=true
+    else
+        BACKUP_DURATION=$(($(date +%s) - BACKUP_START_TIME))
+        send_backup_failure_notification "Backup integrity verification failed"
+        exit 1
     fi
     
     # Upload to remote storage
-    upload_to_s3 "$backup_archive"
-    upload_to_ftp "$backup_archive"
+    upload_to_s3 "$backup_archive" || true  # Don't fail on upload errors
+    upload_to_ftp "$backup_archive" || true  # Don't fail on upload errors
     
     # Apply retention policy
     apply_retention
     
     # Calculate duration
     BACKUP_DURATION=$(($(date +%s) - BACKUP_START_TIME))
+    BACKUP_FILE="$backup_archive"
     
     # Generate report
     generate_report "$backup_archive"
+    
+    # Send success notification
+    if [[ "$BACKUP_SUCCESS" == true ]]; then
+        send_backup_success_notification "$backup_archive"
+    fi
     
     # Final summary
     log ""

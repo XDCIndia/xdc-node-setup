@@ -7,6 +7,15 @@ set -euo pipefail
 # Features: ETag caching, multi-repo support, rolling restart
 #==============================================================================
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="${SCRIPT_DIR}/lib"
+
+# Source notification library
+# shellcheck source=/dev/null
+source "${LIB_DIR}/notify.sh" 2>/dev/null || {
+    echo "Warning: Notification library not found at ${LIB_DIR}/notify.sh"
+}
+
 VERSIONS_FILE="/opt/xdc-node/configs/versions.json"
 REPORT_DIR="/opt/xdc-node/reports"
 LOG_FILE="/var/log/xdc-version-check.log"
@@ -16,7 +25,7 @@ ETAG_CACHE_DIR="/tmp/xdc-version-cache"
 # Ensure directories exist
 mkdir -p "$REPORT_DIR" "$ETAG_CACHE_DIR"
 
-# Telegram settings (from env or versions.json)
+# Telegram settings (from env or versions.json - legacy fallback)
 TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID:-}"
 
@@ -371,8 +380,36 @@ build_from_source() {
 }
 
 #==============================================================================
-# Notification
+# Notification Functions
 #==============================================================================
+send_notification() {
+    local level="$1"
+    local title="$2"
+    local message="$3"
+    
+    # Use new notification system if available
+    if [[ "$(type -t notify)" == "function" ]]; then
+        notify "$level" "$title" "$message" "version_check"
+    else
+        # Fallback to legacy Telegram
+        send_telegram "$message"
+    fi
+}
+
+send_alert() {
+    local title="$1"
+    local message="$2"
+    
+    # Use new notification system if available
+    if [[ "$(type -t notify_alert)" == "function" ]]; then
+        notify_alert "critical" "$title" "$message" "version_update_failed"
+    else
+        # Fallback to legacy Telegram
+        send_telegram "$message"
+    fi
+}
+
+# Legacy Telegram notification (fallback)
 send_telegram() {
     local message=$1
     
@@ -532,39 +569,22 @@ check_client() {
                 update_versions_json "$client_name" "$latest"
                 
                 # Send success notification
-                send_telegram "✅ *$client_name Auto-Updated*
-
-Version: \`$current\` → \`$latest\`
-Server: \`$(hostname)\`
-Time: $(date '+%Y-%m-%d %H:%M:%S')
-
-Auto-update completed successfully."
+                send_notification "info" "✅ $client_name Auto-Updated" \
+                    "Version: \`$current\` → \`$latest\`\nServer: \`$(hostname)\`\nTime: $(date '+%Y-%m-%d %H:%M:%S')\n\nAuto-update completed successfully."
                 
                 return 0
             else
                 # Send failure notification
-                send_telegram "❌ *$client_name Update Failed*
-
-Version: \`$current\` → \`$latest\`
-Server: \`$(hostname)\`
-Time: $(date '+%Y-%m-%d %H:%M:%S')
-
-Update failed. Check logs: $LOG_FILE"
+                send_alert "❌ $client_name Update Failed" \
+                    "Version: \`$current\` → \`$latest\`\nServer: \`$(hostname)\`\nTime: $(date '+%Y-%m-%d %H:%M:%S')\n\nUpdate failed. Check logs: $LOG_FILE"
                 return 1
             fi
         else
             log "📧 Auto-update disabled, sending notification..."
             
             # Send notification about available update
-            send_telegram "📦 *$client_name Update Available*
-
-Version: \`$current\` → \`$latest\`
-Server: \`$(hostname)\`
-Time: $(date '+%Y-%m-%d %H:%M:%S')
-
-Auto-update is disabled. Manual update required.
-
-[View Release]($html_url)"
+            send_notification "info" "📦 $client_name Update Available" \
+                "Version: \`$current\` → \`$latest\`\nServer: \`$(hostname)\`\nTime: $(date '+%Y-%m-%d %H:%M:%S')\n\nAuto-update is disabled. Manual update required.\n\n[View Release]($html_url)"
         fi
     else
         log "✓ $client_name is up to date ($current)"
