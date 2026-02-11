@@ -677,10 +677,14 @@ ENABLE_WS=true
 RPC_API=eth,net,web3,XDPoS
 ENVEOF
 
-    # Create password file
+    # Create password file (remove if Docker created it as a directory)
+    if [[ -d "$network_dir/.pwd" ]]; then
+        rm -rf "$network_dir/.pwd"
+    fi
     if [[ ! -f "$network_dir/.pwd" ]]; then
         openssl rand -base64 32 > "$network_dir/.pwd" 2>/dev/null || echo "xdc-node-password" > "$network_dir/.pwd"
     fi
+    chmod 600 "$network_dir/.pwd" 2>/dev/null || true
     
     # Create docker-compose.yml
     cat > "$docker_dir/docker-compose.yml" << EOF
@@ -700,7 +704,6 @@ services:
       - ./mainnet/start-node.sh:/work/start.sh
       - ./mainnet/bootnodes.list:/work/bootnodes.list
       - ./mainnet/.pwd:/work/.pwd
-      - /etc/localtime:/etc/localtime:ro
     env_file:
       - ./mainnet/.env
     entrypoint: /work/start.sh
