@@ -1,8 +1,86 @@
 # XDC Node Dashboard
 
-A lightweight web dashboard for monitoring and managing XDC Network nodes.
+A comprehensive web dashboard for monitoring and managing XDC Network nodes.
 
 ![Dashboard Screenshot](../docs/images/dashboard-overview.png)
+
+## Quick Start
+
+### Option 1: Docker (Recommended)
+
+The full monitoring stack includes Grafana, Prometheus, and the XDC node.
+
+```bash
+cd docker && docker compose up -d
+
+# Access:
+# Grafana:   http://localhost:3000 (admin/admin)
+# Prometheus: http://localhost:9090
+```
+
+### Option 2: Next.js Dashboard (Development)
+
+For local development with hot reloading:
+
+```bash
+cd dashboard
+npm install
+npm run dev
+
+# Dashboard: http://localhost:3001
+```
+
+### Option 3: Next.js Dashboard (Production)
+
+For production deployment:
+
+```bash
+cd dashboard
+npm install
+npm run build
+npm start
+
+# Dashboard: http://localhost:3001
+```
+
+### Option 4: Docker Build (Dashboard Only)
+
+```bash
+docker build -t xdc-dashboard .
+docker run -p 3001:3000 \
+  -v $(pwd)/../reports:/app/reports:ro \
+  -v $(pwd)/../configs:/app/configs:ro \
+  xdc-dashboard
+
+# Dashboard: http://localhost:3001
+```
+
+## Monitoring Stack Overview
+
+| Service | Port | URL | Description |
+|---------|------|-----|-------------|
+| Grafana | 3000 | http://localhost:3000 | Pre-configured dashboards |
+| Next.js Dashboard | 3001 | http://localhost:3001 | Custom web UI |
+| Prometheus | 9090 | http://localhost:9090 | Metrics database |
+| Node Exporter | 9100 | (internal) | System metrics |
+| cAdvisor | 8080 | (internal) | Container metrics |
+
+## Grafana Dashboards
+
+Two pre-configured dashboards are available:
+
+### XDC Node Monitor (`xdc-node-main`)
+- Node Overview: Block height, peer count, sync status, uptime
+- System Metrics: CPU, memory, disk usage
+- Disk Performance: I/O throughput, IOPS
+- Container Metrics: Docker resource usage
+- Chain Metrics: Epoch progress, blocks per minute
+
+### XDC Consensus & Rewards (`xdc-consensus`)
+- Epoch Info: Current epoch, progress, countdown
+- Masternode Status: Active nodes, rankings
+- Rewards: Daily earnings, APY, missed blocks
+- Network Health: Block time, peer count, TX rate
 
 ## Features
 
@@ -14,49 +92,6 @@ A lightweight web dashboard for monitoring and managing XDC Network nodes.
 - **Alert System** — Timeline view of all alerts with acknowledge/dismiss functionality
 - **Settings** — Notification channels, node registration, API keys, and theme
 
-## Quick Start
-
-### Prerequisites
-
-- Node.js 18+ or Bun
-- XDC Node Setup toolkit installed
-
-### Installation
-
-```bash
-cd dashboard
-npm install
-```
-
-### Development
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-### Production Build
-
-```bash
-npm run build
-npm start
-```
-
-### Docker
-
-```bash
-docker build -t xdc-dashboard .
-docker run -p 3000:3000 -v $(pwd)/../reports:/app/reports:ro xdc-dashboard
-```
-
-Or use docker-compose from the parent directory:
-
-```bash
-cd ..
-docker-compose up dashboard
-```
-
 ## Configuration
 
 ### Environment Variables
@@ -67,6 +102,34 @@ docker-compose up dashboard
 | `PORT` | Server port | 3000 |
 | `REPORTS_DIR` | Path to health reports | `../reports` |
 | `CONFIGS_DIR` | Path to configuration files | `../configs` |
+
+### Metrics Collection
+
+XDC-specific metrics are collected via the `scripts/metrics-collector.sh` script:
+
+```bash
+# Install as cron job (every 15 seconds via systemd timer recommended)
+sudo cp scripts/metrics-collector.sh /opt/xdc-node/scripts/
+sudo chmod +x /opt/xdc-node/scripts/metrics-collector.sh
+
+# Create textfile collector directory
+sudo mkdir -p /var/lib/node_exporter/textfile_collector
+
+# Test manually
+sudo /opt/xdc-node/scripts/metrics-collector.sh
+
+# Add to crontab for periodic collection
+echo "* * * * * root /opt/xdc-node/scripts/metrics-collector.sh" | sudo tee /etc/cron.d/xdc-metrics
+```
+
+The metrics collector provides:
+- `xdc_block_number` - Current block height
+- `xdc_peer_count` - Connected peers
+- `xdc_syncing` - Sync status (0=synced, 1=syncing)
+- `xdc_epoch_number` - Current epoch
+- `xdc_epoch_progress` - Epoch progress (0-100%)
+- `xdc_chain_id` - Chain ID
+- `xdc_client_version` - Client version label
 
 ### API Authentication
 
@@ -83,7 +146,7 @@ echo "API_KEY=your-secret-key" >> .env.local
 Include the key in requests:
 
 ```bash
-curl -X POST http://localhost:3000/api/health \
+curl -X POST http://localhost:3001/api/health \
   -H "x-api-key: your-secret-key"
 ```
 
@@ -141,6 +204,45 @@ dashboard/
   - Warning: `#F59E0B` (yellow)
   - Critical: `#EF4444` (red)
 - **Typography:** Fira Sans
+
+## Troubleshooting
+
+### Grafana shows "No Data"
+
+1. Check if metrics-collector.sh is running:
+   ```bash
+   cat /var/lib/node_exporter/textfile_collector/xdc_metrics.prom
+   ```
+
+2. Verify Prometheus is scraping node-exporter:
+   ```bash
+   curl http://localhost:9090/api/v1/targets
+   ```
+
+3. Check if XDC RPC is accessible:
+   ```bash
+   curl -X POST http://localhost:8545 \
+     -H "Content-Type: application/json" \
+     -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+   ```
+
+### Next.js Dashboard won't start
+
+1. Ensure Node.js 18+ is installed:
+   ```bash
+   node --version
+   ```
+
+2. Clear node_modules and reinstall:
+   ```bash
+   rm -rf node_modules package-lock.json
+   npm install
+   ```
+
+3. Check if port 3001 is available:
+   ```bash
+   lsof -i :3001
+   ```
 
 ## License
 

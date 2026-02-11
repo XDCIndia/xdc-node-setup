@@ -1145,7 +1145,9 @@ print_summary() {
     echo ""
     
     if [[ "$ENABLE_MONITORING" == "true" ]]; then
-        echo -e "   ${BOLD}Dashboard:${NC}  http://localhost:3000 (Grafana - admin/admin)"
+        echo -e "   ${BOLD}Dashboards:${NC}"
+        echo -e "     Grafana:   http://localhost:3000 (admin/admin)"
+        echo -e "     Dashboard: http://localhost:3001 (run: cd dashboard && npm run dev)"
     fi
     
     echo -e "   ${BOLD}CLI:${NC}        xdc-node status"

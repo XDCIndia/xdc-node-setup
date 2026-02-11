@@ -3,7 +3,6 @@ global:
   evaluation_interval: 15s
   external_labels:
     monitor: 'xdc-node'
-    hostname: '{{.ExternalURL}}'
 
 alerting:
   alertmanagers:
@@ -16,23 +15,35 @@ rule_files:
   - 'alerts.yml'
 
 scrape_configs:
+  # Prometheus self-monitoring
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
     scrape_interval: 30s
 
+  # Node Exporter - System metrics + XDC textfile metrics
   - job_name: 'node-exporter'
     static_configs:
       - targets: ['node-exporter:9100']
     scrape_interval: 15s
+    # This will include xdc_* metrics from textfile collector
 
+  # XDC Node metrics endpoint
   - job_name: 'xdc-node'
     static_configs:
       - targets: ['xdc-node:6060']
     metrics_path: /debug/metrics/prometheus
     scrape_interval: 15s
 
+  # cAdvisor - Container metrics
   - job_name: 'cadvisor'
     static_configs:
       - targets: ['cadvisor:8080']
     scrape_interval: 15s
+
+  # Grafana health endpoint
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    metrics_path: /metrics
+    scrape_interval: 30s
