@@ -1,0 +1,138 @@
+# XDC Node Setup - .gitignore
+
+# Chain data
+/root/xdcchain/
+xdcchain/
+chaindata/
+lightchaindata/
+nodes/
+geth/
+erigon/
+
+# Node data directories
+/data/
+*.db
+*.ldb
+
+# Keystore (DO NOT COMMIT!)
+keystore/
+*.json.key
+*.key
+*.pem
+
+# Secrets and credentials
+.env.local
+.env.production
+*.secret
+*.secrets
+*_secret
+*_key
+*_password
+credentials/
+secrets/
+
+# Reports and logs
+reports/
+*.log
+*.log.*
+/var/log/
+
+# Backup files
+*.backup
+*.bak
+*.tar.gz
+*.tar.gz.enc
+/backup/
+
+# Docker volumes
+docker-volumes/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.sublime-*
+*.code-workspace
+
+# Node.js (if any tooling uses it)
+node_modules/
+
+# Python (if any tooling uses it)
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# Testing
+.coverage
+coverage/
+*.cover
+htmlcov/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Lock files for specific backup
+*.lock
+!package-lock.json
+!yarn.lock
+
+# Grafana provisioning (generated)
+/monitoring/grafana/data/
+
+# Prometheus data
+/monitoring/prometheus-data/
+
+# Security audit reports (may contain sensitive info)
+/opt/xdc-node/reports/
+security-audit-*.txt
+security-score.json
+
+# SSH keys (never commit)
+id_rsa
+id_ed25519
+*.pub
+known_hosts
+authorized_keys
+
+# SSL/TLS certificates
+*.crt
+*.cert
+*.p12
+*.pfx
+ssl/
+certs/
+
+# Terraform (if used)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# Ansible (if used)
+*.retry
+inventory/production
+inventory/staging
+
+# Local configuration overrides
+*.local
+*.local.*
+docker-compose.override.yml

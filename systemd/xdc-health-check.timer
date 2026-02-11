@@ -1,0 +1,12 @@
+[Unit]
+Description=XDC Node Health Check Timer
+Documentation=https://github.com/AnilChinchawale/XDC-Node-Setup
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

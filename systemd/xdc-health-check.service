@@ -1,0 +1,16 @@
+[Unit]
+Description=XDC Node Health Check Service
+Documentation=https://github.com/AnilChinchawale/XDC-Node-Setup
+After=xdc-node.service
+Wants=xdc-node.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/xdc-node/scripts/node-health-check.sh
+Environment=TELEGRAM_BOT_TOKEN=
+Environment=TELEGRAM_CHAT_ID=
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
