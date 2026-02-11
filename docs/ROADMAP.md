@@ -215,26 +215,46 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
 
 ## Changelog
 
-### v2.1.0 (February 2026)
-- Added masternode setup wizard
-- Added bootnode optimizer with latency testing
-- Added snapshot manager (download/create/verify)
-- Added XDC monitor (epoch, rewards, fork detection)
-- Added sync optimizer with ETA calculation
-- Added RPC security hardening
-- Added network intelligence tools
-- Added comprehensive masternode guide
-- Added sync troubleshooting guide
-- Added RPC profiles for different use cases
-- Updated CLI with new commands
-- Updated documentation with new sections
+### v2.1.0 (February 11, 2026)
+**XDC-Specific Features Release**
 
-### v2.0.0 (January 2026)
-- Initial public release
-- Core infrastructure complete
-- Security hardening implemented
-- Monitoring stack deployed
-- CLI tool available
+**New Scripts:**
+- `masternode-setup.sh` — Complete masternode wizard (stake check, keystore, registration)
+- `bootnode-optimize.sh` — Latency-ranked peer discovery, NAT detection
+- `snapshot-manager.sh` — Download/create/verify chain snapshots
+- `xdc-monitor.sh` — Epoch tracking, rewards monitoring, fork detection, txpool stats
+- `sync-optimizer.sh` — Smart sync mode recommendation, ETA calculator, pruning
+- `rpc-security.sh` — RPC method whitelisting (4 profiles), rate limiting
+- `network-intel.sh` — Peer geographic map, fork readiness, client diversity
+
+**New Documentation:**
+- `docs/MASTERNODE-GUIDE.md` — Complete masternode setup and operations guide
+- `docs/SYNC-GUIDE.md` — Sync optimization and troubleshooting guide
+
+**New Configs:**
+- `configs/snapshots.json` — Verified snapshot sources
+- `configs/bootnodes-mainnet.json` + `configs/bootnodes-testnet.json`
+- `configs/rpc-profiles/` — public.json, validator.json, archive.json, development.json
+
+**CLI Updates:**
+- 7 new XDC-specific commands: `masternode`, `peers`, `snapshot`, `monitor`, `sync`, `rpc-secure`, `network`
+- Updated bash completions
+
+**Enterprise Additions:**
+- `ansible/` — 5 roles, rolling update playbooks
+- `terraform/` — AWS, Hetzner, DigitalOcean templates
+- `k8s/` — Helm chart + plain manifests
+- `scripts/cis-benchmark.sh` — 60+ security checks
+- `scripts/chaos-test.sh` — Resilience testing
+- `docs/CTO-PLAYBOOK.md` — Enterprise decision framework
+- `docs/RUNBOOK.md` — Operations runbook
+
+**Total: 183 files, 10,000+ lines of code**
+
+### v2.0.0 (February 2026)
+- Initial public release with core infrastructure
+- Security hardening, monitoring, CLI, dashboard
+- Notification system (Platform API, Telegram, Email)
 
 ---
 
