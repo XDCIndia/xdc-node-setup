@@ -109,24 +109,74 @@ detect_node_info() {
     DETECT_LNG=$(echo "$geo" | jq -r '.lon // 0')
     DETECT_ISP=$(echo "$geo" | jq -r '.isp // "Unknown"')
     
-    # Detect client version
+    # Detect client version and type
     local node_info
     node_info=$(rpc_call "admin_nodeInfo")
     DETECT_VERSION=$(echo "$node_info" | jq -r '.result.name // "Unknown"')
     DETECT_ENODE=$(echo "$node_info" | jq -r '.result.enode // ""')
     
-    # Detect if masternode
+    # Detect client type from version string
+    DETECT_CLIENT_TYPE="Unknown"
+    if echo "$DETECT_VERSION" | grep -qi "XDC\|XDPoS"; then
+        DETECT_CLIENT_TYPE="XDC"
+    elif echo "$DETECT_VERSION" | grep -qi "erigon"; then
+        DETECT_CLIENT_TYPE="Erigon"
+    elif echo "$DETECT_VERSION" | grep -qi "geth\|go-ethereum"; then
+        DETECT_CLIENT_TYPE="Geth"
+    fi
+    
+    # Detect OS information
+    DETECT_OS_TYPE=$(uname -s)
+    DETECT_OS_RELEASE=$(cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d'"' -f2 || echo "Unknown")
+    DETECT_OS_ARCH=$(uname -m)
+    DETECT_KERNEL=$(uname -r)
+    
+    # Get public IPs
+    DETECT_IPV4=$(curl -s -4 --max-time 2 https://ifconfig.me 2>/dev/null || curl -s -4 --max-time 2 https://api.ipify.org 2>/dev/null || echo "")
+    DETECT_IPV6=$(curl -s -6 --max-time 2 https://ifconfig6.me 2>/dev/null || curl -s -6 --max-time 2 https://api6.ipify.org 2>/dev/null || echo "")
+    
+    # Detect if masternode with detailed node type
     local coinbase
     coinbase=$(rpc_call "eth_coinbase" | jq -r '.result // "0x0"')
     DETECT_COINBASE="$coinbase"
     DETECT_IS_MASTERNODE=false
+    DETECT_NODE_TYPE="fullnode"
+    
     if [[ "$coinbase" != "0x0" && "$coinbase" != "0x0000000000000000000000000000000000000000" && "$coinbase" != "null" ]]; then
-        # Check if this address is a masternode
+        # Check if coinbase is a candidate
+        local is_candidate=false
+        local encoded_addr="${coinbase:2}"
+        while [[ ${#encoded_addr} -lt 64 ]]; do
+            encoded_addr="0${encoded_addr}"
+        done
+        local call_data="0x2d5b6ebf${encoded_addr}"
+        
+        local candidate_check
+        candidate_check=$(rpc_call "eth_call" "[{\"to\":\"0x0000000000000000000000000000000000000088\",\"data\":\"${call_data}\"},\"latest\"]")
+        if [[ "$(echo "$candidate_check" | jq -r '.result // "0x0"')" == "0x0000000000000000000000000000000000000000000000000000000000000001" ]]; then
+            is_candidate=true
+        fi
+        
+        # Check if in active masternode set
         local mn_check
         mn_check=$(rpc_call "XDPoS_getMasternodesByNumber" '["latest"]')
+        local in_active_set=false
         if echo "$mn_check" | jq -r '.result[]?' 2>/dev/null | grep -qi "${coinbase#0x}"; then
             DETECT_IS_MASTERNODE=true
-            NODE_ROLE="masternode"
+            in_active_set=true
+        fi
+        
+        # Determine node type
+        if [[ "$is_candidate" == "true" ]]; then
+            if [[ "$in_active_set" == "true" ]]; then
+                DETECT_NODE_TYPE="masternode"
+                NODE_ROLE="masternode"
+            else
+                DETECT_NODE_TYPE="standby"
+                NODE_ROLE="standby"
+            fi
+        else
+            DETECT_NODE_TYPE="fullnode"
         fi
     fi
     
@@ -164,7 +214,18 @@ register_node() {
         "lng": $DETECT_LNG
     },
     "tags": ["$DETECT_RUNTIME", "auto-registered"],
-    "version": "$DETECT_VERSION"
+    "version": "$DETECT_VERSION",
+    "clientType": "$DETECT_CLIENT_TYPE",
+    "nodeType": "$DETECT_NODE_TYPE",
+    "ipv4": "$DETECT_IPV4",
+    "ipv6": "$DETECT_IPV6",
+    "os": {
+        "type": "$DETECT_OS_TYPE",
+        "release": "$DETECT_OS_RELEASE",
+        "arch": "$DETECT_OS_ARCH",
+        "kernel": "$DETECT_KERNEL"
+    },
+    "coinbase": "$DETECT_COINBASE"
 }
 EOF
 )
@@ -257,13 +318,69 @@ collect_metrics() {
     local client_version
     client_version=$(echo "$node_info" | jq -r '.result.name // "Unknown"')
     
-    # Masternode check
+    # Detect client type from version string
+    local client_type="Unknown"
+    if echo "$client_version" | grep -qi "XDC\|XDPoS"; then
+        client_type="XDC"
+    elif echo "$client_version" | grep -qi "erigon"; then
+        client_type="Erigon"
+    elif echo "$client_version" | grep -qi "geth\|go-ethereum"; then
+        client_type="Geth"
+    fi
+    
+    # Get public IPv4 with timeout and fallback
+    local ipv4=""
+    ipv4=$(curl -s -4 --max-time 2 https://ifconfig.me 2>/dev/null || curl -s -4 --max-time 2 https://api.ipify.org 2>/dev/null || echo "")
+    
+    # Get public IPv6 with timeout and fallback
+    local ipv6=""
+    ipv6=$(curl -s -6 --max-time 2 https://ifconfig6.me 2>/dev/null || curl -s -6 --max-time 2 https://api6.ipify.org 2>/dev/null || echo "")
+    
+    # Get OS information
+    local os_type os_release os_arch kernel
+    os_type=$(uname -s)
+    os_release=$(cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d'"' -f2 || echo "Unknown")
+    os_arch=$(uname -m)
+    kernel=$(uname -r)
+    
+    # Masternode check with detailed node type detection
     local is_masternode=false
-    if [[ "$coinbase" != "0x0" && "$coinbase" != "0x0000000000000000000000000000000000000000" ]]; then
+    local node_type="fullnode"
+    if [[ "$coinbase" != "0x0" && "$coinbase" != "0x0000000000000000000000000000000000000000" && "$coinbase" != "null" ]]; then
+        # Check if coinbase is a candidate using XDCValidator contract
+        # XDCValidator proxy: 0x0000000000000000000000000000000000000088
+        local is_candidate=false
+        local candidate_check
+        # Encode isCandidate(address) call: 0x2d5b6ebf + padded address
+        local encoded_addr="${coinbase:2}"
+        while [[ ${#encoded_addr} -lt 64 ]]; do
+            encoded_addr="0${encoded_addr}"
+        done
+        local call_data="0x2d5b6ebf${encoded_addr}"
+        
+        candidate_check=$(rpc_call "eth_call" "[{\"to\":\"0x0000000000000000000000000000000000000088\",\"data\":\"${call_data}\"},\"latest\"]")
+        if [[ "$(echo "$candidate_check" | jq -r '.result // "0x0"')" == "0x0000000000000000000000000000000000000000000000000000000000000001" ]]; then
+            is_candidate=true
+        fi
+        
+        # Check if in active masternode set
         local mn_check
         mn_check=$(rpc_call "XDPoS_getMasternodesByNumber" '["latest"]')
+        local in_active_set=false
         if echo "$mn_check" | jq -r '.result[]?' 2>/dev/null | grep -qi "${coinbase#0x}"; then
             is_masternode=true
+            in_active_set=true
+        fi
+        
+        # Determine node type
+        if [[ "$is_candidate" == "true" ]]; then
+            if [[ "$in_active_set" == "true" ]]; then
+                node_type="masternode"
+            else
+                node_type="standby"
+            fi
+        else
+            node_type="fullnode"
         fi
     fi
     
@@ -295,7 +412,17 @@ collect_metrics() {
     "gasPrice": "$gas_price",
     "coinbase": "$coinbase",
     "clientVersion": "$client_version",
+    "clientType": "$client_type",
     "isMasternode": $is_masternode,
+    "nodeType": "$node_type",
+    "ipv4": "$ipv4",
+    "ipv6": "$ipv6",
+    "os": {
+        "type": "$os_type",
+        "release": "$os_release",
+        "arch": "$os_arch",
+        "kernel": "$kernel"
+    },
     "system": {
         "cpuPercent": $cpu_percent,
         "memoryPercent": $mem_percent,
