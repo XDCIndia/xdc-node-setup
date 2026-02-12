@@ -93,6 +93,8 @@ ensure_file_path() {
         rm -rf "$f"
     fi
     mkdir -p "$(dirname "$f")"
+    # Actually create the file to prevent Docker from creating it as a directory
+    touch "$f"
 }
 
 log() {
@@ -873,7 +875,7 @@ scrape_configs:
 
   - job_name: 'xdc-node'
     static_configs:
-      - targets: ['xdc-node:6060']
+      - targets: ['xdc-node:8545']
     metrics_path: /debug/metrics/prometheus
 
   - job_name: 'node-exporter'
