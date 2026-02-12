@@ -47,15 +47,17 @@ services:
       options:
         max-size: "100m"
         max-file: "5"
-    # Resource limits
+    # Resource limits - adjust based on available hardware
+    # For production: recommend 8 CPUs / 32GB RAM
+    # For minimum: 4 CPUs / 8GB RAM works for basic sync
     deploy:
       resources:
         limits:
-          cpus: '8'
-          memory: 32G
-        reservations:
           cpus: '4'
-          memory: 16G
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
     # Security options
     security_opt:
       - no-new-privileges:true
