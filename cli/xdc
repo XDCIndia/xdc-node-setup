@@ -21,6 +21,15 @@ readonly PROJECT_DIR="$(dirname "$CLI_DIR")"
 readonly SCRIPTS_DIR="${PROJECT_DIR}/scripts"
 readonly CONFIGS_DIR="${PROJECT_DIR}/configs"
 
+# Auto-detect INSTALL_DIR
+find_install_dir() {
+    for d in /opt/xdc-node /opt/xdc "$HOME/.xdc-node" "$HOME/workspace/xdc-node-setup" "$PROJECT_DIR"; do
+        [[ -d "$d/docker" ]] && echo "$d" && return
+    done
+    echo "$PROJECT_DIR"
+}
+readonly INSTALL_DIR="$(find_install_dir)"
+
 # Runtime directories
 readonly XDC_HOME="${XDC_HOME:-/opt/xdc-node}"
 readonly XDC_DATA="${XDC_DATA:-/root/xdcchain}"
@@ -328,6 +337,42 @@ detect_service() {
     echo ""
 }
 
+# Find Docker container by name pattern
+find_container() {
+    # Common XDC container names
+    local common_names=("xdc-node" "xdc" "xdcchain" "mainnet-node" "xdcnetwork-mainnet-node")
+    
+    # Check if docker is available
+    if ! command -v docker &>/dev/null; then
+        return 1
+    fi
+    
+    # First check exact common names
+    for name in "${common_names[@]}"; do
+        if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$name"; then
+            echo "$name"
+            return 0
+        fi
+    done
+    
+    # Then check pattern xdc.*node
+    local container
+    container=$(docker ps -a --format '{{.Names}}' 2>/dev/null | grep -E '^xdc.*node$' | head -1)
+    if [[ -n "$container" ]]; then
+        echo "$container"
+        return 0
+    fi
+    
+    # Check for any container with xdc in the name
+    container=$(docker ps -a --format '{{.Names}}' 2>/dev/null | grep -i "xdc" | head -1)
+    if [[ -n "$container" ]]; then
+        echo "$container"
+        return 0
+    fi
+    
+    return 1
+}
+
 # Detect running client
 detect_client() {
     if pgrep -x "XDC" &>/dev/null || pgrep -f "geth.*xdc" &>/dev/null; then
@@ -337,6 +382,142 @@ detect_client() {
     else
         echo "unknown"
     fi
+}
+
+# Get RPC URL from config or use default
+get_rpc_url() {
+    local default_url="http://127.0.0.1:9545"
+    local config_url
+    config_url=$(get_config ".rpc_url" "")
+    if [[ -n "$config_url" && "$config_url" != "null" ]]; then
+        echo "$config_url"
+    else
+        echo "$default_url"
+    fi
+}
+
+# Inject peers from bootnodes.list or SkyNet API
+inject_peers() {
+    local rpc_url
+    rpc_url=$(get_rpc_url)
+    local peers_added=0
+    local max_peers=25
+    
+    info "Checking peer count..."
+    
+    # Get current peer count via RPC
+    local response
+    response=$(rpc_call "$rpc_url" "net_peerCount" "[]" 2>/dev/null || echo '{}')
+    local hex_peers
+    hex_peers=$(echo "$response" | jq -r '.result // "0x0"')
+    local current_peers=0
+    if [[ "$hex_peers" != "0x0" && -n "$hex_peers" && "$hex_peers" != "null" ]]; then
+        current_peers=$((16#${hex_peers#0x}))
+    fi
+    
+    info "Current peer count: $current_peers"
+    
+    # If we have enough peers, skip injection
+    if [[ $current_peers -ge 3 ]]; then
+        info "Sufficient peers connected ($current_peers >= 3), skipping peer injection"
+        return 0
+    fi
+    
+    info "Low peer count detected, injecting peers..."
+    
+    # Array to hold bootnode enodes
+    local bootnodes=()
+    
+    # Try local bootnodes.list first
+    local bootnodes_file="$INSTALL_DIR/docker/mainnet/bootnodes.list"
+    if [[ -f "$bootnodes_file" ]]; then
+        info "Reading bootnodes from $bootnodes_file"
+        while IFS= read -r line; do
+            # Skip empty lines and comments
+            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+            # Extract enode if line contains one
+            if [[ "$line" =~ ^enode:// ]]; then
+                bootnodes+=("$line")
+            fi
+        done < "$bootnodes_file"
+    fi
+    
+    # If no local bootnodes, try SkyNet API
+    if [[ ${#bootnodes[@]} -eq 0 ]]; then
+        info "No local bootnodes found, trying SkyNet API..."
+        local skynet_response
+        skynet_response=$(curl -s -m 10 "https://net.xdc.network/api/v1/peers/healthy" 2>/dev/null || echo '[]')
+        
+        # Parse enodes from SkyNet API response
+        local skynet_peers
+        skynet_peers=$(echo "$skynet_response" | jq -r '.[].enode // empty' 2>/dev/null)
+        
+        if [[ -n "$skynet_peers" ]]; then
+            while IFS= read -r enode; do
+                [[ -n "$enode" ]] && bootnodes+=("$enode")
+            done <<< "$skynet_peers"
+        fi
+    fi
+    
+    # Limit the number of peers to inject
+    local total_bootnodes=${#bootnodes[@]}
+    if [[ $total_bootnodes -gt $max_peers ]]; then
+        info "Limiting to $max_peers peers out of $total_bootnodes available"
+        total_bootnodes=$max_peers
+    fi
+    
+    if [[ $total_bootnodes -eq 0 ]]; then
+        warn "No bootnodes found to inject"
+        return 1
+    fi
+    
+    info "Injecting $total_bootnodes peers..."
+    
+    # Add each peer via admin_addPeer RPC
+    local i=0
+    for enode in "${bootnodes[@]}"; do
+        [[ $i -ge $max_peers ]] && break
+        
+        # Validate enode format
+        if [[ ! "$enode" =~ ^enode://[a-f0-9]{128}@[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$ ]]; then
+            verbose "Skipping invalid enode: ${enode:0:40}..."
+            continue
+        fi
+        
+        local add_response
+        add_response=$(rpc_call "$rpc_url" "admin_addPeer" "[\"$enode\"]" 2>/dev/null || echo '{}')
+        local success
+        success=$(echo "$add_response" | jq -r '.result // false')
+        
+        if [[ "$success" == "true" ]]; then
+            peers_added=$((peers_added + 1))
+            verbose "Added peer: ${enode:0:40}..."
+        else
+            verbose "Failed to add peer: ${enode:0:40}..."
+        fi
+        
+        i=$((i + 1))
+        
+        # Small delay to avoid overwhelming the node
+        sleep 0.1
+    done
+    
+    log "Injected $peers_added peers successfully"
+    
+    # Wait a moment for connections to establish
+    sleep 2
+    
+    # Check new peer count
+    response=$(rpc_call "$rpc_url" "net_peerCount" "[]" 2>/dev/null || echo '{}')
+    hex_peers=$(echo "$response" | jq -r '.result // "0x0"')
+    local new_peers=0
+    if [[ "$hex_peers" != "0x0" && -n "$hex_peers" && "$hex_peers" != "null" ]]; then
+        new_peers=$((16#${hex_peers#0x}))
+    fi
+    
+    info "Peer count after injection: $new_peers"
+    
+    return 0
 }
 
 #==============================================================================
@@ -1184,13 +1365,44 @@ EOF
         esac
     done
     
+    # Try Docker first
+    local container
+    if container=$(find_container) && [[ -n "$container" ]]; then
+        info "Found Docker container: $container"
+        
+        if [[ "$graceful" == "true" && "$force" != "true" ]]; then
+            info "Performing graceful restart..."
+            start_spinner "Waiting for block finalization"
+            sleep 2
+            stop_spinner true "Block finalized"
+        fi
+        
+        start_spinner "Restarting container"
+        
+        if docker restart "$container" >/dev/null 2>&1; then
+            stop_spinner true "Container restarted"
+            log "Docker container $container restarted successfully"
+            
+            # Wait a moment for RPC to be available
+            sleep 3
+            
+            # Inject peers if needed
+            inject_peers || true
+            return 0
+        else
+            stop_spinner false "Restart failed"
+            die "Failed to restart Docker container $container"
+        fi
+    fi
+    
+    # Fall back to systemctl
     require_root
     
     local service
     service=$(detect_service)
     
     if [[ -z "$service" ]]; then
-        die "No XDC node service found"
+        die "No XDC node service or Docker container found"
     fi
     
     if [[ "$graceful" == "true" && "$force" != "true" ]]; then
@@ -1205,6 +1417,12 @@ EOF
     if systemctl restart "$service"; then
         stop_spinner true "Node restarted"
         log "Node $service restarted successfully"
+        
+        # Wait a moment for RPC to be available
+        sleep 3
+        
+        # Inject peers if needed
+        inject_peers || true
     else
         stop_spinner false "Restart failed"
         die "Failed to restart $service"
@@ -1234,13 +1452,30 @@ EOF
         esac
     done
     
+    # Try Docker first
+    local container
+    if container=$(find_container) && [[ -n "$container" ]]; then
+        info "Found Docker container: $container"
+        start_spinner "Stopping Docker container"
+        
+        if docker stop "$container" >/dev/null 2>&1; then
+            stop_spinner true "Container stopped"
+            log "Docker container $container stopped"
+            return 0
+        else
+            stop_spinner false "Stop failed"
+            die "Failed to stop Docker container $container"
+        fi
+    fi
+    
+    # Fall back to systemctl
     require_root
     
     local service
     service=$(detect_service)
     
     if [[ -z "$service" ]]; then
-        die "No XDC node service found"
+        die "No XDC node service or Docker container found"
     fi
     
     start_spinner "Stopping node"
@@ -1277,13 +1512,36 @@ EOF
         esac
     done
     
+    # Try Docker first
+    local container
+    if container=$(find_container) && [[ -n "$container" ]]; then
+        info "Found Docker container: $container"
+        start_spinner "Starting Docker container"
+        
+        if docker start "$container" >/dev/null 2>&1; then
+            stop_spinner true "Container started"
+            log "Docker container $container started"
+            
+            # Wait a moment for RPC to be available
+            sleep 3
+            
+            # Inject peers if needed
+            inject_peers || true
+            return 0
+        else
+            stop_spinner false "Start failed"
+            die "Failed to start Docker container $container"
+        fi
+    fi
+    
+    # Fall back to systemctl
     require_root
     
     local service
     service=$(detect_service)
     
     if [[ -z "$service" ]]; then
-        die "No XDC node service found"
+        die "No XDC node service or Docker container found"
     fi
     
     start_spinner "Starting node"
@@ -1291,6 +1549,12 @@ EOF
     if systemctl start "$service"; then
         stop_spinner true "Node started"
         log "Node $service started"
+        
+        # Wait a moment for RPC to be available
+        sleep 3
+        
+        # Inject peers if needed
+        inject_peers || true
     else
         stop_spinner false "Start failed"
         die "Failed to start $service"
@@ -1633,7 +1897,7 @@ cmd_peers() {
     
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            optimize|list|test)
+            optimize|list|test|add)
                 action="$1"
                 shift
                 ;;
@@ -1642,19 +1906,45 @@ cmd_peers() {
                 shift
                 ;;
             --help|-h)
-                echo "xdc-node peers — Peer Connection Optimization"
-                echo ""
-                echo "Usage:"
-                echo "  xdc-node peers optimize [--testnet]  Optimize peer list by latency"
-                echo "  xdc-node peers list [--testnet]      List current peers"
-                echo "  xdc-node peers test [--testnet]      Test bootnode connectivity"
+                cat << EOF
+$(c BOLD)xdc-node peers$(c NC) — Peer Connection Optimization
+
+$(c BOLD)USAGE:$(c NC)
+    xdc-node peers <command> [options]
+
+$(c BOLD)COMMANDS:$(c NC)
+    optimize  Optimize peer list by latency ranking
+    list      List current peers
+    test      Test bootnode connectivity
+    add       Add peers from bootnodes.list (manual peer injection)
+
+$(c BOLD)OPTIONS:$(c NC)
+    --testnet    Use testnet instead of mainnet
+    --help       Show this help
+
+$(c BOLD)EXAMPLES:$(c NC)
+    xdc-node peers optimize
+    xdc-node peers add
+    xdc-node peers list --testnet
+
+EOF
                 return 0
                 ;;
             *) shift ;;
         esac
     done
     
-    run_script "bootnode-optimize.sh" "--$action $args"
+    case "$action" in
+        add)
+            inject_peers
+            ;;
+        optimize|list|test)
+            run_script "bootnode-optimize.sh" "--$action $args"
+            ;;
+        *)
+            run_script "bootnode-optimize.sh" "--optimize $args"
+            ;;
+    esac
 }
 
 cmd_snapshot() {

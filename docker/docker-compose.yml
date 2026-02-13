@@ -31,8 +31,8 @@ services:
     environment:
       # Network must be set for official entry.sh to create correct symlink
       - NETWORK=${NETWORK:-mainnet}
-    # Use official entrypoint flow - entry.sh creates symlink then calls start.sh
-    entrypoint: ["/work/entry.sh"]
+    # Override image entrypoint — use our start.sh which auto-detects --rpc vs --http flags
+    entrypoint: ["/bin/bash", "/work/start.sh"]
     networks:
       - xdc-network
       - xdc-monitoring
