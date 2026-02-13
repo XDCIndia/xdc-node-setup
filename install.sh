@@ -301,6 +301,8 @@ run_setup() {
                 cp "$temp_dir/xdc-node-setup/setup.sh" "$temp_dir/setup.sh"
                 cp -r "$temp_dir/xdc-node-setup/scripts" "$temp_dir/scripts" 2>/dev/null || true
                 cp -r "$temp_dir/xdc-node-setup/configs" "$temp_dir/configs" 2>/dev/null || true
+                cp -r "$temp_dir/xdc-node-setup/cli" "$temp_dir/cli" 2>/dev/null || true
+                cp -r "$temp_dir/xdc-node-setup/docker" "$temp_dir/docker" 2>/dev/null || true
                 download_ok=true
                 log "Cloned repository successfully"
             else
@@ -309,6 +311,8 @@ run_setup() {
                     cp "$temp_dir/xdc-node-setup/setup.sh" "$temp_dir/setup.sh"
                     cp -r "$temp_dir/xdc-node-setup/scripts" "$temp_dir/scripts" 2>/dev/null || true
                     cp -r "$temp_dir/xdc-node-setup/configs" "$temp_dir/configs" 2>/dev/null || true
+                    cp -r "$temp_dir/xdc-node-setup/cli" "$temp_dir/cli" 2>/dev/null || true
+                    cp -r "$temp_dir/xdc-node-setup/docker" "$temp_dir/docker" 2>/dev/null || true
                     download_ok=true
                     log "Cloned repository via SSH"
                 fi
