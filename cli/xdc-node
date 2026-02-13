@@ -17,7 +17,7 @@ readonly SECURITY_STATE_FILE="/var/lib/xdc-node/security-state.json"
 readonly SNAPSHOT_STATE_FILE="/var/lib/xdc-node/snapshot-state.json"
 
 # Default RPC settings
-readonly XDC_RPC_PORT="${XDC_RPC_PORT:-8545}"
+readonly XDC_RPC_PORT="${XDC_RPC_PORT:-9545}"
 readonly XDC_RPC_URL="http://127.0.0.1:${XDC_RPC_PORT}"
 
 # Colors
@@ -786,7 +786,7 @@ EOF
     # Check RPC exposure
     printf "  %-45s " "RPC not exposed to 0.0.0.0:"
     local rpc_exposed=false
-    if docker inspect xdc-node 2>/dev/null | grep -q '"0.0.0.0:8545"'; then
+    if docker inspect xdc-node 2>/dev/null | grep -qE '"0\.0\.0\.0:(8545|9545)"'; then
         rpc_exposed=true
     fi
     if [[ "$rpc_exposed" == false ]]; then

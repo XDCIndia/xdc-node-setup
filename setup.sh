@@ -211,7 +211,7 @@ Environment Variables:
   NODE_TYPE           Node type: full, archive, rpc, masternode (default: full)
   NETWORK             Network: mainnet, testnet (default: mainnet)
   DATA_DIR            Data directory (default: /root/xdcchain or ~/xdcchain)
-  RPC_PORT            RPC port (default: 8545)
+  RPC_PORT            RPC port (default: 9545)
   P2P_PORT            P2P port (default: 30303)
   SYNC_MODE           Sync mode: full, snap (default: full)
   ENABLE_MONITORING   Enable monitoring: true/false (default: true)
@@ -467,7 +467,7 @@ init_config() {
     NETWORK="${NETWORK:-mainnet}"
     SYNC_MODE="${SYNC_MODE:-full}"
     DATA_DIR="${DATA_DIR:-$DEFAULT_DATA_DIR}"
-    RPC_PORT="${RPC_PORT:-8545}"
+    RPC_PORT="${RPC_PORT:-9545}"
     P2P_PORT="${P2P_PORT:-30303}"
     WS_PORT="${WS_PORT:-8546}"
     
@@ -571,8 +571,8 @@ prompt_ports() {
     echo -e "${BOLD}Port Configuration${NC}"
     echo "==================="
     
-    read -rp "RPC port [8545]: " input
-    RPC_PORT="${input:-8545}"
+    read -rp "RPC port [9545]: " input
+    RPC_PORT="${input:-9545}"
     
     read -rp "P2P port [30303]: " input
     P2P_PORT="${input:-30303}"
@@ -831,7 +831,7 @@ EOF
       - /sys:/host/sys:ro
     environment:
       - SKYNET_CONF=/etc/xdc-node/skynet.conf
-      - XDC_RPC_URL=http://127.0.0.1:${RPC_PORT:-8545}
+      - XDC_RPC_URL=http://127.0.0.1:${RPC_PORT:-9545}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -1154,7 +1154,7 @@ show_status() {
     echo -e "  ${BLUE}Network:${NC}     ${NETWORK:-unknown} (Chain ID: ${CHAIN_ID:-N/A})"
     echo -e "  ${BLUE}Node Type:${NC}   ${NODE_TYPE:-unknown}"
     echo -e "  ${BLUE}Data Dir:${NC}    ${DATA_DIR:-unknown}"
-    echo -e "  ${BLUE}RPC:${NC}         http://127.0.0.1:${RPC_PORT:-8545}"
+    echo -e "  ${BLUE}RPC:${NC}         http://127.0.0.1:${RPC_PORT:-9545}"
     echo -e "  ${BLUE}Block Height:${NC} $block_height"
     echo -e "  ${BLUE}Sync Status:${NC} $sync_status"
     echo ""
@@ -1281,7 +1281,7 @@ register_with_skynet() {
             ;;
     esac
     
-    rpc_port="${RPC_PORT:-8545}"
+    rpc_port="${RPC_PORT:-9545}"
     
     info "Auto-detected configuration:"
     echo "  Hostname: $hostname"
