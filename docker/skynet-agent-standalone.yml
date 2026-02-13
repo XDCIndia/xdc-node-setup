@@ -1,42 +1,42 @@
 #==============================================================================
-# Standalone NetOwn Agent - Docker Compose
+# Standalone SkyNet Agent - Docker Compose
 #
-# For adding XDCNetOwn fleet monitoring to an existing XDC node that was NOT
+# For adding XDC SkyNet fleet monitoring to an existing XDC node that was NOT
 # deployed via the XDC-Node-Setup docker-compose.yml (which has a built-in
-# netown profile). Use this for nodes running natively or via other setups.
+# skynet profile). Use this for nodes running natively or via other setups.
 #
 # Prerequisites:
-#   1. Copy netown-agent.sh to the same directory as this file
-#   2. Copy your netown.conf (with API keys) to the same directory
-#   3. Ensure the XDC node RPC is accessible at the URL in netown.conf
+#   1. Copy skynet-agent.sh to the same directory as this file
+#   2. Copy your skynet.conf (with API keys) to the same directory
+#   3. Ensure the XDC node RPC is accessible at the URL in skynet.conf
 #
 # Usage:
-#   docker compose -f netown-agent-standalone.yml up -d
-#   docker logs -f netown-agent
+#   docker compose -f skynet-agent-standalone.yml up -d
+#   docker logs -f skynet-agent
 #
 # To stop:
-#   docker compose -f netown-agent-standalone.yml down
+#   docker compose -f skynet-agent-standalone.yml down
 #==============================================================================
 
 services:
-  netown-agent:
+  skynet-agent:
     image: alpine:3.19
-    container_name: netown-agent
+    container_name: skynet-agent
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ./netown-agent.sh:/agent.sh:ro
-      - ./netown.conf:/etc/xdc-node/netown.conf:ro
+      - ./skynet-agent.sh:/agent.sh:ro
+      - ./skynet.conf:/etc/xdc-node/skynet.conf:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro   # Docker stats collection
       - /etc/ssh/sshd_config:/host/sshd_config:ro      # Security audit checks
       - /proc:/host/proc:ro                              # System metrics
     environment:
-      - NETOWN_CONF=/etc/xdc-node/netown.conf
+      - SKYNET_CONF=/etc/xdc-node/skynet.conf
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         apk add --no-cache bash curl jq bc procps >/dev/null 2>&1
-        echo "NetOwn Agent started - reporting every 60s"
+        echo "SkyNet Agent started - reporting every 60s"
         while true; do
           /agent.sh 2>/dev/null && echo "[$(date '+%H:%M:%S')] heartbeat ok" || echo "[$(date '+%H:%M:%S')] heartbeat failed"
           sleep 60
@@ -53,6 +53,6 @@ services:
         max-size: "10m"
         max-file: "3"
     labels:
-      com.xdc-node-setup.service: "netown-agent"
+      com.xdc-node-setup.service: "skynet-agent"
       com.xdc-node-setup.version: "1.0.0"
-      com.xdc-node-setup.description: "XDCNetOwn fleet monitoring sidecar"
+      com.xdc-node-setup.description: "XDC SkyNet fleet monitoring sidecar"

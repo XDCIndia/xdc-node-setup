@@ -67,24 +67,27 @@ fi
 #==============================================================================
 # Colors & UI
 #==============================================================================
-if [[ -t 1 ]]; then
-    readonly RED='\033[0;31m'
-    readonly GREEN='\033[0;32m'
-    readonly YELLOW='\033[1;33m'
-    readonly BLUE='\033[0;34m'
-    readonly CYAN='\033[0;36m'
-    readonly MAGENTA='\033[0;35m'
-    readonly BOLD='\033[1m'
-    readonly NC='\033[0m'
-else
-    readonly RED=''
-    readonly GREEN=''
-    readonly YELLOW=''
-    readonly BLUE=''
-    readonly CYAN=''
-    readonly MAGENTA=''
-    readonly BOLD=''
-    readonly NC=''
+# Guard to prevent "readonly variable" error if colors already defined (e.g., from utils.sh)
+if [[ -z "${RED:-}" ]]; then
+    if [[ -t 1 ]]; then
+        readonly RED='\033[0;31m'
+        readonly GREEN='\033[0;32m'
+        readonly YELLOW='\033[1;33m'
+        readonly BLUE='\033[0;34m'
+        readonly CYAN='\033[0;36m'
+        readonly MAGENTA='\033[0;35m'
+        readonly BOLD='\033[1m'
+        readonly NC='\033[0m'
+    else
+        readonly RED=''
+        readonly GREEN=''
+        readonly YELLOW=''
+        readonly BLUE=''
+        readonly CYAN=''
+        readonly MAGENTA=''
+        readonly BOLD=''
+        readonly NC=''
+    fi
 fi
 
 #==============================================================================
@@ -208,7 +211,7 @@ Environment Variables:
   P2P_PORT            P2P port (default: 30303)
   SYNC_MODE           Sync mode: full, snap (default: full)
   ENABLE_MONITORING   Enable monitoring: true/false (default: true)
-  ENABLE_NETOWN       Enable NetOwn fleet monitoring: true/false (default: false)
+  ENABLE_SKYNET       Enable SkyNet fleet monitoring: true/false (default: false)
   ENABLE_SECURITY     Enable security hardening: true/false (default: true)
   ENABLE_UPDATES      Enable auto-updates: true/false (default: true)
   HTTP_PROXY          HTTP proxy URL
@@ -468,7 +471,7 @@ init_config() {
     
     # Feature flags
     ENABLE_MONITORING="${ENABLE_MONITORING:-true}"
-    ENABLE_NETOWN="${ENABLE_NETOWN:-false}"
+    ENABLE_SKYNET="${ENABLE_SKYNET:-false}"
     ENABLE_SECURITY="${ENABLE_SECURITY:-true}"
     ENABLE_NOTIFICATIONS="${ENABLE_NOTIFICATIONS:-false}"
     ENABLE_UPDATES="${ENABLE_UPDATES:-true}"
@@ -583,8 +586,8 @@ prompt_features() {
     read -rp "Enable monitoring (Grafana + Prometheus)? [Y/n]: " input
     [[ ! "${input:-Y}" =~ ^[Nn]$ ]] && ENABLE_MONITORING="true" || ENABLE_MONITORING="false"
     
-    read -rp "Enable NetOwn fleet monitoring? [y/N]: " input
-    [[ "${input:-N}" =~ ^[Yy]$ ]] && ENABLE_NETOWN="true" || ENABLE_NETOWN="false"
+    read -rp "Enable SkyNet fleet monitoring? [y/N]: " input
+    [[ "${input:-N}" =~ ^[Yy]$ ]] && ENABLE_SKYNET="true" || ENABLE_SKYNET="false"
     
     if [[ "$OS" == "linux" ]]; then
         read -rp "Enable security hardening (SSH, UFW, fail2ban)? [Y/n]: " input
@@ -600,7 +603,7 @@ prompt_features() {
     read -rp "Install CLI tool (xdc-node)? [Y/n]: " input
     [[ ! "${input:-Y}" =~ ^[Nn]$ ]] && INSTALL_CLI="true" || INSTALL_CLI="false"
     
-    log "Monitoring: $ENABLE_MONITORING, NetOwn: $ENABLE_NETOWN, Security: $ENABLE_SECURITY, Notifications: $ENABLE_NOTIFICATIONS, Updates: $ENABLE_UPDATES, CLI: $INSTALL_CLI"
+    log "Monitoring: $ENABLE_MONITORING, SkyNet: $ENABLE_SKYNET, Security: $ENABLE_SECURITY, Notifications: $ENABLE_NOTIFICATIONS, Updates: $ENABLE_UPDATES, CLI: $INSTALL_CLI"
 }
 
 prompt_advanced() {
@@ -809,48 +812,47 @@ EOF
 EOF
     fi
 
-    # Add NetOwn agent if enabled
-    if [[ "$ENABLE_NETOWN" == "true" ]]; then
-        cat >> "$INSTALL_DIR/docker/docker-compose.yml" << 'EOF'
+    # Add SkyNet agent service (will be started after registration)
+    cat >> "$INSTALL_DIR/docker/docker-compose.yml" << 'EOF'
 
-  netown-agent:
+  skynet-agent:
     image: alpine:3.19
-    container_name: netown-agent
+    container_name: skynet-agent
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ./netown-agent.sh:/agent.sh:ro
-      - ./netown.conf:/etc/xdc-node/netown.conf:ro
+      - ./skynet-agent.sh:/agent.sh:ro
+      - ./skynet.conf:/etc/xdc-node/skynet.conf:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /etc/ssh/sshd_config:/host/sshd_config:ro
       - /proc:/host/proc:ro
     environment:
-      - NETOWN_CONF=/etc/xdc-node/netown.conf
+      - SKYNET_CONF=/etc/xdc-node/skynet.conf
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         apk add --no-cache bash curl jq bc procps >/dev/null 2>&1
         chmod +x /agent.sh
-        echo "NetOwn Agent started - reporting every 60s"
+        echo "SkyNet Agent started - reporting every 60s"
         while true; do
           /agent.sh 2>/dev/null
           sleep 60
         done
     depends_on:
       - xdc-node
+    profiles:
+      - skynet
 EOF
-        
-        # Copy netown agent files
-        cp "$SCRIPT_DIR/scripts/netown-agent.sh" "$INSTALL_DIR/docker/netown-agent.sh" 2>/dev/null || \
-            curl -sSL "https://raw.githubusercontent.com/XDC-Node-Setup/main/scripts/netown-agent.sh" -o "$INSTALL_DIR/docker/netown-agent.sh"
-        chmod +x "$INSTALL_DIR/docker/netown-agent.sh"
-        
-        # Create netown.conf from template
-        if [[ ! -f "$INSTALL_DIR/docker/netown.conf" ]]; then
-            cp "$SCRIPT_DIR/configs/netown.conf.template" "$INSTALL_DIR/docker/netown.conf" 2>/dev/null || \
-                curl -sSL "https://raw.githubusercontent.com/XDC-Node-Setup/main/configs/netown.conf.template" -o "$INSTALL_DIR/docker/netown.conf"
-            warn "Please edit $INSTALL_DIR/docker/netown.conf with your NetOwn API credentials"
-        fi
+    
+    # Copy skynet agent files
+    cp "$SCRIPT_DIR/scripts/skynet-agent.sh" "$INSTALL_DIR/docker/skynet-agent.sh" 2>/dev/null || \
+        curl -sSL "https://raw.githubusercontent.com/XDC-Node-Setup/main/scripts/skynet-agent.sh" -o "$INSTALL_DIR/docker/skynet-agent.sh"
+    chmod +x "$INSTALL_DIR/docker/skynet-agent.sh"
+    
+    # Create initial skynet.conf from template (will be updated after registration)
+    if [[ ! -f "$INSTALL_DIR/docker/skynet.conf" ]]; then
+        cp "$SCRIPT_DIR/configs/skynet.conf.template" "$INSTALL_DIR/docker/skynet.conf" 2>/dev/null || \
+            curl -sSL "https://raw.githubusercontent.com/XDC-Node-Setup/main/configs/skynet.conf.template" -o "$INSTALL_DIR/docker/skynet.conf"
     fi
 
     # Close the compose file
@@ -1227,6 +1229,148 @@ uninstall_node() {
 }
 
 #==============================================================================
+# SkyNet Registration
+#==============================================================================
+register_with_skynet() {
+    local email=""
+    local hostname
+    local public_ip
+    local node_role
+    local rpc_port
+    local skynet_conf="$INSTALL_DIR/docker/skynet.conf"
+    
+    log "Setting up SkyNet registration..."
+    
+    # Check if already registered
+    if [[ -f "$skynet_conf" ]]; then
+        # shellcheck source=/dev/null
+        source "$skynet_conf"
+        if [[ -n "${SKYNET_API_KEY:-}" ]]; then
+            info "Node already registered with SkyNet (API key found)"
+            return 0
+        fi
+    fi
+    
+    # Ask user for email
+    echo ""
+    echo -e "${CYAN}${BOLD}📡 SkyNet Dashboard Registration${NC}"
+    echo "Register your node to receive monitoring alerts and view node status."
+    echo ""
+    
+    while [[ -z "$email" ]]; do
+        read -rp "Enter your email address (required for alerts): " email
+        if [[ -z "$email" ]]; then
+            warn "Email is required for SkyNet registration"
+        elif [[ ! "$email" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+            warn "Invalid email format. Please try again."
+            email=""
+        fi
+    done
+    
+    # Auto-detect node information
+    hostname=$(hostname -s)
+    public_ip=$(curl -s -m 5 ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')
+    
+    # Determine node role from config
+    case "${NODE_TYPE:-full}" in
+        archive|archivenode)
+            node_role="archive"
+            ;;
+        validator|masternode)
+            node_role="masternode"
+            ;;
+        *)
+            node_role="fullnode"
+            ;;
+    esac
+    
+    rpc_port="${RPC_PORT:-8545}"
+    
+    info "Auto-detected configuration:"
+    echo "  Hostname: $hostname"
+    echo "  Public IP: $public_ip"
+    echo "  Node Role: $node_role"
+    echo "  RPC Port: $rpc_port"
+    echo ""
+    
+    # Prepare registration payload
+    local payload
+    payload=$(cat <<EOF
+{
+    "name": "${hostname}-${NETWORK:-mainnet}",
+    "host": "${public_ip}",
+    "rpcUrl": "http://${public_ip}:${rpc_port}",
+    "role": "${node_role}",
+    "email": "${email}"
+}
+EOF
+)
+    
+    info "Registering node with SkyNet dashboard..."
+    
+    # Call registration API
+    local response
+    response=$(curl -s -m 15 -X POST "https://net.xdc.network/api/v1/nodes/register" \
+        -H "Content-Type: application/json" \
+        -d "$payload" 2>/dev/null || echo '{"error":"connection_failed"}')
+    
+    # Check for API key in response
+    local api_key
+    api_key=$(echo "$response" | jq -r '.apiKey // empty' 2>/dev/null || echo "")
+    
+    if [[ -n "$api_key" && "$api_key" != "null" ]]; then
+        log "✅ Node registered successfully with SkyNet!"
+        
+        # Create skynet.conf with the API key
+        mkdir -p "$(dirname "$skynet_conf")"
+        cat > "$skynet_conf" <<EOF
+# XDC SkyNet Agent Configuration
+# Auto-generated during node setup
+
+SKYNET_API_URL=https://net.xdc.network/api/v1
+SKYNET_NODE_NAME=${hostname}-${NETWORK:-mainnet}
+SKYNET_API_KEY=${api_key}
+SKYNET_ROLE=${node_role}
+SKYNET_EMAIL=${email}
+SKYNET_TELEGRAM=
+EOF
+        chmod 600 "$skynet_conf"
+        
+        # Set up skynet-agent for heartbeat reporting
+        if [[ -f "$INSTALL_DIR/docker/skynet-agent.sh" ]]; then
+            # Start skynet-agent container using the skynet profile
+            if grep -q "skynet-agent:" "$INSTALL_DIR/docker/docker-compose.yml" 2>/dev/null; then
+                (cd "$INSTALL_DIR/docker" && docker compose --profile skynet up -d skynet-agent 2>/dev/null) || \
+                    warn "Could not start skynet-agent container. Start manually with: cd $INSTALL_DIR/docker && docker compose --profile skynet up -d skynet-agent"
+            fi
+            
+            log "SkyNet agent running as Docker container (heartbeat every 60s)"
+        fi
+        
+        echo ""
+        echo -e "${GREEN}${BOLD}✅ SkyNet Registration Complete!${NC}"
+        echo ""
+        echo -e "${YELLOW}To receive alert notifications, edit:${NC}"
+        echo "  $skynet_conf"
+        echo ""
+        echo "And add your:"
+        echo "  SKYNET_EMAIL=your@email.com"
+        echo "  SKYNET_TELEGRAM=@your_telegram_handle"
+        echo ""
+        echo "View your node at: https://net.xdc.network"
+        return 0
+    else
+        local error_msg
+        error_msg=$(echo "$response" | jq -r '.error // "Registration failed"' 2>/dev/null || echo "Registration failed")
+        warn "SkyNet registration failed: $error_msg"
+        echo ""
+        echo "You can manually register later by running:"
+        echo "  $0 --register-skynet"
+        return 1
+    fi
+}
+
+#==============================================================================
 # Print Summary
 #==============================================================================
 print_summary() {
@@ -1336,6 +1480,9 @@ main() {
     
     # Start services
     start_services
+    
+    # Register with SkyNet
+    register_with_skynet
     
     # Show summary
     print_summary

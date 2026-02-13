@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 #==============================================================================
-# XDCNetOwn Agent — Auto-register + push heartbeats to XDCNetOwn Platform
+# XDC SkyNet Agent — Auto-register + push heartbeats to XDC SkyNet Platform
 # 
 # Usage:
-#   ./netown-agent.sh                    # Run once (heartbeat)
-#   ./netown-agent.sh --register         # Force re-registration
-#   ./netown-agent.sh --daemon           # Run as daemon (every 30s)
-#   ./netown-agent.sh --install          # Install as systemd service + cron
+#   ./skynet-agent.sh                    # Run once (heartbeat)
+#   ./skynet-agent.sh --register         # Force re-registration
+#   ./skynet-agent.sh --daemon           # Run as daemon (every 30s)
+#   ./skynet-agent.sh --install          # Install as systemd service + cron
 #
-# Config: /etc/xdc-node/netown.conf
-# State:  /var/lib/xdc-node/netown.json
+# Config: /etc/xdc-node/skynet.conf
+# State:  /var/lib/xdc-node/skynet.json
 #==============================================================================
 set -euo pipefail
 
@@ -18,11 +18,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #==============================================================================
 # Configuration
 #==============================================================================
-CONF_FILE="${NETOWN_CONF:-/etc/xdc-node/netown.conf}"
-STATE_FILE="${NETOWN_STATE:-/var/lib/xdc-node/netown.json}"
+CONF_FILE="${SKYNET_CONF:-/etc/xdc-node/skynet.conf}"
+STATE_FILE="${SKYNET_STATE:-/var/lib/xdc-node/skynet.json}"
 RPC_URL="${XDC_RPC_URL:-http://127.0.0.1:8545}"
-NETOWN_API="${NETOWN_API_URL:-https://net.xdc.network/api/v1}"
-NETOWN_API_KEY="${NETOWN_API_KEY:-}"
+SKYNET_API="${SKYNET_API_URL:-https://net.xdc.network/api/v1}"
+SKYNET_API_KEY="${SKYNET_API_KEY:-}"
 NODE_NAME="${NODE_NAME:-$(hostname)}"
 NODE_ROLE="${NODE_ROLE:-fullnode}"
 HEARTBEAT_INTERVAL=30
@@ -35,7 +35,7 @@ fi
 
 # State
 NODE_ID=""
-NODE_API_KEY=""
+API_KEY=""
 
 #==============================================================================
 # Helpers
@@ -61,9 +61,9 @@ api_call() {
     local method=$1
     local endpoint=$2
     local data=${3:-}
-    local auth_key="${NODE_API_KEY:-$NETOWN_API_KEY}"
+    local auth_key="${API_KEY:-$SKYNET_API_KEY}"
     
-    local args=(-s -m 15 -X "$method" "${NETOWN_API}${endpoint}" -H "Content-Type: application/json")
+    local args=(-s -m 15 -X "$method" "${SKYNET_API}${endpoint}" -H "Content-Type: application/json")
     [[ -n "$auth_key" ]] && args+=(-H "Authorization: Bearer ${auth_key}")
     [[ -n "$data" ]] && args+=(-d "$data")
     
@@ -76,7 +76,7 @@ api_call() {
 load_state() {
     if [[ -f "$STATE_FILE" ]]; then
         NODE_ID=$(jq -r '.nodeId // ""' "$STATE_FILE" 2>/dev/null || echo "")
-        NODE_API_KEY=$(jq -r '.apiKey // ""' "$STATE_FILE" 2>/dev/null || echo "")
+        API_KEY=$(jq -r '.apiKey // ""' "$STATE_FILE" 2>/dev/null || echo "")
     fi
 }
 
@@ -85,11 +85,11 @@ save_state() {
     cat > "$STATE_FILE" <<EOF
 {
     "nodeId": "$NODE_ID",
-    "apiKey": "$NODE_API_KEY",
+    "apiKey": "$API_KEY",
     "nodeName": "$NODE_NAME",
     "registeredAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
     "rpcUrl": "$RPC_URL",
-    "apiUrl": "$NETOWN_API"
+    "apiUrl": "$SKYNET_API"
 }
 EOF
     chmod 600 "$STATE_FILE"
@@ -288,7 +288,7 @@ detect_security() {
 # Registration
 #==============================================================================
 register_node() {
-    log "Registering node '$NODE_NAME' with XDCNetOwn..."
+    log "Registering node '$NODE_NAME' with XDC SkyNet..."
     
     detect_node_info
     
@@ -330,7 +330,7 @@ EOF
     
     if echo "$response" | jq -e '.nodeId' >/dev/null 2>&1; then
         NODE_ID=$(echo "$response" | jq -r '.nodeId')
-        NODE_API_KEY=$(echo "$response" | jq -r '.apiKey')
+        API_KEY=$(echo "$response" | jq -r '.apiKey')
         save_state
         log "✅ Registered! nodeId=$NODE_ID"
         return 0
@@ -504,7 +504,7 @@ collect_metrics() {
     "nodeId": "$NODE_ID",
     "blockHeight": $block_height,
     "syncing": $is_syncing,
-    $([ -n "$sync_progress" ] && echo "\"syncProgress\": $sync_progress," || true)
+    $( [[ -n "$sync_progress" ]] && echo "\"syncProgress\": $sync_progress," || true )
     "peerCount": $peer_count,
     "peers": $peers_json,
     "txPool": {"pending": $tx_pending, "queued": $tx_queued},
@@ -604,7 +604,7 @@ execute_commands() {
 # Daemon Mode
 #==============================================================================
 run_daemon() {
-    log "🚀 Starting XDCNetOwn agent daemon (interval: ${HEARTBEAT_INTERVAL}s)"
+    log "🚀 Starting XDC SkyNet agent daemon (interval: ${HEARTBEAT_INTERVAL}s)"
     
     # Ensure registered
     load_state
@@ -622,7 +622,7 @@ run_daemon() {
 # Install as Service
 #==============================================================================
 install_service() {
-    log "📦 Installing XDCNetOwn agent..."
+    log "📦 Installing XDC SkyNet agent..."
     
     # Create config directory
     mkdir -p /etc/xdc-node /var/lib/xdc-node
@@ -630,9 +630,9 @@ install_service() {
     # Create config if not exists
     if [[ ! -f "$CONF_FILE" ]]; then
         cat > "$CONF_FILE" <<EOF
-# XDCNetOwn Agent Configuration
-NETOWN_API_URL=${NETOWN_API}
-NETOWN_API_KEY=${NETOWN_API_KEY}
+# XDC SkyNet Agent Configuration
+SKYNET_API_URL=${SKYNET_API}
+SKYNET_API_KEY=${SKYNET_API_KEY}
 XDC_RPC_URL=${RPC_URL}
 NODE_NAME=${NODE_NAME}
 NODE_ROLE=${NODE_ROLE}
@@ -643,31 +643,31 @@ EOF
     fi
     
     # Create systemd service
-    cat > /etc/systemd/system/xdc-netown-agent.service <<EOF
+    cat > /etc/systemd/system/xdc-skynet-agent.service <<EOF
 [Unit]
-Description=XDCNetOwn Monitoring Agent
+Description=XDC SkyNet Monitoring Agent
 After=network.target docker.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=${SCRIPT_DIR}/netown-agent.sh --daemon
+ExecStart=${SCRIPT_DIR}/skynet-agent.sh --daemon
 Restart=always
 RestartSec=10
-EnvironmentFile=-/etc/xdc-node/netown.conf
+EnvironmentFile=-/etc/xdc-node/skynet.conf
 
 [Install]
 WantedBy=multi-user.target
 EOF
     
     systemctl daemon-reload
-    systemctl enable xdc-netown-agent
-    systemctl start xdc-netown-agent
+    systemctl enable xdc-skynet-agent
+    systemctl start xdc-skynet-agent
     
     log "✅ Agent installed and started as systemd service"
     log "   Config: $CONF_FILE"
     log "   State:  $STATE_FILE"
-    log "   Service: systemctl status xdc-netown-agent"
+    log "   Service: systemctl status xdc-skynet-agent"
 }
 
 #==============================================================================
@@ -695,7 +695,7 @@ main() {
             load_state
             if [[ -n "$NODE_ID" ]]; then
                 echo "Node ID:  $NODE_ID"
-                echo "API URL:  $NETOWN_API"
+                echo "API URL:  $SKYNET_API"
                 echo "RPC URL:  $RPC_URL"
                 echo "State:    $STATE_FILE"
                 api_call GET "/nodes/${NODE_ID}/status" | jq .
@@ -712,20 +712,20 @@ main() {
             push_heartbeat && log "✅ Heartbeat sent" || err "Heartbeat failed"
             ;;
         --help|-h)
-            echo "XDCNetOwn Agent — Monitor your XDC node"
+            echo "XDC SkyNet Agent — Monitor your XDC node"
             echo ""
             echo "Usage: $0 [option]"
             echo ""
             echo "Options:"
             echo "  (none)       Send a heartbeat (auto-registers if needed)"
-            echo "  --register   Force re-registration with XDCNetOwn"
+            echo "  --register   Force re-registration with XDC SkyNet"
             echo "  --daemon     Run as daemon (heartbeat every ${HEARTBEAT_INTERVAL}s)"
             echo "  --install    Install as systemd service"
             echo "  --status     Show registration status"
             echo "  --help       Show this help"
             echo ""
             echo "Config: $CONF_FILE"
-            echo "API:    $NETOWN_API"
+            echo "API:    $SKYNET_API"
             ;;
         *)
             err "Unknown option: $action"
