@@ -1,5 +1,19 @@
 #!/bin/bash
 
+# Ensure XDC binary is available (some images use XDC-mainnet instead of XDC)
+if ! command -v XDC &>/dev/null; then
+    if command -v XDC-mainnet &>/dev/null; then
+        ln -sf "$(which XDC-mainnet)" /usr/local/bin/XDC 2>/dev/null || \
+        ln -sf "$(which XDC-mainnet)" /usr/bin/XDC 2>/dev/null || \
+        alias XDC=XDC-mainnet
+        echo "Linked XDC-mainnet → XDC"
+    elif command -v XDC-testnet &>/dev/null; then
+        ln -sf "$(which XDC-testnet)" /usr/local/bin/XDC 2>/dev/null || true
+    else
+        echo "ERROR: No XDC binary found!" && exit 1
+    fi
+fi
+
 if [ ! -d /work/xdcchain/XDC/chaindata ]; then
     wallet=$(XDC account new --password /work/.pwd --datadir /work/xdcchain | awk -F '[{}]' '{print $2}')
     echo "Initalizing Genesis Block"

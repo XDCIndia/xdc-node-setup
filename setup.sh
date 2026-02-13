@@ -714,6 +714,13 @@ setup_docker_compose() {
                     warn "Generating start-node.sh from inline template..."
                     cat > "$network_dir/start-node.sh" << 'STARTEOF'
 #!/bin/bash
+# Ensure XDC binary is available
+if ! command -v XDC &>/dev/null; then
+    for bin in XDC-mainnet XDC-testnet XDC-devnet; do
+        command -v $bin &>/dev/null && { ln -sf "$(which $bin)" /usr/bin/XDC; break; }
+    done
+fi
+command -v XDC &>/dev/null || { echo "ERROR: No XDC binary found!"; exit 1; }
 if [ ! -d /work/xdcchain/XDC/chaindata ]; then
     wallet=$(XDC account new --password /work/.pwd --datadir /work/xdcchain | awk -F '[{}]' '{print $2}')
     coinbaseaddr="$wallet"
