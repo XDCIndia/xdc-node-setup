@@ -277,17 +277,52 @@ run_setup() {
     
     local temp_dir
     temp_dir=$(mktemp -d)
+    local download_ok=false
     
-    # Download setup script
+    # Try downloading setup script via curl/wget first (works for public repos)
     if command -v curl >/dev/null 2>&1; then
-        curl -fsSL "${RAW_URL}/setup.sh" -o "$temp_dir/setup.sh"
-    else
-        wget -q "${RAW_URL}/setup.sh" -O "$temp_dir/setup.sh"
+        if curl -fsSL "${RAW_URL}/setup.sh" -o "$temp_dir/setup.sh" 2>/dev/null; then
+            download_ok=true
+        fi
+    elif command -v wget >/dev/null 2>&1; then
+        if wget -q "${RAW_URL}/setup.sh" -O "$temp_dir/setup.sh" 2>/dev/null; then
+            download_ok=true
+        fi
+    fi
+    
+    # If download failed (404 / private repo), fall back to git clone
+    if [ "$download_ok" = false ]; then
+        warn "Direct download failed (repo may be private). Falling back to git clone..."
+        rm -rf "$temp_dir"
+        temp_dir=$(mktemp -d)
+        
+        if command -v git >/dev/null 2>&1; then
+            if git clone --depth 1 "${REPO_URL}.git" "$temp_dir/xdc-node-setup" 2>/dev/null; then
+                cp "$temp_dir/xdc-node-setup/setup.sh" "$temp_dir/setup.sh"
+                cp -r "$temp_dir/xdc-node-setup/scripts" "$temp_dir/scripts" 2>/dev/null || true
+                cp -r "$temp_dir/xdc-node-setup/configs" "$temp_dir/configs" 2>/dev/null || true
+                download_ok=true
+                log "Cloned repository successfully"
+            else
+                # Try SSH if HTTPS fails
+                if git clone --depth 1 "git@github.com:AnilChinchawale/xdc-node-setup.git" "$temp_dir/xdc-node-setup" 2>/dev/null; then
+                    cp "$temp_dir/xdc-node-setup/setup.sh" "$temp_dir/setup.sh"
+                    cp -r "$temp_dir/xdc-node-setup/scripts" "$temp_dir/scripts" 2>/dev/null || true
+                    cp -r "$temp_dir/xdc-node-setup/configs" "$temp_dir/configs" 2>/dev/null || true
+                    download_ok=true
+                    log "Cloned repository via SSH"
+                fi
+            fi
+        fi
+    fi
+    
+    if [ "$download_ok" = false ]; then
+        error "Failed to download XDC Node Setup. Please clone manually:\n  git clone ${REPO_URL}.git\n  cd xdc-node-setup && bash setup.sh"
     fi
     
     chmod +x "$temp_dir/setup.sh"
     
-    log "Setup script downloaded"
+    log "Setup script ready"
     info "Running setup..."
     
     # Run setup with any additional arguments passed to this script
