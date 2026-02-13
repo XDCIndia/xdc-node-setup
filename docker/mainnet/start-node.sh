@@ -38,7 +38,7 @@ echo "RPC flag style: $RPC_STYLE"
 # Defaults (env vars override these)
 # ============================================================
 : "${SYNC_MODE:=full}"
-: "${GC_MODE:=archive}"  # archive required for masternodes
+: "${GC_MODE:=full}"
 : "${LOG_LEVEL:=2}"
 : "${INSTANCE_NAME:=XDC_Node}"
 : "${ENABLE_RPC:=true}"
