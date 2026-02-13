@@ -10,7 +10,20 @@ readonly CLI_VERSION="2.0.0"
 readonly CLI_NAME="xdc"
 
 # Determine installation directory
-readonly INSTALL_DIR="${INSTALL_DIR:-/opt/xdc}"
+# Auto-detect install dir
+if [[ -d "${INSTALL_DIR:-}" ]]; then
+    readonly INSTALL_DIR="$INSTALL_DIR"
+elif [[ -d "/opt/xdc-node/docker" ]]; then
+    readonly INSTALL_DIR="/opt/xdc-node"
+elif [[ -d "/opt/xdc/docker" ]]; then
+    readonly INSTALL_DIR="/opt/xdc"
+elif [[ -d "$HOME/.xdc-node/docker" ]]; then
+    readonly INSTALL_DIR="$HOME/.xdc-node"
+elif [[ -d "$HOME/workspace/xdc-node-setup/docker" ]]; then
+    readonly INSTALL_DIR="$HOME/workspace/xdc-node-setup"
+else
+    readonly INSTALL_DIR="/opt/xdc-node"
+fi
 readonly XDC_HOME="${XDC_HOME:-/opt/xdc}"
 readonly XDC_DATA="${XDC_DATA:-/root/xdcchain}"
 readonly SECURITY_STATE_FILE="/var/lib/xdc/security-state.json"
@@ -19,6 +32,24 @@ readonly SNAPSHOT_STATE_FILE="/var/lib/xdc/snapshot-state.json"
 # Default RPC settings
 readonly XDC_RPC_PORT="${XDC_RPC_PORT:-9545}"
 readonly XDC_RPC_URL="http://127.0.0.1:${XDC_RPC_PORT}"
+
+# Find XDC node container name
+find_container() {
+    for name in xdc-node xdc xdcchain mainnet-node xdcnetwork-mainnet-node; do
+        if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${name}$"; then
+            echo "$name"
+            return 0
+        fi
+    done
+    # Fallback: any container with xdc in the name
+    docker ps -a --format '{{.Names}}' 2>/dev/null | grep -i 'xdc.*node\|xdc.*chain\|xdc.*mainnet' | head -1
+}
+
+XDC_CONTAINER=""
+_get_container() {
+    [[ -n "$XDC_CONTAINER" ]] && return
+    XDC_CONTAINER=$(find_container)
+}
 
 # Colors
 setup_colors() {
@@ -545,9 +576,9 @@ EOF
     fi
     
     if [[ "$follow" == true ]]; then
-        docker logs -f --tail "$lines" xdc 2>/dev/null || error "Container not found"
+        _get_container; docker logs -f --tail "$lines" "${XDC_CONTAINER:-xdc-node}" 2>/dev/null || error "Container not found"
     else
-        docker logs --tail "$lines" xdc 2>/dev/null || error "Container not found"
+        _get_container; docker logs --tail "$lines" "${XDC_CONTAINER:-xdc-node}" 2>/dev/null || error "Container not found"
     fi
 }
 
@@ -577,7 +608,8 @@ EOF
     fi
     
     info "Stopping XDC node..."
-    if docker stop xdc 2>/dev/null; then
+    _get_container
+    if docker stop "${XDC_CONTAINER:-xdc-node}" 2>/dev/null; then
         log "Node stopped successfully"
     else
         warn "Node may already be stopped or container not found"
@@ -606,11 +638,72 @@ EOF
     fi
     
     info "Starting XDC node..."
-    if docker start xdc 2>/dev/null; then
-        log "Node started successfully"
+    
+    # Find the XDC node container (try common names)
+    local container=""
+    for name in xdc-node xdc xdcchain mainnet-node; do
+        if docker ps -a --format '{{.Names}}' | grep -q "^${name}$"; then
+            container="$name"
+            break
+        fi
+    done
+    
+    if [[ -z "$container" ]]; then
+        # Try docker compose
+        if [[ -d "$INSTALL_DIR/docker" ]]; then
+            info "Starting via docker compose..."
+            local output
+            output=$(cd "$INSTALL_DIR/docker" && docker compose up -d 2>&1) || true
+            if echo "$output" | grep -qi "port is already allocated\|address already in use\|Bind for"; then
+                warn "Port conflict detected. Attempting to resolve..."
+                # Find conflicting port and increment
+                local conflict_port
+                conflict_port=$(echo "$output" | grep -oP '0\.0\.0\.0:\K\d+' | head -1)
+                if [[ -n "$conflict_port" ]]; then
+                    local new_port=$((conflict_port + 1))
+                    warn "Port $conflict_port in use, trying $new_port..."
+                    # Update compose file
+                    sed -i "s/${conflict_port}:/${new_port}:/" "$INSTALL_DIR/docker/docker-compose.yml"
+                    (cd "$INSTALL_DIR/docker" && docker compose up -d 2>&1) && log "Node started on port $new_port" || error "Still failed. Check ports manually."
+                fi
+            elif echo "$output" | grep -qi "error\|fail"; then
+                error "Failed to start: $output"
+            else
+                log "Node started successfully"
+            fi
+        else
+            error "No XDC node container found. Run setup first: bash install.sh"
+        fi
+        return
+    fi
+    
+    # Try starting existing container
+    local output
+    output=$(docker start "$container" 2>&1) || true
+    if echo "$output" | grep -qi "^${container}$" && docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
+        log "Node started ($container)"
+    elif echo "$output" | grep -qi "port is already allocated\|address already in use"; then
+        warn "Port conflict detected. Stopping conflicting container..."
+        # Get the port and find who's using it
+        local conflict_port
+        conflict_port=$(echo "$output" | grep -oP ':\K\d+' | head -1)
+        if [[ -n "$conflict_port" ]]; then
+            local blocker
+            blocker=$(docker ps --format '{{.Names}}' --filter "publish=$conflict_port" | head -1)
+            if [[ -n "$blocker" && "$blocker" != "$container" ]]; then
+                warn "Port $conflict_port used by '$blocker'"
+            fi
+            # Try with docker compose and port+1
+            if [[ -d "$INSTALL_DIR/docker" ]]; then
+                local new_port=$((conflict_port + 1))
+                warn "Retrying with port $new_port..."
+                sed -i "s/${conflict_port}:/${new_port}:/" "$INSTALL_DIR/docker/docker-compose.yml"
+                docker rm -f "$container" 2>/dev/null
+                (cd "$INSTALL_DIR/docker" && docker compose up -d 2>&1) && log "Node started on port $new_port" || error "Still failed."
+            fi
+        fi
     else
-        error "Failed to start node. Check if container exists."
-        exit 1
+        error "Failed: $output"
     fi
 }
 
@@ -636,7 +729,8 @@ EOF
     fi
     
     info "Restarting XDC node..."
-    if docker restart xdc 2>/dev/null; then
+    _get_container
+    if docker restart "${XDC_CONTAINER:-xdc-node}" 2>/dev/null; then
         log "Node restarted successfully"
     else
         error "Failed to restart node"
@@ -1021,7 +1115,7 @@ EOF
     
     # Stop node before extraction
     info "Stopping XDC node for snapshot restore..."
-    docker stop xdc 2>/dev/null || true
+    _get_container; docker stop "${XDC_CONTAINER:-xdc-node}" 2>/dev/null || true
     
     # Update state
     jq '.stage = "extracting"' "$SNAPSHOT_STATE_FILE" > "${SNAPSHOT_STATE_FILE}.tmp" && mv "${SNAPSHOT_STATE_FILE}.tmp" "$SNAPSHOT_STATE_FILE"
