@@ -1,0 +1,63 @@
+---
+dependency:
+  name: galaxy
+driver:
+  name: docker
+platforms:
+  - name: xdc-node-ubuntu-2204
+    image: ubuntu:22.04
+    dockerfile: Dockerfile.j2
+    pre_build_image: false
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    cgroupns_mode: host
+    command: /lib/systemd/systemd
+    tmpfs:
+      - /run
+      - /tmp
+  - name: xdc-node-ubuntu-2404
+    image: ubuntu:24.04
+    dockerfile: Dockerfile.j2
+    pre_build_image: false
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    cgroupns_mode: host
+    command: /lib/systemd/systemd
+    tmpfs:
+      - /run
+      - /tmp
+provisioner:
+  name: ansible
+  inventory:
+    host_vars:
+      xdc-node-ubuntu-2204:
+        xdc_network: mainnet
+        xdc_sync_mode: full
+      xdc-node-ubuntu-2404:
+        xdc_network: testnet
+        xdc_sync_mode: fast
+  config_options:
+    defaults:
+      interpreter_python: auto_silent
+verifier:
+  name: ansible
+lint: |
+  set -e
+  yamllint .
+  ansible-lint
+scenario:
+  name: default
+  test_sequence:
+    - dependency
+    - cleanup
+    - destroy
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - side_effect
+    - verify
+    - cleanup
+    - destroy

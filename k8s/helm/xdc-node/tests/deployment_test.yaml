@@ -1,0 +1,261 @@
+suite: test xdc-node deployment
+templates:
+  - deployment.yaml
+  - statefulset.yaml
+  - service.yaml
+  - configmap.yaml
+  - secret.yaml
+  - pvc.yaml
+  - ingress.yaml
+  - servicemonitor.yaml
+  - pdb.yaml
+
+tests:
+  # Test deployment metadata
+  - it: should have correct metadata
+    set:
+      nameOverride: xdc-test
+    asserts:
+      - isKind:
+          of: StatefulSet
+      - equal:
+          path: metadata.name
+          value: xdc-test
+
+  # Test image configuration
+  - it: should use the correct image
+    set:
+      image.repository: custom/xdc
+      image.tag: v1.0.0
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: custom/xdc:v1.0.0
+
+  # Test replica count
+  - it: should have correct replica count
+    set:
+      replicaCount: 3
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+
+  # Test resource limits
+  - it: should set resource limits
+    set:
+      resources:
+        limits:
+          cpu: 4000m
+          memory: 8Gi
+        requests:
+          cpu: 2000m
+          memory: 4Gi
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.cpu
+          value: 4000m
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 8Gi
+
+  # Test persistence
+  - it: should mount persistent volume
+    set:
+      persistence.enabled: true
+      persistence.size: 100Gi
+    asserts:
+      - isKind:
+          of: StatefulSet
+      - equal:
+          path: spec.volumeClaimTemplates[0].spec.resources.requests.storage
+          value: 100Gi
+
+  # Test service configuration
+  - it: should expose correct ports
+    template: service.yaml
+    asserts:
+      - contains:
+          path: spec.ports
+          content:
+            port: 8545
+            name: rpc
+      - contains:
+          path: spec.ports
+          content:
+            port: 30303
+            name: p2p
+
+  # Test configmap
+  - it: should create configmap with genesis
+    template: configmap.yaml
+    asserts:
+      - isKind:
+          of: ConfigMap
+      - exists:
+          path: data["genesis.json"]
+
+  # Test secrets
+  - it: should create secret for passwords
+    template: secret.yaml
+    asserts:
+      - isKind:
+          of: Secret
+      - exists:
+          path: data
+
+  # Test ingress
+  - it: should create ingress when enabled
+    template: ingress.yaml
+    set:
+      ingress.enabled: true
+      ingress.hosts:
+        - host: xdc.example.com
+          paths:
+            - path: /
+              pathType: Prefix
+    asserts:
+      - isKind:
+          of: Ingress
+      - equal:
+          path: spec.rules[0].host
+          value: xdc.example.com
+
+  # Test service monitor
+  - it: should create service monitor when enabled
+    template: servicemonitor.yaml
+    set:
+      metrics.enabled: true
+      metrics.serviceMonitor.enabled: true
+    asserts:
+      - isKind:
+          of: ServiceMonitor
+
+  # Test pod disruption budget
+  - it: should create PDB when enabled
+    template: pdb.yaml
+    set:
+      pdb.enabled: true
+      pdb.minAvailable: 1
+    asserts:
+      - isKind:
+          of: PodDisruptionBudget
+      - equal:
+          path: spec.minAvailable
+          value: 1
+
+  # Test security context
+  - it: should set security context
+    set:
+      podSecurityContext:
+        fsGroup: 1000
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 1000
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.runAsUser
+          value: 1000
+
+  # Test network policy
+  - it: should have correct container port
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].ports[0].containerPort
+          value: 30303
+
+  # Test environment variables
+  - it: should set environment variables
+    set:
+      env:
+        - name: NETWORK
+          value: mainnet
+        - name: SYNC_MODE
+          value: full
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: NETWORK
+            value: mainnet
+
+  # Test node selector
+  - it: should set node selector
+    set:
+      nodeSelector:
+        kubernetes.io/arch: amd64
+    asserts:
+      - equal:
+          path: spec.template.spec.nodeSelector.kubernetes.io/arch
+          value: amd64
+
+  # Test tolerations
+  - it: should set tolerations
+    set:
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: xdc
+          effect: NoSchedule
+    asserts:
+      - contains:
+          path: spec.template.spec.tolerations
+          content:
+            key: dedicated
+            operator: Equal
+            value: xdc
+            effect: NoSchedule
+
+  # Test affinity
+  - it: should set pod affinity
+    set:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - xdc-node
+                topologyKey: kubernetes.io/hostname
+    asserts:
+      - exists:
+          path: spec.template.spec.affinity.podAntiAffinity
+
+  # Test health checks
+  - it: should configure liveness probe
+    asserts:
+      - exists:
+          path: spec.template.spec.containers[0].livenessProbe
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /health
+
+  - it: should configure readiness probe
+    asserts:
+      - exists:
+          path: spec.template.spec.containers[0].readinessProbe
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /health/ready
+
+  # Test secret references
+  - it: should reference secrets correctly
+    set:
+      secrets:
+        - name: rpc-password
+          secretName: xdc-rpc-password
+          key: password
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: rpc-password
+            mountPath: /secrets/rpc-password
+            readOnly: true

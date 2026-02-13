@@ -1,0 +1,150 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: true
+  vars:
+    xdc_user: xdc
+    xdc_group: xdc
+    xdc_home: /opt/xdc-node
+  tasks:
+    # Test user creation
+    - name: Check xdc user exists
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ xdc_user }}"
+      register: user_check
+
+    - name: Assert xdc user exists
+      ansible.builtin.assert:
+        that:
+          - user_check.ansible_facts.getent_passwd is defined
+        fail_msg: "XDC user was not created"
+
+    # Test directory structure
+    - name: Check required directories exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: dir_stats
+      loop:
+        - "{{ xdc_home }}"
+        - "{{ xdc_home }}/mainnet"
+        - "{{ xdc_home }}/scripts"
+        - "{{ xdc_home }}/logs"
+
+    - name: Assert directories exist
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isdir
+        fail_msg: "Directory {{ item.item }} does not exist"
+      loop: "{{ dir_stats.results }}"
+
+    # Test Docker installation
+    - name: Check Docker is installed
+      ansible.builtin.command: docker --version
+      changed_when: false
+      register: docker_version
+
+    - name: Assert Docker is installed
+      ansible.builtin.assert:
+        that:
+          - docker_version.rc == 0
+        fail_msg: "Docker is not installed"
+
+    # Test Docker Compose installation
+    - name: Check Docker Compose is installed
+      ansible.builtin.command: docker compose version
+      changed_when: false
+      register: compose_version
+
+    - name: Assert Docker Compose is installed
+      ansible.builtin.assert:
+        that:
+          - compose_version.rc == 0
+        fail_msg: "Docker Compose is not installed"
+
+    # Test configuration files
+    - name: Check configuration files exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: config_stats
+      loop:
+        - "{{ xdc_home }}/docker-compose.yml"
+        - "{{ xdc_home }}/mainnet/.env"
+        - "{{ xdc_home }}/mainnet/genesis.json"
+
+    - name: Assert configuration files exist
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+        fail_msg: "Config file {{ item.item }} does not exist"
+      loop: "{{ config_stats.results }}"
+
+    # Test file permissions
+    - name: Check .env file permissions
+      ansible.builtin.stat:
+        path: "{{ xdc_home }}/mainnet/.env"
+      register: env_perms
+
+    - name: Assert .env has restricted permissions
+      ansible.builtin.assert:
+        that:
+          - env_perms.stat.mode == '0600'
+        fail_msg: ".env file does not have secure permissions"
+
+    # Test systemd service (if applicable)
+    - name: Check if systemd service exists
+      ansible.builtin.stat:
+        path: /etc/systemd/system/xdc-node.service
+      register: service_file
+      ignore_errors: true
+
+    - name: Report service status
+      ansible.builtin.debug:
+        msg: "XDC node service file exists: {{ service_file.stat.exists | default(false) }}"
+
+    # Test network connectivity
+    - name: Check if required ports are available
+      ansible.builtin.wait_for:
+        port: "{{ item }}"
+        state: stopped
+        timeout: 5
+      loop:
+        - 8545
+        - 30303
+      ignore_errors: true
+      register: port_check
+
+    - name: Debug port check
+      ansible.builtin.debug:
+        msg: "Port {{ item.item }} is available"
+      loop: "{{ port_check.results }}"
+      when: item is succeeded
+
+    # Test log directory permissions
+    - name: Check log directory permissions
+      ansible.builtin.stat:
+        path: "{{ xdc_home }}/logs"
+      register: log_dir
+
+    - name: Assert log directory is writable
+      ansible.builtin.assert:
+        that:
+          - log_dir.stat.mode | int >= 0755
+        fail_msg: "Log directory is not writable"
+
+    # Verify Docker image can be pulled
+    - name: Pull XDC Docker image
+      community.docker.docker_image:
+        name: xinfinorg/xdposchain
+        tag: v2.6.8
+        source: pull
+      check_mode: true
+      register: image_pull
+
+    - name: Assert image pull would succeed
+      ansible.builtin.assert:
+        that:
+          - not image_pull.changed
+        fail_msg: "Docker image pull check failed"

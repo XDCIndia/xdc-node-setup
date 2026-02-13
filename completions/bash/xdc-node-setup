@@ -1,0 +1,70 @@
+#!/bin/bash
+#==============================================================================
+# XDC Node Setup - Bash Completion
+# Auto-completion for setup.sh and related scripts
+#==============================================================================
+
+_xdc_node_setup_completions() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    
+    # Main options
+    opts="--advanced --simple --help --version --dry-run --verbose --quiet --config --network --data-dir"
+    
+    # Subcommands for different modes
+    case "$prev" in
+        --network)
+            COMPREPLY=( $(compgen -W "mainnet testnet devnet" -- "$cur") )
+            return 0
+            ;;
+        --data-dir|--config)
+            COMPREPLY=( $(compgen -d -- "$cur") )
+            return 0
+            ;;
+        *)
+            ;;
+    esac
+    
+    # Complete with options
+    if [[ ${cur} == -* ]]; then
+        COMPREPLY=( $(compgen -W "${opts}" -- "$cur") )
+        return 0
+    fi
+}
+
+complete -F _xdc_node_setup_completions setup.sh
+complete -F _xdc_node_setup_completions ./setup.sh
+
+# Completion for helper scripts
+_xdc_scripts_completions() {
+    local cur opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    
+    case "${COMP_WORDS[0]}" in
+        backup.sh)
+            opts="create restore list delete --help --config --retention"
+            ;;
+        node-health-check.sh)
+            opts="--full --quick --notify --help --config --output"
+            ;;
+        version-check.sh)
+            opts="--update --notify --dry-run --help --config"
+            ;;
+        security-harden.sh)
+            opts="--apply --check --restore --help"
+            ;;
+        *)
+            opts="--help"
+            ;;
+    esac
+    
+    COMPREPLY=( $(compgen -W "${opts}" -- "$cur") )
+}
+
+complete -F _xdc_scripts_completions backup.sh
+complete -F _xdc_scripts_completions node-health-check.sh
+complete -F _xdc_scripts_completions version-check.sh
+complete -F _xdc_scripts_completions security-harden.sh

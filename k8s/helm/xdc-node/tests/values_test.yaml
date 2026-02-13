@@ -1,0 +1,49 @@
+suite: test xdc-node values validation
+templates: []
+tests:
+  # Test required values
+  - it: should require image repository
+    set:
+      image.repository: ""
+    asserts:
+      - failedTemplate:
+          errorMessage: "image.repository is required"
+
+  # Test network validation
+  - it: should validate network value
+    set:
+      config.network: invalid-network
+    asserts:
+      - failedTemplate:
+          errorMessage: "config.network must be one of"
+
+  # Test sync mode validation  
+  - it: should validate sync mode
+    set:
+      config.syncMode: invalid-mode
+    asserts:
+      - failedTemplate:
+          errorMessage: "config.syncMode must be one of"
+
+  # Test resource limits validation
+  - it: should warn if resources not set
+    set:
+      resources: null
+    asserts:
+      - notFailedTemplate: {}
+
+  # Test persistence size format
+  - it: should accept valid persistence size
+    set:
+      persistence.enabled: true
+      persistence.size: 100Gi
+    asserts:
+      - notFailedTemplate: {}
+
+  # Test replica count limits
+  - it: should allow single replica for standalone
+    set:
+      replicaCount: 1
+      persistence.enabled: true
+    asserts:
+      - notFailedTemplate: {}

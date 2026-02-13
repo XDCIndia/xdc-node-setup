@@ -1,485 +1,450 @@
-# Troubleshooting Guide
+# Troubleshooting Guide for XDC Node Setup
 
-Common issues and solutions for XDC Network nodes.
-
----
+This guide helps you diagnose and resolve common issues with XDC Node Setup.
 
 ## Table of Contents
 
-1. [Node Not Syncing](#1-node-not-syncing)
-2. [No Peers](#2-no-peers)
-3. [High Disk Usage](#3-high-disk-usage)
-4. [Memory Issues](#4-memory-issues)
-5. [Port Conflicts](#5-port-conflicts)
-6. [Docker Issues](#6-docker-issues)
-7. [RPC Connection Issues](#7-rpc-connection-issues)
+- [Installation Issues](#installation-issues)
+- [Docker Issues](#docker-issues)
+- [Sync Issues](#sync-issues)
+- [Network Issues](#network-issues)
+- [Performance Issues](#performance-issues)
+- [Security Issues](#security-issues)
+- [API/RPC Issues](#apirpc-issues)
+- [Backup/Restore Issues](#backuprestore-issues)
+- [Getting Help](#getting-help)
 
 ---
 
-## 1. Node Not Syncing
+## Installation Issues
 
-### Symptoms
-- Block height stays at 0 or doesn't increase
-- Sync status shows "syncing" for extended period
-- `eth_syncing` returns `true` indefinitely
+### "Permission denied" when running setup.sh
 
-### Diagnostics
+**Cause:** Script doesn't have execute permissions or user lacks privileges.
 
+**Solution:**
 ```bash
+chmod +x setup.sh
+sudo ./setup.sh
+```
+
+### "Command not found: docker"
+
+**Cause:** Docker is not installed or not in PATH.
+
+**Solution:**
+```bash
+# Install Docker
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+### "Unsupported OS" error
+
+**Cause:** Operating system not officially supported.
+
+**Solution:**
+- Supported: Ubuntu 20.04/22.04/24.04, Debian 11/12, macOS 12+
+- For other systems, use Docker deployment method
+
+---
+
+## Docker Issues
+
+### Container fails to start
+
+**Check logs:**
+```bash
+docker logs xdc-node
+```
+
+**Common causes:**
+1. Port already in use
+   ```bash
+   sudo lsof -i :8545  # Check what's using the port
+   sudo systemctl stop <service>
+   ```
+
+2. Volume permissions
+   ```bash
+   sudo chown -R $(id -u):$(id -g) ./xdcchain
+   ```
+
+3. Out of disk space
+   ```bash
+   df -h
+   docker system prune -a  # Clean up unused images
+   ```
+
+### "No such file or directory" for genesis.json
+
+**Solution:**
+```bash
+# Ensure proper file structure
+mkdir -p mainnet
+cp configs/genesis.json mainnet/
+```
+
+---
+
+## Sync Issues
+
+### Node stuck at block 0
+
+**Diagnosis:**
+```bash
+# Check peer count
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' \
+  http://localhost:8545
+
+# Expected: 0x5 (at least 5 peers)
+```
+
+**Solutions:**
+1. Check firewall rules
+2. Verify bootstrap nodes in bootnodes.list
+3. Restart with clean sync:
+   ```bash
+   docker-compose down
+   rm -rf xdcchain/XDC
+   docker-compose up -d
+   ```
+
+### Sync is very slow
+
+**Causes:**
+- Insufficient hardware resources
+- Slow disk I/O
+- Network latency
+
+**Solutions:**
+1. Check resources:
+   ```bash
+   # Monitor during sync
+   iostat -x 5  # Check disk I/O
+   top          # Check CPU/memory
+   ```
+
+2. Use SSD/NVMe storage
+3. Increase cache:
+   ```yaml
+   # docker-compose.yml
+   environment:
+     - --cache=4096
+   ```
+
+### "Ancient block chain prune" warning
+
+**Cause:** Normal operation for ancient data pruning.
+
+**Solution:** No action needed unless disk is full.
+
+---
+
+## Network Issues
+
+### Cannot connect to RPC endpoint
+
+**Check:**
+```bash
+curl -X POST http://localhost:8545 \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+```
+
+**Common fixes:**
+1. Check if container is running:
+   ```bash
+   docker ps | grep xdc-node
+   ```
+
+2. Verify port binding:
+   ```bash
+   docker port xdc-node
+   ```
+
+3. Check firewall:
+   ```bash
+   sudo ufw status
+   sudo ufw allow 8545/tcp
+   ```
+
+### Peers disconnect frequently
+
+**Causes:**
+- Clock drift
+- NAT issues
+- Unstable network
+
+**Solutions:**
+1. Sync system clock:
+   ```bash
+   sudo apt-get install ntp
+   sudo systemctl enable ntp
+   ```
+
+2. Configure port forwarding for 30303/tcp and 30303/udp
+3. Use static IP or DDNS
+
+---
+
+## Performance Issues
+
+### High CPU usage
+
+**Diagnosis:**
+```bash
+# Identify process
+ps aux | grep -E "XDC|xdc"
+
 # Check sync status
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"eth_syncing","params":[],"id":1}' | jq
-
-# Check current block
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' | jq
-
-# Check peer count
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' | jq
-
-# View node logs
-docker logs xdc --tail 100 -f
+./scripts/node-health-check.sh --full
 ```
 
-### Solutions
+**Solutions:**
+1. Limit CPU usage:
+   ```yaml
+   # docker-compose.yml
+   deploy:
+     resources:
+       limits:
+         cpus: '4.0'
+   ```
 
-**1. Check Network Connectivity**
+2. Reduce peer count:
+   ```bash
+   # In start-node.sh
+   --maxpeers 25
+   ```
+
+### High memory usage
+
+**Solutions:**
+1. Reduce cache size
+2. Limit concurrent connections
+3. Add swap space (emergency only):
+   ```bash
+   sudo fallocate -l 8G /swapfile
+   sudo chmod 600 /swapfile
+   sudo mkswap /swapfile
+   sudo swapon /swapfile
+   ```
+
+### Disk space issues
+
+**Check:**
 ```bash
-# Test P2P port connectivity
-nc -zv localhost 30303
-
-# Check firewall rules
-ufw status verbose
-
-# Verify bootnodes are reachable
-telnet 5.189.144.192 30303
+du -sh xdcchain/* | sort -h
 ```
 
-**2. Reset Sync (Last Resort)**
-```bash
-# Stop node
-docker compose -f /opt/xdc-node/docker/docker-compose.yml stop xdc-node
-
-# Backup chain data
-cp -r /root/xdcchain/XDC/chaindata /root/xdcchain/XDC/chaindata.backup.$(date +%Y%m%d)
-
-# Remove chain data (WARNING: Full resync required!)
-rm -rf /root/xdcchain/XDC/chaindata/*
-
-# Restart node
-docker compose -f /opt/xdc-node/docker/docker-compose.yml start xdc-node
-```
-
-**3. Increase Peer Count**
-```bash
-# Edit config to increase max peers
-sed -i 's/MAX_PEERS=.*/MAX_PEERS=50/' /opt/xdc-node/configs/node.env
-
-# Restart node
-docker compose -f /opt/xdc-node/docker/docker-compose.yml restart xdc-node
-```
+**Solutions:**
+1. Enable pruning (if not archive node)
+2. Move data to larger disk
+3. Set up automated cleanup:
+   ```bash
+   ./scripts/cleanup-logs.sh
+   ```
 
 ---
 
-## 2. No Peers
+## Security Issues
 
-### Symptoms
-- Peer count is 0 or very low (<3)
-- Node appears isolated
-- Sync progress stalls
+### SSH brute force attacks
 
-### Diagnostics
+**Symptoms:**
+- Many failed login attempts in `/var/log/auth.log`
 
+**Solution:**
 ```bash
-# Check peer count
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' | jq
-
-# Check network interfaces
-ip addr show
-
-# Check if P2P port is listening
-ss -tlnp | grep 30303
-
-# Check firewall status
-ufw status
-iptables -L -n | grep 30303
-```
-
-### Solutions
-
-**1. Verify Firewall Rules**
-```bash
-# Allow XDC P2P ports
-ufw allow 30303/tcp comment "XDC P2P"
-ufw allow 30303/udp comment "XDC P2P Discovery"
-ufw reload
-```
-
-**2. Check Port Forwarding (if behind NAT)**
-```bash
-# Verify NAT configuration
-docker exec xdc XDC --nat extip:$(curl -s ifconfig.me)
-```
-
-**3. Add Static Peers**
-```bash
-# Edit docker-compose.yml to add static nodes:
-# --bootnodes "enode://..."
-```
-
-**4. Check for IP Blacklisting**
-```bash
-# Check if your IP is rate-limited
-iptables -L -n | grep DROP
+# Run security hardening
+sudo ./scripts/security-harden.sh
 
 # Check fail2ban status
-fail2ban-client status
+sudo fail2ban-client status sshd
+```
+
+### Unauthorized RPC access
+
+**Symptoms:**
+- Unknown transactions
+- Unexpected API calls
+
+**Solution:**
+1. Enable authentication
+2. Bind to localhost only:
+   ```yaml
+   ports:
+     - "127.0.0.1:8545:8545"
+   ```
+3. Use firewall to restrict access
+
+### Certificate errors
+
+**Solution:**
+```bash
+# Regenerate certificates
+sudo ./scripts/regenerate-certs.sh
 ```
 
 ---
 
-## 3. High Disk Usage
+## API/RPC Issues
 
-### Symptoms
-- Disk usage >85%
-- Node performance degradation
-- Potential crashes
+### "Method not found" error
 
-### Diagnostics
+**Cause:** API namespace not enabled
 
+**Solution:**
 ```bash
-# Check disk usage
-df -h
-
-# Check XDC data size
-du -sh /root/xdcchain/XDC/*
-
-# Find large files
-find /root/xdcchain -type f -size +1G -exec ls -lh {} \;
-
-# Check log sizes
-du -sh /var/log/*
-docker system df
+# Enable required APIs
+# In start-node.sh, add to --rpcapi:
+--rpcapi eth,net,web3,admin,debug
 ```
 
-### Solutions
+### CORS errors from browser
 
-**1. Prune Old Data (Full Nodes)**
+**Solution:**
 ```bash
-# Prune ancient chain segments (requires node stop)
-docker compose -f /opt/xdc-node/docker/docker-compose.yml stop xdc-node
-
-# Run prune (if using geth-based client)
-# Note: XDC doesn't support standard pruning, consider:
-# - Switching to snap sync mode for resync
-# - Using lighter client
+# Add allowed origins
+--rpccorsdomain "http://localhost:3000,https://myapp.com"
 ```
 
-**2. Enable Log Rotation**
-```bash
-# Docker log rotation should already be configured
-# Verify in docker-compose.yml:
-grep -A5 logging /opt/xdc-node/docker/docker-compose.yml
-```
+### Rate limiting issues
 
-**3. Clean Docker Resources**
-```bash
-# Remove unused containers
-docker container prune -f
+**Symptoms:**
+- 429 Too Many Requests errors
 
-# Remove unused images
-docker image prune -af
-
-# Remove unused volumes (WARNING: Check first!)
-docker volume prune -f
-```
-
-**4. Move Data to Larger Disk**
-```bash
-# Mount new disk
-mount /dev/sdb1 /mnt/xdc-data
-
-# Sync data
-rsync -avP /root/xdcchain/ /mnt/xdc-data/
-
-# Update mount
-umount /mnt/xdc-data
-mount /dev/sdb1 /root/xdcchain
-```
+**Solution:**
+1. Implement client-side rate limiting
+2. Increase limits (if self-hosted):
+   ```yaml
+   # In docker-compose.yml
+   --rpcrps 1000
+   ```
 
 ---
 
-## 4. Memory Issues
+## Backup/Restore Issues
 
-### Symptoms
-- OOM (Out of Memory) kills
-- High swap usage
-- Slow performance
+### Backup fails with "permission denied"
 
-### Diagnostics
-
+**Solution:**
 ```bash
-# Check memory usage
-free -h
+# Fix permissions
+sudo chown -R $(whoami) /opt/xdc-node/backups
 
-# Check swap usage
-swapon -s
-
-# Check memory by process
-ps aux --sort=-%mem | head -20
-
-# Check OOM kills
-dmesg | grep -i "out of memory"
-
-# Check container memory limits
-docker stats --no-stream
+# Run backup with sudo
+sudo ./scripts/backup.sh create
 ```
 
-### Solutions
+### Restore fails with "corrupted data"
 
-**1. Increase Swap (Temporary)**
-```bash
-# Create swap file
-fallocate -l 8G /swapfile
-chmod 600 /swapfile
-mkswap /swapfile
-swapon /swapfile
+**Causes:**
+- Incomplete backup
+- Version mismatch
+- Wrong network
 
-# Make permanent
-echo '/swapfile none swap sw 0 0' >> /etc/fstab
-```
+**Solution:**
+1. Verify backup integrity:
+   ```bash
+   ./scripts/backup.sh verify <backup-file>
+   ```
 
-**2. Reduce Cache Size**
-```bash
-# Edit node config
-sed -i 's/CACHE_SIZE=.*/CACHE_SIZE=2048/' /opt/xdc-node/configs/node.env
+2. Check version compatibility
+3. Ensure correct network type
 
-# Restart node
-docker compose -f /opt/xdc-node/docker/docker-compose.yml restart xdc-node
-```
+### Encrypted backup won't decrypt
 
-**3. Add More RAM**
-Recommended RAM by node type:
-- Full Node: 32GB
-- Archive Node: 64GB
-- RPC Node: 32GB
-
-**4. Optimize System**
-```bash
-# Reduce vm.swappiness
-echo 'vm.swappiness = 10' >> /etc/sysctl.conf
-sysctl -p
-
-# Clear caches (temporary)
-echo 1 > /proc/sys/vm/drop_caches
-```
-
----
-
-## 5. Port Conflicts
-
-### Symptoms
-- "bind: address already in use" errors
-- Services fail to start
-- Connection refused errors
-
-### Diagnostics
-
-```bash
-# Check listening ports
-ss -tlnp
-
-# Find process using port
-lsof -i :30303
-lsof -i :8545
-lsof -i :8546
-
-# Check Docker port mappings
-docker ps --format "table {{.Names}}\t{{.Ports}}"
-```
-
-### Solutions
-
-**1. Change Conflicting Port**
-```bash
-# Edit docker-compose.yml to use different ports
-# Example: Change RPC port from 8545 to 18545
-sed -i 's/8545:8545/18545:8545/' /opt/xdc-node/docker/docker-compose.yml
-
-# Update firewall
-ufw allow 18545/tcp
-```
-
-**2. Kill Conflicting Process**
-```bash
-# Find and kill process
-kill -9 $(lsof -t -i:8545)
-```
-
-**3. Check for Multiple Node Instances**
-```bash
-# List all XDC processes
-ps aux | grep -i xdc
-
-# Stop duplicate containers
-docker ps | grep xdc
-docker stop <container_id>
-```
-
----
-
-## 6. Docker Issues
-
-### Symptoms
-- Containers won't start
-- Image pull failures
-- Network connectivity issues
-
-### Diagnostics
-
-```bash
-# Check Docker status
-systemctl status docker
-
-# Check Docker logs
-journalctl -u docker -f
-
-# Check disk space for Docker
-docker system df
-
-# Verify Docker network
-docker network ls
-docker network inspect xdc-network
-```
-
-### Solutions
-
-**1. Restart Docker**
-```bash
-systemctl restart docker
-```
-
-**2. Reset Docker Network**
-```bash
-# Remove and recreate network
-docker network rm xdc-network
-docker compose -f /opt/xdc-node/docker/docker-compose.yml up -d
-```
-
-**3. Clean Docker**
-```bash
-# Remove all stopped containers
-docker container prune -f
-
-# Remove unused networks
-docker network prune -f
-
-# Restart with clean state
-docker compose -f /opt/xdc-node/docker/docker-compose.yml down
-docker compose -f /opt/xdc-node/docker/docker-compose.yml up -d
-```
-
-**4. Fix Permission Issues**
-```bash
-# Fix Docker socket permissions
-chmod 666 /var/run/docker.sock
-
-# Or add user to docker group
-usermod -aG docker $USER
-```
-
----
-
-## 7. RPC Connection Issues
-
-### Symptoms
-- Cannot connect to RPC endpoint
-- Connection refused errors
-- Timeouts
-
-### Diagnostics
-
-```bash
-# Test RPC endpoint
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"net_version","params":[],"id":1}'
-
-# Check if port is listening locally
-ss -tlnp | grep 8545
-
-# Check from remote (should fail if properly secured)
-curl -X POST http://<server-ip>:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"net_version","params":[],"id":1}'
-```
-
-### Solutions
-
-**1. Verify RPC is Enabled**
-```bash
-# Check node is started with RPC flags
-docker logs xdc | grep -i "rpc"
-```
-
-**2. Use SSH Tunnel for Remote Access**
-```bash
-# Create secure tunnel
-ssh -L 8545:localhost:8545 root@your-server -p 12141
-
-# Then use localhost:8545 locally
-```
-
-**3. Configure RPC CORS (if needed)**
-```bash
-# Edit docker-compose.yml to add:
-# --rpccorsdomain "https://your-domain.com"
-```
-
-**4. Check Firewall**
-```bash
-# Ensure RPC is NOT exposed publicly
-ufw status | grep 8545
-
-# Should show no rules, or only local access
-```
-
----
-
-## Quick Reference Commands
-
-```bash
-# Restart all services
-docker compose -f /opt/xdc-node/docker/docker-compose.yml restart
-
-# View all logs
-docker compose -f /opt/xdc-node/docker/docker-compose.yml logs -f
-
-# Check node status
-curl -s -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"eth_syncing","params":[],"id":1}' | jq
-
-# Health check
-/opt/xdc-node/scripts/node-health-check.sh
-
-# Run security hardening
-/opt/xdc-node/scripts/security-harden.sh
-```
+**Solutions:**
+1. Verify you have the correct key
+2. Check if key rotation occurred
+3. Use backup key rotation script:
+   ```bash
+   ./scripts/rotate-backup-keys.sh list
+   ```
 
 ---
 
 ## Getting Help
 
-If issues persist:
+### Collect diagnostic information
 
-1. Check logs: `/var/log/xdc-*.log`
-2. Run health check: `/opt/xdc-node/scripts/node-health-check.sh --full`
-3. Review [XDC Documentation](https://docs.xdc.community/)
-4. Open an issue: https://github.com/AnilChinchawale/XDC-Node-Setup/issues
+```bash
+# Run diagnostic script
+./scripts/diagnostics.sh
+
+# Or manually collect:
+- OS version: lsb_release -a
+- Docker version: docker version
+- Node logs: docker logs xdc-node
+- System resources: free -h, df -h
+- Network: netstat -tlnp, iptables -L
+```
+
+### Community Support
+
+- **Discord:** https://discord.gg/xdc
+- **GitHub Issues:** https://github.com/XinFinOrg/XDC-Node-Setup/issues
+- **Documentation:** https://docs.xdc.network
+
+### Emergency Contacts
+
+For security issues: security@xdc.dev
+
+### Debug Mode
+
+Enable debug logging:
+```bash
+export DEBUG=1
+export LOG_LEVEL=DEBUG
+./setup.sh
+```
+
+---
+
+## Quick Reference
+
+### Common Commands
+
+```bash
+# Check node status
+curl http://localhost:8545 -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"eth_syncing","params":[],"id":1}'
+
+# View logs
+docker logs -f xdc-node --tail 100
+
+# Restart node
+docker-compose restart xdc-node
+
+# Health check
+./scripts/node-health-check.sh --full
+
+# Update node
+./scripts/version-check.sh --update
+```
+
+### Important File Locations
+
+| File/Directory | Purpose |
+|---------------|---------|
+| `/opt/xdc-node/` | Installation directory |
+| `/opt/xdc-node/mainnet/xdcchain/` | Blockchain data |
+| `/opt/xdc-node/logs/` | Log files |
+| `/opt/xdc-node/backups/` | Backup storage |
+| `/opt/xdc-node/configs/` | Configuration files |
+| `/var/log/xdc-node/` | System logs |
+
+### Default Ports
+
+| Port | Service | Protocol |
+|------|---------|----------|
+| 8545 | RPC | HTTP |
+| 8546 | WebSocket | WS |
+| 30303 | P2P | TCP/UDP |
+| 12141 | SSH (hardened) | TCP |
+| 9090 | Prometheus | HTTP |
+| 3000 | Grafana | HTTP |

@@ -1,0 +1,88 @@
+#==============================================================================
+# Log Rotation Configuration for XDC Node
+# rsyslog and logrotate configuration
+#==============================================================================
+
+/var/log/xdc-node/*.log {
+    daily
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 640 xdc-node xdc-node
+    sharedscripts
+    
+    # Compress rotated logs with gzip
+    compresscmd /bin/gzip
+    compressext .gz
+    
+    # Run post-rotation script
+    postrotate
+        # Reload rsyslog if running
+        if [ -f /var/run/rsyslogd.pid ]; then
+            kill -HUP $(cat /var/run/rsyslogd.pid) > /dev/null 2>&1 || true
+        fi
+        
+        # Send notification if logrotate failed (optional)
+        if [ $1 -ne 0 ]; then
+            logger -t logrotate "XDC node log rotation completed with errors"
+        fi
+    endscript
+    
+    # Remove old logs after rotation
+    maxage 90
+    
+    # Size limit - rotate if log exceeds 100MB
+    size 100M
+}
+
+# Separate configuration for error logs
+/var/log/xdc-node/*-error.log {
+    daily
+    rotate 60
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 640 xdc-node xdc-node
+    
+    # Keep error logs longer
+    maxage 180
+    size 50M
+}
+
+# Audit logs - keep for compliance
+/var/log/xdc-node/audit/*.log {
+    weekly
+    rotate 52
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 600 xdc-node xdc-node
+    
+    # Keep audit logs for 1 year
+    maxage 365
+    
+    # Don't rotate by size for audit logs
+    # size is not specified
+    
+    postrotate
+        # Log audit log rotation event
+        logger -t xdc-audit "Audit logs rotated"
+    endscript
+}
+
+# Benchmark logs
+/var/log/xdc-node/benchmarks.log {
+    monthly
+    rotate 12
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 644 xdc-node xdc-node
+    
+    maxage 365
+}

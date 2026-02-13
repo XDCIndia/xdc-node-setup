@@ -1,0 +1,67 @@
+#compdef xdc-node-setup
+#==============================================================================
+# XDC Node Setup - Zsh Completion
+# Auto-completion for setup.sh and related scripts
+#==============================================================================
+
+_xdc_node_setup() {
+    local curcontext="$curcontext" state line
+    typeset -A opt_args
+
+    _arguments -C \
+        '(-h --help)'{-h,--help}'[Show help message]' \
+        '(-v --version)'{-v,--version}'[Show version information]' \
+        '(-a --advanced)'{-a,--advanced}'[Enable advanced configuration mode]' \
+        '(-s --simple)'{-s,--simple}'[Use simple mode with defaults]' \
+        '(-n --dry-run)'{-n,--dry-run}'[Perform a dry run without making changes]' \
+        '--verbose[Enable verbose output]' \
+        '--quiet[Suppress non-error output]' \
+        '--network[Select network]:network:(mainnet testnet devnet)' \
+        '--data-dir[Specify data directory]:directory:_directories' \
+        '--config[Specify config file]:config file:_files' \
+        '--rpc-port[Set RPC port]:port:' \
+        '--p2p-port[Set P2P port]:port:' \
+        '--enable-monitoring[Enable monitoring stack]' \
+        '--enable-backup[Enable automated backups]' \
+        && return 0
+}
+
+compdef _xdc_node_setup setup.sh
+
+# Backup script completion
+_xdc_backup() {
+    _arguments \
+        '(-h --help)'{-h,--help}'[Show help message]' \
+        '1: :(create restore list delete)' \
+        '--config[Config file]:file:_files' \
+        '--retention[Retention days]:days:' \
+        '--encrypt[Encrypt backup]' \
+        '--type[Backup type]:type:(full chaindata keys config)'
+}
+
+compdef _xdc_backup backup.sh
+
+# Health check completion
+_xdc_health() {
+    _arguments \
+        '(-h --help)'{-h,--help}'[Show help message]' \
+        '(-f --full)'{-f,--full}'[Run full health check]' \
+        '(-q --quick)'{-q,--quick}'[Run quick health check]' \
+        '(-n --notify)'{-n,--notify}'[Send notifications]' \
+        '--output[Output format]:format:(json text)' \
+        '--config[Config file]:file:_files'
+}
+
+compdef _xdc_health node-health-check.sh
+
+# Version check completion
+_xdc_version() {
+    _arguments \
+        '(-h --help)'{-h,--help}'[Show help message]' \
+        '(-u --update)'{-u,--update}'[Apply available updates]' \
+        '(-n --notify)'{-n,--notify}'[Send notifications]' \
+        '(-d --dry-run)'{-d,--dry-run}'[Dry run mode]' \
+        '--config[Config file]:file:_files'
+}
+
+compdef _xdc_version version-check.sh

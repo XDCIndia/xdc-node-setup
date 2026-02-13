@@ -1,0 +1,115 @@
+#==============================================================================
+# Pre-commit hooks configuration for XDC Node Setup
+# https://pre-commit.com/
+#==============================================================================
+
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '^dashboard/'
+      - id: end-of-file-fixer
+        exclude: '^dashboard/'
+      - id: check-yaml
+        exclude: '^k8s/helm/xdc-node/templates/'
+      - id: check-json
+        files: '\.(json)$'
+        exclude: '^dashboard/'
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: detect-private-key
+      - id: mixed-line-ending
+      - id: no-commit-to-branch
+        args: ['--branch', 'main', '--branch', 'master']
+
+  # Shell script linting
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        args: ['-e', 'SC1090,SC1091,SC2034']
+        files: '\.sh$'
+        exclude: '^dashboard/'
+
+  # YAML linting
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.33.0
+    hooks:
+      - id: yamllint
+        args: ['-c', '.yamllint.yml']
+        files: '\.(yaml|yml)$'
+        exclude: '^(k8s/helm/xdc-node/templates/|dashboard/)'
+
+  # Ansible linting
+  - repo: https://github.com/ansible/ansible-lint
+    rev: v6.22.1
+    hooks:
+      - id: ansible-lint
+        files: 'ansible/'
+        args: ['-c', '.ansible-lint']
+
+  # Terraform linting
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.86.0
+    hooks:
+      - id: terraform_fmt
+        files: 'terraform/'
+      - id: terraform_validate
+        files: 'terraform/'
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.38.0
+    hooks:
+      - id: markdownlint
+        args: ['--config', '.markdownlint.yml']
+        exclude: '^dashboard/'
+
+  # Spell checking
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.2.6
+    hooks:
+      - id: codespell
+        args: ['--skip=package-lock.json,dashboard/*']
+
+  # GitLeaks - Secret scanning
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.1
+    hooks:
+      - id: gitleaks
+
+  # Custom hooks for XDC specific checks
+  - repo: local
+    hooks:
+      - id: validate-config-schema
+        name: Validate Config Schema
+        entry: bash -c 'jq empty configs/schema.json'
+        language: system
+        files: 'configs/schema\.json$'
+
+      - id: check-bats-tests
+        name: Check Bats Tests Exist
+        entry: bash -c 'test -f tests/unit/test_validation.bats || exit 1'
+        language: system
+        pass_filenames: false
+
+      - id: check-helm-docs
+        name: Check Helm Docs
+        entry: bash -c 'test -f k8s/helm/xdc-node/README.md || echo "Warning: Helm chart README missing"'
+        language: system
+        pass_filenames: false
+
+      - id: validate-openapi
+        name: Validate OpenAPI Spec
+        entry: bash -c 'docker run --rm -v $(pwd):/spec redocly/cli lint docs/api/openapi.yaml || true'
+        language: system
+        files: 'docs/api/openapi\.yaml$'
+        pass_filenames: false

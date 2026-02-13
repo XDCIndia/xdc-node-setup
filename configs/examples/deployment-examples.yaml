@@ -1,0 +1,305 @@
+#==============================================================================
+# Example Configurations for XDC Node Setup
+# Various deployment scenarios and configurations
+#==============================================================================
+
+#------------------------------------------------------------------------------
+# 1. Minimal Configuration (Single node, basic setup)
+#------------------------------------------------------------------------------
+minimal-deployment:
+  network: mainnet
+  mode: simple
+  resources:
+    cpu: 2
+    memory: 4Gi
+    disk: 500GB
+  monitoring: false
+  backup: false
+
+#------------------------------------------------------------------------------
+# 2. Production Configuration (High availability)
+#------------------------------------------------------------------------------
+production-deployment:
+  network: mainnet
+  mode: advanced
+  highAvailability: true
+  replicaCount: 3
+  resources:
+    cpu: 8
+    memory: 32Gi
+    disk: 2000GB
+    diskType: ssd
+  monitoring:
+    enabled: true
+    prometheus: true
+    grafana: true
+    alerting: true
+  backup:
+    enabled: true
+    schedule: "0 2 * * *"  # Daily at 2 AM
+    retention: 30
+    encryption: true
+  security:
+    hardening: true
+    firewall: true
+    fail2ban: true
+    auditLogging: true
+
+#------------------------------------------------------------------------------
+# 3. Development/Testing Configuration
+#------------------------------------------------------------------------------
+dev-deployment:
+  network: testnet
+  mode: simple
+  syncMode: fast
+  resources:
+    cpu: 2
+    memory: 4Gi
+    disk: 100GB
+  monitoring: false
+  backup: false
+  ports:
+    rpc: 18545
+    ws: 18546
+    p2p: 30304
+
+#------------------------------------------------------------------------------
+# 4. Archive Node Configuration
+#------------------------------------------------------------------------------
+archive-deployment:
+  network: mainnet
+  mode: advanced
+  syncMode: full
+  archive: true
+  gcMode: archive
+  resources:
+    cpu: 16
+    memory: 64Gi
+    disk: 8000GB
+    diskType: nvme
+  monitoring:
+    enabled: true
+    longTermMetrics: true
+    retention: 1y
+
+#------------------------------------------------------------------------------
+# 5. Masternode Configuration
+#------------------------------------------------------------------------------
+masternode-deployment:
+  network: mainnet
+  mode: advanced
+  role: masternode
+  resources:
+    cpu: 8
+    memory: 32Gi
+    disk: 2000GB
+  services:
+    - masternode
+    - rpc
+    - ws
+  staking:
+    enabled: true
+    minStake: 10000000  # 10M XDC
+  monitoring:
+    enabled: true
+    customDashboards: true
+
+#------------------------------------------------------------------------------
+# 6. RPC Endpoint Configuration (Public API)
+#------------------------------------------------------------------------------
+rpc-endpoint-deployment:
+  network: mainnet
+  mode: advanced
+  role: rpc
+  resources:
+    cpu: 8
+    memory: 32Gi
+    disk: 1000GB
+  rpc:
+    enabled: true
+    cors:
+      - "*"
+    vhosts:
+      - "*"
+    apis:
+      - eth
+      - net
+      - web3
+      - txpool
+  loadBalancer:
+    enabled: true
+    replicas: 3
+  rateLimiting:
+    enabled: true
+    requestsPerSecond: 100
+
+#------------------------------------------------------------------------------
+# 7. Kubernetes Deployment Examples
+#------------------------------------------------------------------------------
+kubernetes-examples:
+  # Minimal K8s deployment
+  minimal:
+    values:
+      replicaCount: 1
+      persistence:
+        enabled: true
+        size: 500Gi
+      resources:
+        requests:
+          cpu: 2000m
+          memory: 4Gi
+      monitoring:
+        enabled: false
+
+  # Production K8s deployment
+  production:
+    values:
+      replicaCount: 3
+      persistence:
+        enabled: true
+        size: 2000Gi
+        storageClass: fast-ssd
+      resources:
+        requests:
+          cpu: 8000m
+          memory: 32Gi
+        limits:
+          cpu: 16000m
+          memory: 64Gi
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: xdc-node
+              topologyKey: kubernetes.io/hostname
+      monitoring:
+        enabled: true
+        serviceMonitor:
+          enabled: true
+      pdb:
+        enabled: true
+        minAvailable: 2
+
+#------------------------------------------------------------------------------
+# 8. Docker Compose Examples
+#------------------------------------------------------------------------------
+docker-compose-examples:
+  # Single node
+  single:
+    services:
+      xdc-node:
+        image: xinfinorg/xdposchain:v2.6.8
+        restart: always
+        ports:
+          - "30303:30303"
+          - "8545:8545"
+        volumes:
+          - ./xdcchain:/work/xdcchain
+
+  # With monitoring
+  with-monitoring:
+    services:
+      xdc-node:
+        image: xinfinorg/xdposchain:v2.6.8
+        restart: always
+        ports:
+          - "30303:30303"
+          - "8545:8545"
+        volumes:
+          - ./xdcchain:/work/xdcchain
+      
+      prometheus:
+        image: prom/prometheus:v2.48.0
+        volumes:
+          - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+        ports:
+          - "9090:9090"
+      
+      grafana:
+        image: grafana/grafana:10.2.3
+        ports:
+          - "3000:3000"
+        environment:
+          - GF_SECURITY_ADMIN_PASSWORD=admin
+
+#------------------------------------------------------------------------------
+# 9. Cloud Provider Examples
+#------------------------------------------------------------------------------
+cloud-examples:
+  # AWS
+  aws:
+    instance_type: t3.xlarge
+    region: us-east-1
+    ebs_volume_size: 1000
+    ebs_volume_type: gp3
+    security_groups:
+      - xdc-node-sg
+    iam_role: XDCNodeRole
+    cloudwatch:
+      enabled: true
+    s3_backup:
+      enabled: true
+      bucket: xdc-node-backups
+
+  # DigitalOcean
+  digitalocean:
+    size: s-4vcpu-8gb
+    region: nyc3
+    volume_size: 500
+    tags:
+      - xdc-node
+      - production
+    monitoring: true
+    backups: true
+
+  # Hetzner
+  hetzner:
+    server_type: cpx31
+    location: nbg1
+    volume_size: 500
+    firewall:
+      - port: 30303
+        protocol: tcp
+      - port: 30303
+        protocol: udp
+      - port: 8545
+        source_ips: ["10.0.0.0/8"]
+
+#------------------------------------------------------------------------------
+# 10. Security Hardening Examples
+#------------------------------------------------------------------------------
+security-examples:
+  basic:
+    ssh:
+      port: 12141
+      passwordAuth: false
+      rootLogin: prohibit-password
+    firewall:
+      enabled: true
+      allowedPorts:
+        - 12141/tcp
+        - 30303/tcp
+        - 30303/udp
+    fail2ban:
+      enabled: true
+      maxRetries: 3
+      banTime: 3600
+
+  advanced:
+    extends: basic
+    auditd:
+      enabled: true
+      rules:
+        - /opt/xdc-node/
+        - /var/lib/xdc/
+    apparmor:
+      enabled: true
+    selinux:
+      enabled: true
+      mode: enforcing
+    kernelHardening:
+      enabled: true
+      sysctl:
+        - net.ipv4.tcp_syncookies=1
+        - net.ipv4.ip_forward=0

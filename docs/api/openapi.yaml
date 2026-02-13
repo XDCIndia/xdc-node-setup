@@ -1,0 +1,781 @@
+openapi: 3.0.3
+info:
+  title: XDC Node Dashboard API
+  description: |
+    API for managing and monitoring XDC Network nodes.
+    
+    This API provides endpoints for:
+    - Node health monitoring
+    - Blockchain metrics
+    - Peer management
+    - Configuration management
+    - Backup operations
+    
+    Authentication is required for all write operations using API keys.
+  version: 1.0.0
+  contact:
+    name: XDC Node Support
+    email: support@xdc.network
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000/api
+    description: Local development server
+  - url: https://api.xdc-node.local/api
+    description: Production server
+
+security:
+  - ApiKeyAuth: []
+  - BearerAuth: []
+
+tags:
+  - name: Health
+    description: Health check and monitoring endpoints
+  - name: Metrics
+    description: Prometheus and blockchain metrics
+  - name: Peers
+    description: Peer network management
+  - name: Node
+    description: Node operations and status
+  - name: Backup
+    description: Backup and restore operations
+  - name: Configuration
+    description: Node configuration management
+
+paths:
+  /health/live:
+    get:
+      summary: Liveness probe
+      description: |
+        Returns 200 if the dashboard API process is running.
+        This endpoint should be used by Kubernetes liveness probes.
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: API is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LivenessResponse'
+        '503':
+          description: API is not responding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /health/ready:
+    get:
+      summary: Readiness probe
+      description: |
+        Returns 200 if the API is ready to accept traffic.
+        Checks database connections and required services.
+        This endpoint should be used by Kubernetes readiness probes.
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: API is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+        '503':
+          description: API is not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /health/deep:
+    get:
+      summary: Deep health check
+      description: |
+        Comprehensive health check that validates:
+        - API service status
+        - XDC node RPC connectivity
+        - Prometheus connectivity
+        - Database connectivity (if configured)
+        - Disk space availability
+      tags:
+        - Health
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: All systems operational
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeepHealthResponse'
+        '503':
+          description: One or more systems unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeepHealthResponse'
+
+  /metrics:
+    get:
+      summary: Get node metrics
+      description: |
+        Returns current node metrics including:
+        - Block height
+        - Peer count
+        - Sync status
+        - System resources (CPU, memory, disk)
+        - Network statistics
+      tags:
+        - Metrics
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Metrics unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /metrics/prometheus:
+    get:
+      summary: Prometheus metrics endpoint
+      description: |
+        Returns metrics in Prometheus exposition format.
+        This endpoint can be scraped by Prometheus directly.
+      tags:
+        - Metrics
+      security: []
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  # HELP xdc_block_height Current block height
+                  # TYPE xdc_block_height gauge
+                  xdc_block_height 12345678
+
+  /peers:
+    get:
+      summary: List connected peers
+      description: Returns a list of currently connected peers
+      tags:
+        - Peers
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of peers to return
+          schema:
+            type: integer
+            default: 50
+            maximum: 500
+        - name: offset
+          in: query
+          description: Number of peers to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of peers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeersResponse'
+
+  /peers/count:
+    get:
+      summary: Get peer count
+      description: Returns the total number of connected peers
+      tags:
+        - Peers
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Peer count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    example: 25
+                  maxPeers:
+                    type: integer
+                    example: 50
+
+  /node/status:
+    get:
+      summary: Get node status
+      description: |
+        Returns comprehensive node status including:
+        - Current block height
+        - Sync status
+        - Client version
+        - Uptime
+        - Network ID
+      tags:
+        - Node
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Node status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeStatusResponse'
+
+  /node/block-height:
+    get:
+      summary: Get current block height
+      description: Returns the current block height of the node
+      tags:
+        - Node
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Block height
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  height:
+                    type: integer
+                    example: 12345678
+                  hexHeight:
+                    type: string
+                    example: "0xBC614E"
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /node/sync-status:
+    get:
+      summary: Get sync status
+      description: |
+        Returns synchronization status including:
+        - Whether node is syncing
+        - Current block
+        - Highest block
+        - Progress percentage
+      tags:
+        - Node
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Sync status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncStatusResponse'
+
+  /backup/create:
+    post:
+      summary: Create a backup
+      description: |
+        Initiates a backup of the node data.
+        Returns immediately with a backup ID. Use /backup/{id}/status to check progress.
+      tags:
+        - Backup
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [full, chaindata, keys, config]
+                  default: full
+                encrypt:
+                  type: boolean
+                  default: true
+                retentionDays:
+                  type: integer
+                  default: 30
+      responses:
+        '202':
+          description: Backup initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  backupId:
+                    type: string
+                    example: "bkp-20260213-abc123"
+                  status:
+                    type: string
+                    enum: [pending, running, completed, failed]
+                  startedAt:
+                    type: string
+                    format: date-time
+
+  /backup/{id}/status:
+    get:
+      summary: Get backup status
+      description: Returns the status of a backup operation
+      tags:
+        - Backup
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Backup status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupStatusResponse'
+
+  /backup/list:
+    get:
+      summary: List backups
+      description: Returns a list of available backups
+      tags:
+        - Backup
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [full, chaindata, keys, config]
+      responses:
+        '200':
+          description: List of backups
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  backups:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BackupInfo'
+
+  /config:
+    get:
+      summary: Get node configuration
+      description: Returns the current node configuration (sensitive values masked)
+      tags:
+        - Configuration
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Node configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+
+    put:
+      summary: Update node configuration
+      description: |
+        Updates node configuration. Requires node restart for some changes.
+        Sensitive fields are write-only.
+      tags:
+        - Configuration
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigUpdateRequest'
+      responses:
+        '200':
+          description: Configuration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+        '400':
+          description: Invalid configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for authentication
+
+  schemas:
+    LivenessResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum: [alive]
+          example: alive
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+          example: "1.0.0"
+
+    ReadinessResponse:
+      type: object
+      required:
+        - ready
+        - checks
+      properties:
+        ready:
+          type: boolean
+          example: true
+        checks:
+          type: object
+          properties:
+            database:
+              type: string
+              enum: [ok, error]
+            rpc:
+              type: string
+              enum: [ok, error]
+        timestamp:
+          type: string
+          format: date-time
+
+    DeepHealthResponse:
+      type: object
+      required:
+        - status
+        - checks
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy, degraded]
+        checks:
+          type: object
+          properties:
+            api:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [pass, fail]
+                responseTime:
+                  type: integer
+                  description: Response time in milliseconds
+            rpc:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [pass, fail]
+                blockHeight:
+                  type: integer
+            prometheus:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [pass, fail]
+            disk:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [pass, fail, warning]
+                usagePercent:
+                  type: integer
+                availableBytes:
+                  type: integer
+        timestamp:
+          type: string
+          format: date-time
+
+    MetricsResponse:
+      type: object
+      properties:
+        blockHeight:
+          type: integer
+          example: 12345678
+        peerCount:
+          type: integer
+          example: 25
+        syncing:
+          type: boolean
+          example: false
+        system:
+          type: object
+          properties:
+            cpuPercent:
+              type: number
+              example: 45.5
+            memoryPercent:
+              type: number
+              example: 62.3
+            diskPercent:
+              type: number
+              example: 73.1
+        network:
+          type: object
+          properties:
+            inbound:
+              type: integer
+              example: 12
+            outbound:
+              type: integer
+              example: 13
+        timestamp:
+          type: string
+          format: date-time
+
+    PeersResponse:
+      type: object
+      properties:
+        peers:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                example: "enode://abc123@192.168.1.1:30303"
+              ip:
+                type: string
+                example: "192.168.1.1"
+              port:
+                type: integer
+                example: 30303
+              name:
+                type: string
+                example: "XDC/v2.6.8"
+              network:
+                type: object
+                properties:
+                  localAddress:
+                    type: string
+                  remoteAddress:
+                    type: string
+              protocols:
+                type: object
+        total:
+          type: integer
+          example: 25
+
+    NodeStatusResponse:
+      type: object
+      properties:
+        version:
+          type: string
+          example: "v2.6.8"
+        network:
+          type: string
+          example: "mainnet"
+        chainId:
+          type: integer
+          example: 50
+        blockHeight:
+          type: integer
+          example: 12345678
+        syncStatus:
+          type: string
+          enum: [synced, syncing, stalled]
+        uptime:
+          type: string
+          example: "15d 3h 45m"
+        peers:
+          type: integer
+          example: 25
+
+    SyncStatusResponse:
+      type: object
+      properties:
+        syncing:
+          type: boolean
+          example: false
+        currentBlock:
+          type: integer
+          example: 12345678
+        highestBlock:
+          type: integer
+          example: 12345678
+        progress:
+          type: number
+          example: 100.0
+        eta:
+          type: string
+          nullable: true
+          example: null
+
+    BackupStatusResponse:
+      type: object
+      properties:
+        backupId:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+        progress:
+          type: integer
+          description: Progress percentage
+        size:
+          type: integer
+          description: Backup size in bytes
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    BackupInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [full, chaindata, keys, config]
+        size:
+          type: integer
+        encrypted:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ConfigResponse:
+      type: object
+      properties:
+        network:
+          type: string
+          example: "mainnet"
+        syncMode:
+          type: string
+          enum: [full, fast, light]
+        rpc:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            port:
+              type: integer
+            cors:
+              type: array
+              items:
+                type: string
+            vhosts:
+              type: array
+              items:
+                type: string
+        p2p:
+          type: object
+          properties:
+            port:
+              type: integer
+            maxPeers:
+              type: integer
+        metrics:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            port:
+              type: integer
+
+    ConfigUpdateRequest:
+      type: object
+      properties:
+        syncMode:
+          type: string
+          enum: [full, fast, light]
+        rpc:
+          type: object
+          properties:
+            cors:
+              type: array
+              items:
+                type: string
+        p2p:
+          type: object
+          properties:
+            maxPeers:
+              type: integer
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: "Internal server error"
+        code:
+          type: string
+          example: "INTERNAL_ERROR"
+        details:
+          type: object
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
