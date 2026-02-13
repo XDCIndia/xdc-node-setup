@@ -378,6 +378,17 @@ collect_metrics() {
     local peer_count
     peer_count=$(echo "$peers_resp" | jq -r '.result | length // 0' 2>/dev/null || echo "0")
     
+    # Auto-inject peers if count is 0
+    if [[ "$peer_count" -eq 0 ]]; then
+        log "⚠️ No peers connected — auto-injecting from SkyNet..."
+        inject_peers "$RPC_URL" && {
+            # Re-fetch peer count after injection
+            peers_resp=$(rpc_call "admin_peers")
+            peer_count=$(echo "$peers_resp" | jq -r '.result | length // 0' 2>/dev/null || echo "0")
+            log "📊 Peer count after injection: $peer_count"
+        } || warn "Auto-injection failed"
+    fi
+    
     # Build peers array
     local peers_json="[]"
     if [[ "$peer_count" -gt 0 ]]; then
@@ -589,9 +600,66 @@ execute_commands() {
                     "${SCRIPT_DIR}/version-check.sh" --auto-update &
                 fi
                 ;;
+#==============================================================================
+# Peer Injection
+#==============================================================================
+inject_peers() {
+    local rpc_url="${1:-$RPC_URL}"
+    local added=0
+    
+    # Fetch healthy peers from SkyNet API
+    local peers_resp
+    peers_resp=$(curl -s -f "${SKYNET_API}/peers/healthy?limit=20" 2>/dev/null || echo "")
+    
+    if [[ -z "$peers_resp" ]]; then
+        warn "Could not fetch peers from SkyNet API"
+        return 1
+    fi
+    
+    # Parse and add each peer
+    local enodes
+    enodes=$(echo "$peers_resp" | jq -r '.peers[]?.enode // empty' 2>/dev/null)
+    
+    if [[ -z "$enodes" ]]; then
+        warn "No peers returned from SkyNet API"
+        return 1
+    fi
+    
+    while IFS= read -r enode; do
+        [[ -z "$enode" ]] && continue
+        
+        local result
+        result=$(curl -s -X POST "$rpc_url" \
+            -H "Content-Type: application/json" \
+            -d "{\"jsonrpc\":\"2.0\",\"method\":\"admin_addPeer\",\"params\":[\"$enode\"],\"id\":1}" 2>/dev/null | jq -r '.result // false')
+        
+        if [[ "$result" == "true" ]]; then
+            ((added++)) || true
+        fi
+    done <<< "$enodes"
+    
+    log "✅ Added $added peers from SkyNet"
+    return 0
+}
+
+#==============================================================================
+# Command Queue Processing
+#==============================================================================
+process_commands() {
+    local commands="${1:-}"
+    [[ -z "$commands" ]] && return 0
+    
+    while IFS='|' read -r cmd arg; do
+        case "$cmd" in
+            restart)
+                log "🔄 Restart command received"
+                ;;
+            update)
+                log "⬆️ Update command received (version: $arg)"
+                ;;
             add_peers)
-                log "🔗 Adding peers..."
-                # Would call admin_addPeer via RPC
+                log "🔗 Adding peers from SkyNet..."
+                inject_peers || warn "Peer injection failed"
                 ;;
             *)
                 warn "Unknown command: $cmd"
@@ -703,6 +771,10 @@ main() {
                 echo "Not registered. Run: $0 --register"
             fi
             ;;
+        --add-peers|-p)
+            log "🔗 Adding peers from SkyNet API..."
+            inject_peers "$RPC_URL" || { err "Failed to add peers"; exit 1; }
+            ;;
         --heartbeat|heartbeat|"")
             load_state
             if [[ -z "$NODE_ID" ]]; then
@@ -722,6 +794,7 @@ main() {
             echo "  --daemon     Run as daemon (heartbeat every ${HEARTBEAT_INTERVAL}s)"
             echo "  --install    Install as systemd service"
             echo "  --status     Show registration status"
+            echo "  --add-peers  Fetch and add peers from SkyNet API"
             echo "  --help       Show this help"
             echo ""
             echo "Config: $CONF_FILE"
