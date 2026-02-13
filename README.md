@@ -10,11 +10,23 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/Version-2.0.0-green.svg" alt="Version: 2.0.0">
-  <img src="https://img.shields.io/badge/Ubuntu-20.04%2F22.04%2F24.04-orange.svg" alt="Ubuntu: 20.04/22.04/24.04">
+  <img src="https://img.shields.io/badge/Version-2.2.0-green.svg" alt="Version: 2.2.0">
   <img src="https://img.shields.io/badge/XDC-v2.6.0-blue.svg" alt="XDC: v2.6.0">
   <img src="https://img.shields.io/badge/Standards-Compliant-brightgreen.svg" alt="Standards: Compliant">
 </p>
+
+---
+
+## OS Compatibility
+
+| OS | Status | Notes |
+|---|---|---|
+| Ubuntu 20.04/22.04/24.04 | ✅ Full | Recommended for production |
+| Debian 11/12 | ✅ Full | Fully supported |
+| CentOS/RHEL 8/9 | ✅ Full | Enterprise deployments |
+| macOS 13+ (Intel) | ✅ Full | Docker Desktop required |
+| macOS 13+ (Apple Silicon) | ✅ Full | Native ARM64 images |
+| Windows 10/11 | ✅ via WSL2 | Docker Desktop + WSL2 required |
 
 ---
 
@@ -24,79 +36,66 @@
 
 ### Key Features
 
-- 🔒 **Security Hardening** — SSH hardening, firewall, fail2ban, audit logging, disk encryption guidance
-- 📊 **Monitoring Stack** — Prometheus + Grafana with pre-configured dashboards and alerts
+- 🔒 **Security Hardening** — SSH hardening, firewall, fail2ban, audit logging
+- 📊 **Monitoring Stack** — Prometheus + Grafana with pre-configured dashboards
 - 📦 **Version Management** — Automated version checking with optional auto-update
-- 🏥 **Health Monitoring** — Continuous health checks with Telegram notifications
-- 💾 **Backup & Recovery** — Incremental backups with GPG encryption and retention policies
-- 📋 **Compliance Reporting** — Security scorecard and compliance matrix
-- 🌐 **Web Dashboard** — Modern UI for monitoring and management
-- 🚀 **One-Line Setup** — Deploy a production-ready XDC node in minutes
-
----
-
-## 📋 Implementation Status
-
-| Standard | Status | Script/Config |
-|----------|--------|---------------|
-| SSH Hardening | ✅ Implemented | `security-harden.sh` |
-| Firewall (UFW) | ✅ Implemented | `security-harden.sh` |
-| Fail2ban | ✅ Implemented | `security-harden.sh` |
-| Audit Logging | ✅ Implemented | `security-harden.sh` |
-| Sysctl Hardening | ✅ Implemented | `security-harden.sh` |
-| Unattended Upgrades | ✅ Implemented | `security-harden.sh` |
-| LUKS Guidance | ✅ Implemented | `security-harden.sh` |
-| RPC Health Checks | ✅ Implemented | `node-health-check.sh` |
-| Block Height Comparison | ✅ Implemented | `node-health-check.sh` |
-| Security Score | ✅ Implemented | `node-health-check.sh` |
-| Version Checking | ✅ Implemented | `version-check.sh` |
-| ETag Caching | ✅ Implemented | `version-check.sh` |
-| Auto-Update | ✅ Implemented | `version-check.sh` |
-| Incremental Backups | ✅ Implemented | `backup.sh` |
-| GPG Encryption | ✅ Implemented | `backup.sh` |
-| S3/FTP Upload | ✅ Implemented | `backup.sh` |
-| Prometheus Monitoring | ✅ Implemented | `docker-compose.yml` |
-| Grafana Dashboards | ✅ Implemented | `docker-compose.yml` |
-| Alert Rules | ✅ Implemented | `alerts.yml` |
-| Alertmanager | ✅ Implemented | `alertmanager.yml` |
-| Cron Jobs | ✅ Implemented | `setup-crons.sh` |
-| Web Dashboard | ✅ Implemented | `dashboard/` |
+- 🏥 **Health Monitoring** — Continuous health checks with notifications
+- 💾 **Backup & Recovery** — Incremental backups with GPG encryption
+- 🚀 **One-Line Setup** — Deploy a production-ready node in minutes
 
 ---
 
 ## 🚀 Quick Start
 
-### Quick Start (Simple)
+### Universal Installer (All Platforms)
 
-The simplest way to get started - just run and go:
+```bash
+curl -sSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/install.sh | bash
+```
+
+### Linux (Ubuntu/Debian)
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/setup.sh | sudo bash
 ```
 
-This will:
-- Auto-detect your OS (Linux/macOS)
-- Install Docker if missing
-- Pull the XDC Docker image
-- Start a full node on mainnet with sensible defaults
-- Set up basic monitoring (Grafana + Prometheus)
-- Install the `xdc` CLI tool
+### macOS
+
+```bash
+# Install Homebrew first if needed: https://brew.sh
+curl -sSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/setup.sh | bash
+```
+
+### Windows (WSL2)
+
+```powershell
+# In PowerShell (Admin)
+wsl --install
+# Then in WSL2 Ubuntu:
+curl -sSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/setup.sh | bash
+```
+
+### Manual Installation
+
+```bash
+git clone https://github.com/AnilChinchawale/XDC-Node-Setup.git
+cd XDC-Node-Setup
+./setup.sh
+```
 
 ### Advanced Setup
-
-For more control over your node configuration:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/setup.sh | sudo bash -s -- --advanced
 ```
 
-This interactive mode lets you configure:
-- Network: mainnet / testnet (Apothem)
-- Node type: Full / Archive / RPC / Masternode
-- Sync mode: full / snap
-- Data directory location
-- RPC and P2P ports
-- Monitoring, security, notifications, auto-updates
+---
+
+## 📖 Platform-Specific Guides
+
+- [Windows Setup Guide](docs/WINDOWS-SETUP.md) — WSL2 + Docker Desktop
+- [macOS Setup Guide](docs/MACOS-SETUP.md) — Intel & Apple Silicon
+- [Linux Setup](docs/XDC-NODE-STANDARDS.md) — Production deployment standards
 
 ### Manual Installation
 
@@ -638,15 +637,31 @@ RETENTION_MONTHLY=12
 
 ## 🔧 Requirements
 
+### Hardware
+
 | Component | Minimum | Recommended |
 |-----------|---------|-------------|
-| **OS** | Ubuntu 20.04 | Ubuntu 22.04/24.04 |
 | **CPU** | 4 cores | 8+ cores |
 | **RAM** | 16GB | 32GB+ |
 | **Disk** | 500GB SSD | 1TB NVMe SSD |
 | **Network** | 100 Mbps | 1 Gbps |
 
----
+### Operating Systems
+
+| OS | Version | Notes |
+|---|---|---|
+| **Ubuntu** | 20.04 / 22.04 / 24.04 | Recommended for production |
+| **Debian** | 11 / 12 | Fully supported |
+| **CentOS/RHEL** | 8 / 9 | Enterprise deployments |
+| **macOS** | 13+ (Ventura) | Docker Desktop required |
+| **Windows** | 10 / 11 | WSL2 + Docker Desktop required |
+
+### Software Prerequisites
+
+- **Docker** 20.10+ and Docker Compose v2+
+- **curl** or **wget**
+- **jq** (JSON processor)
+- **git** (for manual installation)
 
 ## 🤝 Contributing
 

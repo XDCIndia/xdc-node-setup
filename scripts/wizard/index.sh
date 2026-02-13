@@ -9,13 +9,25 @@ set -euo pipefail
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly WIZARD_VERSION="1.0.0"
 
-# Configuration storage
-declare -A WIZARD_CONFIG
-WIZARD_CONFIG[network]=""
-WIZARD_CONFIG[role]=""
-WIZARD_CONFIG[cloud]=""
-WIZARD_CONFIG[region]=""
-WIZARD_CONFIG[instance_type]=""
+# Configuration storage - using prefixed variables for bash 3.2 compatibility
+# Instead of: declare -A WIZARD_CONFIG
+WIZARD_CONFIG_network=""
+WIZARD_CONFIG_role=""
+WIZARD_CONFIG_cloud=""
+WIZARD_CONFIG_region=""
+WIZARD_CONFIG_instance_type=""
+
+# Helper functions for config access
+set_config() {
+    local key="$1"
+    local value="$2"
+    eval "WIZARD_CONFIG_$key=\"$value\""
+}
+
+get_config() {
+    local key="$1"
+    eval "echo \${WIZARD_CONFIG_$key:-}"
+}
 
 #==============================================================================
 # Colors
@@ -158,7 +170,7 @@ step_network_select() {
         esac
     fi
     
-    WIZARD_CONFIG[network]="$choice"
+    set_config "network" "$choice"
     
     echo ""
     echo -e "${GREEN}✓${NC} Selected network: ${BOLD}$choice${NC}"

@@ -20,11 +20,23 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# Track implementation status
-declare -A IMPL_STATUS
+# Track implementation status - using prefixed variables for bash 3.2 compatibility
+# declare -A IMPL_STATUS
 TOTAL_STEPS=10
 COMPLETED_STEPS=0
 FINAL_SECURITY_SCORE=0
+
+# Helper functions for IMPL_STATUS
+set_impl_status() {
+    local key="$1"
+    local value="$2"
+    eval "IMPL_STATUS_$key=\"$value\""
+}
+
+get_impl_status() {
+    local key="$1"
+    eval "echo \${IMPL_STATUS_$key:-unknown}"
+}
 
 #==============================================================================
 # Logging

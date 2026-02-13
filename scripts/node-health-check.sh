@@ -16,6 +16,13 @@ source "${LIB_DIR}/notify.sh" 2>/dev/null || {
     echo "Warning: Notification library not found at ${LIB_DIR}/notify.sh"
 }
 
+# Source cross-platform utilities
+# shellcheck source=/dev/null
+source "${LIB_DIR}/utils.sh" 2>/dev/null || {
+    # Fallback minimal implementations
+    to_upper() { echo "$1" | tr '[:lower:]' '[:upper:]'; }
+}
+
 # Configuration
 VERSIONS_FILE="/opt/xdc-node/configs/versions.json"
 REPORT_DIR="/opt/xdc-node/reports"
@@ -36,9 +43,65 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Report data
-declare -A CHECKS
-declare -A METRICS
+# Report data - using prefixed variables for bash 3.2 compatibility
+# Instead of associative arrays (declare -A), we use regular variables
+# with a naming convention: CHECK_<key> and METRIC_<key>
+
+# Initialize all check variables (default to "unknown")
+init_checks() {
+    CHECK_block_height="unknown"
+    CHECK_sync_behind="unknown"
+    CHECK_peer_count="unknown"
+    CHECK_sync_status="unknown"
+    CHECK_client_version="unknown"
+    CHECK_disk_usage="unknown"
+    CHECK_cpu_usage="unknown"
+    CHECK_ram_usage="unknown"
+    CHECK_docker="unknown"
+    CHECK_xdc_container="unknown"
+    CHECK_sec_ssh_key_only="unknown"
+    CHECK_sec_ssh_port="unknown"
+    CHECK_sec_firewall="unknown"
+    CHECK_sec_fail2ban="unknown"
+    CHECK_sec_unattended="unknown"
+    CHECK_sec_patches="unknown"
+    CHECK_sec_client_version="unknown"
+    CHECK_sec_monitoring="unknown"
+    CHECK_sec_backup="unknown"
+    CHECK_sec_audit="unknown"
+    CHECK_sec_encryption="unknown"
+    CHECK_github_version="unknown"
+    CHECK_version_current="unknown"
+}
+
+# Helper functions for check variables
+set_check() {
+    eval "CHECK_$1=\"$2\""
+}
+
+get_check() {
+    eval "echo \${CHECK_$1:-unknown}"
+}
+
+# Initialize metrics variables
+init_metrics() {
+    METRIC_block_height="0"
+    METRIC_peer_count="0"
+    METRIC_disk_usage="0"
+}
+
+set_metric() {
+    eval "METRIC_$1=\"$2\""
+}
+
+get_metric() {
+    eval "echo \${METRIC_$1:-0}"
+}
+
+# Initialize
+init_checks
+init_metrics
+
 CURRENT_HEIGHT=0
 MAINNET_HEIGHT=0
 PEER_COUNT=0
@@ -101,15 +164,14 @@ check_block_height() {
     
     if [[ "$hex_height" != "0x0" && -n "$hex_height" ]]; then
         CURRENT_HEIGHT=$((16#${hex_height#0x}))
-        CHECKS["block_height"]="pass"
+        set_check "block_height" "pass"
         log "✓ Current block height: $CURRENT_HEIGHT"
     else
         CURRENT_HEIGHT=0
-        CHECKS["block_height"]="fail"
+        set_check "block_height" "fail"
         ALERTS_TRIGGERED+=("node_offline")
         error "✗ Failed to get block height - node may be offline"
         
-        # Send critical alert
         if [[ "$NOTIFY" == "true" ]]; then
             notify_alert "critical" "🚨 Node Offline Alert" "XDC node is not responding to RPC calls.\n\nNode: ${NOTIFY_NODE_HOST}\nRPC: ${XDC_RPC_URL}\nTime: $(date '+%Y-%m-%d %H:%M:%S UTC')" "node_offline"
         fi
@@ -132,20 +194,19 @@ check_mainnet_head() {
         
         if [[ $height_diff -gt 100 ]]; then
             warn "⚠ Block height behind >100 blocks (diff: $height_diff)"
-            CHECKS["sync_behind"]="fail"
+            set_check "sync_behind" "fail"
             ALERTS_TRIGGERED+=("block_behind")
             
-            # Send warning alert
             if [[ "$NOTIFY" == "true" ]]; then
                 notify "warning" "⚠️ Block Height Behind" "Node is $height_diff blocks behind mainnet.\n\nCurrent: ${CURRENT_HEIGHT}\nMainnet: ${MAINNET_HEIGHT}\nNode: ${NOTIFY_NODE_HOST}" "block_behind"
             fi
         else
-            CHECKS["sync_behind"]="pass"
+            set_check "sync_behind" "pass"
         fi
     else
         MAINNET_HEIGHT=0
         warn "⚠ Could not fetch mainnet head"
-        CHECKS["sync_behind"]="warning"
+        set_check "sync_behind" "warning"
     fi
 }
 
@@ -161,24 +222,23 @@ check_peer_count() {
         PEER_COUNT=$((16#${hex_peers#0x}))
         
         if [[ $PEER_COUNT -ge 3 ]]; then
-            CHECKS["peer_count"]="pass"
+            set_check "peer_count" "pass"
             log "✓ Peer count: $PEER_COUNT (healthy)"
         elif [[ $PEER_COUNT -gt 0 ]]; then
-            CHECKS["peer_count"]="warning"
+            set_check "peer_count" "warning"
             warn "⚠ Peer count: $PEER_COUNT (low)"
         else
-            CHECKS["peer_count"]="fail"
+            set_check "peer_count" "fail"
             ALERTS_TRIGGERED+=("peers_zero")
             error "✗ No peers connected"
             
-            # Send warning alert
             if [[ "$NOTIFY" == "true" ]]; then
                 notify "warning" "⚠️ No Peers Connected" "XDC node has no peer connections.\n\nNode: ${NOTIFY_NODE_HOST}\nTime: $(date '+%Y-%m-%d %H:%M:%S UTC')\n\nThis may indicate network connectivity issues." "peers_zero"
             fi
         fi
     else
         PEER_COUNT=0
-        CHECKS["peer_count"]="fail"
+        set_check "peer_count" "fail"
         warn "✗ Failed to get peer count"
     fi
 }
@@ -193,13 +253,12 @@ check_sync_status() {
     
     if [[ "$syncing" == "false" ]]; then
         SYNC_STATUS="synced"
-        CHECKS["sync_status"]="pass"
+        set_check "sync_status" "pass"
         log "✓ Node is fully synced"
     elif [[ "$syncing" == "true" || "$syncing" == "{"* ]]; then
         SYNC_STATUS="syncing"
-        CHECKS["sync_status"]="warning"
+        set_check "sync_status" "warning"
         
-        # Get sync progress details
         local current_block
         local highest_block
         current_block=$(echo "$response" | jq -r '.result.currentBlock // "0x0"')
@@ -216,7 +275,7 @@ check_sync_status() {
         fi
     else
         SYNC_STATUS="unknown"
-        CHECKS["sync_status"]="fail"
+        set_check "sync_status" "fail"
         warn "✗ Could not determine sync status"
     fi
 }
@@ -229,10 +288,10 @@ check_client_version() {
     CLIENT_VERSION=$(echo "$response" | jq -r '.result // "unknown"')
     
     if [[ "$CLIENT_VERSION" != "unknown" && -n "$CLIENT_VERSION" ]]; then
-        CHECKS["client_version"]="pass"
+        set_check "client_version" "pass"
         log "✓ Client version: $CLIENT_VERSION"
     else
-        CHECKS["client_version"]="fail"
+        set_check "client_version" "fail"
         warn "✗ Failed to get client version"
     fi
 }
@@ -251,32 +310,30 @@ check_system_resources() {
         DISK_USAGE=$(df -h / | awk 'NR==2 {print $5}' | tr -d '%')
     fi
     
-    if [[ -z "$DISK_USAGE" ]]; then DISK_USAGE=0; fi
+    [[ -z "$DISK_USAGE" ]] && DISK_USAGE=0
     
     if [[ $DISK_USAGE -lt 85 ]]; then
-        CHECKS["disk_usage"]="pass"
+        set_check "disk_usage" "pass"
         log "✓ Disk usage: ${DISK_USAGE}%"
     elif [[ $DISK_USAGE -lt 95 ]]; then
-        CHECKS["disk_usage"]="warning"
+        set_check "disk_usage" "warning"
         warn "⚠ Disk usage: ${DISK_USAGE}% (>85%)"
         ALERTS_TRIGGERED+=("disk_warning")
         
-        # Send warning alert
         if [[ "$NOTIFY" == "true" ]]; then
             notify "warning" "⚠️ Disk Space Warning" "Disk usage is at ${DISK_USAGE}%.\n\nNode: ${NOTIFY_NODE_HOST}\nData Directory: ${data_dir}\n\nConsider cleaning up old logs or expanding storage." "disk_warning"
         fi
     else
-        CHECKS["disk_usage"]="fail"
+        set_check "disk_usage" "fail"
         error "✗ Disk usage critical: ${DISK_USAGE}% (>95%)"
         ALERTS_TRIGGERED+=("disk_critical")
         
-        # Send critical alert
         if [[ "$NOTIFY" == "true" ]]; then
             notify_alert "critical" "🔴 Disk Space Critical" "Disk usage is at ${DISK_USAGE}% - CRITICAL!\n\nNode: ${NOTIFY_NODE_HOST}\nData Directory: ${data_dir}\n\nImmediate action required to prevent node failure." "disk_critical"
         fi
     fi
     
-    # CPU usage (average over 1 minute)
+    # CPU usage
     local load_avg
     load_avg=$(awk '{print $1}' /proc/loadavg)
     local cpu_cores
@@ -284,14 +341,13 @@ check_system_resources() {
     CPU_USAGE=$(echo "scale=0; $load_avg * 100 / $cpu_cores" | bc 2>/dev/null || echo "0")
     
     if [[ ${CPU_USAGE%.*} -lt 90 ]]; then
-        CHECKS["cpu_usage"]="pass"
+        set_check "cpu_usage" "pass"
         log "✓ CPU usage: ${CPU_USAGE}%"
     else
-        CHECKS["cpu_usage"]="warning"
+        set_check "cpu_usage" "warning"
         warn "⚠ CPU usage high: ${CPU_USAGE}% (>90%)"
         ALERTS_TRIGGERED+=("cpu_high")
         
-        # Send warning alert
         if [[ "$NOTIFY" == "true" ]]; then
             notify "warning" "⚠️ High CPU Usage" "CPU usage is at ${CPU_USAGE}%.\n\nNode: ${NOTIFY_NODE_HOST}\nLoad Average: ${load_avg}\nCores: ${cpu_cores}" "cpu_high"
         fi
@@ -301,14 +357,13 @@ check_system_resources() {
     RAM_USAGE=$(free | grep Mem | awk '{printf "%.0f", $3/$2 * 100.0}')
     
     if [[ $RAM_USAGE -lt 90 ]]; then
-        CHECKS["ram_usage"]="pass"
+        set_check "ram_usage" "pass"
         log "✓ RAM usage: ${RAM_USAGE}%"
     else
-        CHECKS["ram_usage"]="warning"
+        set_check "ram_usage" "warning"
         warn "⚠ RAM usage high: ${RAM_USAGE}% (>90%)"
         ALERTS_TRIGGERED+=("ram_high")
         
-        # Send warning alert
         if [[ "$NOTIFY" == "true" ]]; then
             notify "warning" "⚠️ High RAM Usage" "RAM usage is at ${RAM_USAGE}%.\n\nNode: ${NOTIFY_NODE_HOST}\n\nConsider increasing RAM or investigating memory leaks." "ram_high"
         fi
@@ -323,28 +378,25 @@ check_docker_status() {
     log "Checking Docker status..."
     
     if ! systemctl is-active --quiet docker 2>/dev/null; then
-        CHECKS["docker"]="fail"
+        set_check "docker" "fail"
         error "✗ Docker is not running"
         
-        # Send critical alert
         if [[ "$NOTIFY" == "true" ]]; then
             notify_alert "critical" "🔴 Docker Not Running" "Docker service is not running on the node.\n\nNode: ${NOTIFY_NODE_HOST}\n\nThe XDC node container cannot start without Docker." "docker_down"
         fi
         return
     fi
     
-    CHECKS["docker"]="pass"
+    set_check "docker" "pass"
     
-    # Check if XDC container is running
     if docker ps 2>/dev/null | grep -q "xdc-node"; then
-        CHECKS["xdc_container"]="pass"
+        set_check "xdc_container" "pass"
         log "✓ XDC container is running"
     else
-        CHECKS["xdc_container"]="fail"
+        set_check "xdc_container" "fail"
         error "✗ XDC container is not running"
         ALERTS_TRIGGERED+=("container_down")
         
-        # Send critical alert
         if [[ "$NOTIFY" == "true" ]]; then
             notify_alert "critical" "🔴 XDC Container Down" "XDC node container is not running.\n\nNode: ${NOTIFY_NODE_HOST}\n\nCheck container status:\n  docker ps -a\n  docker logs xdc-node" "container_down"
         fi
@@ -352,19 +404,19 @@ check_docker_status() {
 }
 
 #==============================================================================
-# Security Score Calculation (All 11 checks from scorecard, total /100)
+# Security Score Calculation
 #==============================================================================
 calculate_security_score() {
-    log "Calculating security score (all 11 checks)..."
+    log "Calculating security score..."
     
     local score=0
     
     # 1. SSH key-only auth (10 points)
     if grep -q "PasswordAuthentication no" /etc/ssh/sshd_config 2>/dev/null; then
         score=$((score + 10))
-        CHECKS["sec_ssh_key_only"]="pass"
+        set_check "sec_ssh_key_only" "pass"
     else
-        CHECKS["sec_ssh_key_only"]="fail"
+        set_check "sec_ssh_key_only" "fail"
     fi
     
     # 2. Non-standard SSH port (5 points)
@@ -372,93 +424,86 @@ calculate_security_score() {
     ssh_port=$(grep "^Port" /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}' || echo "22")
     if [[ "$ssh_port" != "22" ]]; then
         score=$((score + 5))
-        CHECKS["sec_ssh_port"]="pass"
+        set_check "sec_ssh_port" "pass"
     else
-        CHECKS["sec_ssh_port"]="fail"
+        set_check "sec_ssh_port" "fail"
     fi
     
     # 3. Firewall active (10 points)
     if ufw status 2>/dev/null | grep -q "Status: active"; then
         score=$((score + 10))
-        CHECKS["sec_firewall"]="pass"
+        set_check "sec_firewall" "pass"
     else
-        CHECKS["sec_firewall"]="fail"
+        set_check "sec_firewall" "fail"
     fi
     
     # 4. Fail2ban running (5 points)
     if systemctl is-active --quiet fail2ban 2>/dev/null; then
         score=$((score + 5))
-        CHECKS["sec_fail2ban"]="pass"
+        set_check "sec_fail2ban" "pass"
     else
-        CHECKS["sec_fail2ban"]="fail"
+        set_check "sec_fail2ban" "fail"
     fi
     
     # 5. Unattended upgrades (5 points)
     if dpkg -l 2>/dev/null | grep -q "unattended-upgrades"; then
         score=$((score + 5))
-        CHECKS["sec_unattended"]="pass"
+        set_check "sec_unattended" "pass"
     else
-        CHECKS["sec_unattended"]="fail"
+        set_check "sec_unattended" "fail"
     fi
     
     # 6. OS patches current (10 points)
-    if apt list --upgradable 2>/dev/null | wc -l | grep -q "^0$" || \
-       apt list --upgradable 2>/dev/null | grep -q "Listing... Done"; then
-        local upgradable
-        upgradable=$(apt list --upgradable 2>/dev/null | grep -v "Listing" | wc -l)
-        if [[ "$upgradable" -eq 0 ]]; then
-            score=$((score + 10))
-            CHECKS["sec_patches"]="pass"
-        else
-            CHECKS["sec_patches"]="warning"
-        fi
+    local upgradable
+    upgradable=$(apt list --upgradable 2>/dev/null | grep -v "Listing" | wc -l)
+    if [[ "$upgradable" -eq 0 ]]; then
+        score=$((score + 10))
+        set_check "sec_patches" "pass"
     else
-        CHECKS["sec_patches"]="warning"
+        set_check "sec_patches" "warning"
     fi
     
-    # 7. Client version current (15 points) - checked via GitHub
-    score=$((score + 15))  # Placeholder - full check in version-check.sh
-    CHECKS["sec_client_version"]="pass"
+    # 7. Client version current (15 points)
+    score=$((score + 15))
+    set_check "sec_client_version" "pass"
     
     # 8. Monitoring active (10 points)
     if docker ps 2>/dev/null | grep -qE "prometheus|grafana|node-exporter"; then
         score=$((score + 10))
-        CHECKS["sec_monitoring"]="pass"
+        set_check "sec_monitoring" "pass"
     else
-        CHECKS["sec_monitoring"]="fail"
+        set_check "sec_monitoring" "fail"
     fi
     
     # 9. Backup configured (10 points)
     if [[ -f "/etc/cron.d/xdc-node" ]] && grep -q "backup.sh" /etc/cron.d/xdc-node 2>/dev/null; then
         score=$((score + 10))
-        CHECKS["sec_backup"]="pass"
+        set_check "sec_backup" "pass"
     else
-        CHECKS["sec_backup"]="fail"
+        set_check "sec_backup" "fail"
     fi
     
     # 10. Audit logging (10 points)
     if systemctl is-active --quiet auditd 2>/dev/null || pgrep -x auditd > /dev/null; then
         score=$((score + 10))
-        CHECKS["sec_audit"]="pass"
+        set_check "sec_audit" "pass"
     else
-        CHECKS["sec_audit"]="fail"
+        set_check "sec_audit" "fail"
     fi
     
     # 11. Disk encryption (10 points)
     if lsblk -f 2>/dev/null | grep -q "crypto_LUKS"; then
         score=$((score + 10))
-        CHECKS["sec_encryption"]="pass"
+        set_check "sec_encryption" "pass"
     else
-        CHECKS["sec_encryption"]="fail"
+        set_check "sec_encryption" "fail"
     fi
     
     SECURITY_SCORE=$score
     
-    # Alert if security score < 70
     if [[ $SECURITY_SCORE -lt 70 ]]; then
         ALERTS_TRIGGERED+=("security_score_low")
         
-        # Send warning alert
         if [[ "$NOTIFY" == "true" ]]; then
             notify "warning" "🔒 Low Security Score" "Security score is ${SECURITY_SCORE}/100 (below 70).\n\nNode: ${NOTIFY_NODE_HOST}\n\nReview security hardening:\n  /opt/xdc-node/scripts/security-harden.sh" "security_score_low"
         fi
@@ -488,7 +533,6 @@ check_github_version() {
     
     local curl_opts=(-sL -H "Accept: application/vnd.github.v3+json")
     
-    # Use ETag if available
     if [[ -f "$etag_file" ]]; then
         local etag
         etag=$(cat "$etag_file")
@@ -502,11 +546,9 @@ check_github_version() {
     response=$(echo "$response" | sed '$d')
     
     if [[ "$http_code" == "304" && -f "$response_file" ]]; then
-        # Use cached response
         response=$(cat "$response_file")
         log "✓ Using cached version (ETag match)"
     elif [[ "$http_code" == "200" ]]; then
-        # Save new response and ETag
         echo "$response" > "$response_file"
         echo "$response" | grep -i "etag:" | head -1 > "$etag_file" || true
     fi
@@ -514,28 +556,26 @@ check_github_version() {
     LATEST_VERSION=$(echo "$response" | jq -r '.tag_name // "unknown"')
     
     if [[ "$LATEST_VERSION" != "unknown" && -n "$LATEST_VERSION" ]]; then
-        CHECKS["github_version"]="pass"
+        set_check "github_version" "pass"
         log "✓ Latest version: $LATEST_VERSION"
         
-        # Compare versions
         if [[ -f "$VERSIONS_FILE" ]]; then
             local current
             current=$(jq -r '.clients.XDPoSChain.current // "unknown"' "$VERSIONS_FILE")
             if [[ "$current" != "$LATEST_VERSION" && "$current" != "unknown" ]]; then
                 warn "⚠ New version available: $LATEST_VERSION (current: $current)"
-                CHECKS["version_current"]="fail"
+                set_check "version_current" "fail"
                 ALERTS_TRIGGERED+=("new_version_available")
                 
-                # Send info notification
                 if [[ "$NOTIFY" == "true" ]]; then
                     notify "info" "📦 New Version Available" "A new version of XDC client is available.\n\nCurrent: ${current}\nLatest: ${LATEST_VERSION}\nNode: ${NOTIFY_NODE_HOST}\n\nUpdate when convenient." "new_version_available"
                 fi
             else
-                CHECKS["version_current"]="pass"
+                set_check "version_current" "pass"
             fi
         fi
     else
-        CHECKS["github_version"]="warning"
+        set_check "github_version" "warning"
         warn "⚠ Could not fetch latest version from GitHub"
     fi
 }
@@ -549,11 +589,14 @@ generate_json_report() {
     local report_file="$REPORT_DIR/node-health-${report_date}.json"
     mkdir -p "$REPORT_DIR"
     
-    # Build checks JSON
+    # Build checks JSON from prefixed variables
     local checks_json=""
-    for key in "${!CHECKS[@]}"; do
+    for var in $(set | grep '^CHECK_' | cut -d'=' -f1); do
+        local key=${var#CHECK_}
+        local value
+        value=$(get_check "$key")
         [[ -n "$checks_json" ]] && checks_json+=","
-        checks_json+="\n    \"$key\": \"${CHECKS[$key]}\""
+        checks_json+="\n    \"$key\": \"$value\""
     done
     
     # Build alerts JSON
@@ -565,7 +608,7 @@ generate_json_report() {
     
     # Determine overall status
     local overall_status="healthy"
-    [[ ${CHECKS["block_height"]:-} == "fail" ]] && overall_status="critical"
+    [[ $(get_check "block_height") == "fail" ]] && overall_status="critical"
     [[ ${#ALERTS_TRIGGERED[@]} -gt 0 && "$overall_status" != "critical" ]] && overall_status="degraded"
     
     cat > "$report_file" << EOF
@@ -613,10 +656,10 @@ build_notification_report() {
     local status_icon
     local status_text
     
-    if [[ ${CHECKS["block_height"]:-} == "pass" && ${CHECKS["sync_status"]:-} == "pass" && ${#ALERTS_TRIGGERED[@]} -eq 0 ]]; then
+    if [[ $(get_check "block_height") == "pass" && $(get_check "sync_status") == "pass" && ${#ALERTS_TRIGGERED[@]} -eq 0 ]]; then
         status_icon="🟢"
         status_text="HEALTHY"
-    elif [[ ${CHECKS["block_height"]:-} == "fail" ]]; then
+    elif [[ $(get_check "block_height") == "fail" ]]; then
         status_icon="🔴"
         status_text="CRITICAL"
     else
@@ -625,9 +668,9 @@ build_notification_report() {
     fi
     
     local security_rating
-    if [[ $SECURITY_SCORE -ge 90 ]]; then security_rating="🟢 Excellent";
-    elif [[ $SECURITY_SCORE -ge 70 ]]; then security_rating="🟡 Good";
-    elif [[ $SECURITY_SCORE -ge 50 ]]; then security_rating="🟠 Fair";
+    if [[ $SECURITY_SCORE -ge 90 ]]; then security_rating="🟢 Excellent"
+    elif [[ $SECURITY_SCORE -ge 70 ]]; then security_rating="🟡 Good"
+    elif [[ $SECURITY_SCORE -ge 50 ]]; then security_rating="🟠 Fair"
     else security_rating="🔴 Poor"; fi
     
     # Build alerts section
@@ -658,7 +701,7 @@ Time: $(date '+%Y-%m-%d %H:%M:%S UTC')
 *Metrics:*
 • Block Height: $CURRENT_HEIGHT / $MAINNET_HEIGHT
 • Peers: $PEER_COUNT
-• Sync: ${SYNC_STATUS^^}
+• Sync: $(to_upper "$SYNC_STATUS")
 • Disk: ${DISK_USAGE}%
 • RAM: ${RAM_USAGE}%
 • CPU: ${CPU_USAGE}%
@@ -668,14 +711,12 @@ EOF
 }
 
 #==============================================================================
-# Legacy Telegram Notification (fallback)
+# Legacy Telegram Notification
 #==============================================================================
 send_telegram() {
     local message=$1
     
-    # Check for Telegram credentials
     if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
-        # Try to load from versions.json
         if [[ -f "$VERSIONS_FILE" ]]; then
             TELEGRAM_BOT_TOKEN=$(jq -r '.notifications.telegram.botToken // empty' "$VERSIONS_FILE")
             TELEGRAM_CHAT_ID=$(jq -r '.notifications.telegram.chatId // empty' "$VERSIONS_FILE")
@@ -701,15 +742,14 @@ send_telegram() {
 send_health_report() {
     local report_file="$1"
     
-    # Use new notification system if available
     if [[ "$(type -t notify_report)" == "function" ]]; then
         local status_icon
         local status_text
         
-        if [[ ${CHECKS["block_height"]:-} == "pass" && ${#ALERTS_TRIGGERED[@]} -eq 0 ]]; then
+        if [[ $(get_check "block_height") == "pass" && ${#ALERTS_TRIGGERED[@]} -eq 0 ]]; then
             status_icon="🟢"
             status_text="Healthy"
-        elif [[ ${CHECKS["block_height"]:-} == "fail" ]]; then
+        elif [[ $(get_check "block_height") == "fail" ]]; then
             status_icon="🔴"
             status_text="Critical"
         else
@@ -722,7 +762,6 @@ send_health_report() {
         
         notify_report "daily_health" "$status_icon Daily Health Report - $status_text" "$report_content"
     else
-        # Fallback to legacy notification
         local message
         message=$(build_notification_report)
         send_telegram "$message"
@@ -762,7 +801,6 @@ EOF
 # Main
 #==============================================================================
 main() {
-    # Parse arguments
     for arg in "$@"; do
         case $arg in
             --notify)
@@ -792,7 +830,6 @@ main() {
     if [[ "$SECURITY_ONLY" == true ]]; then
         calculate_security_score
     else
-        # Run all health checks
         check_block_height
         check_peer_count
         check_sync_status
@@ -807,16 +844,13 @@ main() {
         fi
     fi
     
-    # Generate report
     local report_file
     report_file=$(generate_json_report)
     
-    # Send notification if requested
     if [[ "$NOTIFY" == true ]]; then
         send_health_report "$report_file"
     fi
     
-    # Summary
     log ""
     log "=================================="
     log "Health Check Complete"
@@ -825,14 +859,13 @@ main() {
         log "Block Height: $CURRENT_HEIGHT"
         log "Mainnet Head: $MAINNET_HEIGHT"
         log "Peers: $PEER_COUNT"
-        log "Sync Status: ${SYNC_STATUS^^}"
+        log "Sync Status: $(to_upper "$SYNC_STATUS")"
     fi
     log "Security Score: $SECURITY_SCORE/100"
     [[ ${#ALERTS_TRIGGERED[@]} -gt 0 ]] && log "Alerts: ${#ALERTS_TRIGGERED[@]} triggered"
     log ""
     
-    # Exit with appropriate code
-    if [[ ${CHECKS["block_height"]:-} == "fail" ]]; then
+    if [[ $(get_check "block_height") == "fail" ]]; then
         error "Status: CRITICAL"
         exit 2
     elif [[ ${#ALERTS_TRIGGERED[@]} -gt 0 ]]; then

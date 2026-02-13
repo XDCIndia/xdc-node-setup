@@ -4,35 +4,52 @@ set -euo pipefail
 #==============================================================================
 # XDC Node Setup Script
 # Production-ready XDC Network node deployment toolkit
-# Supports: Linux (Ubuntu/Debian) and macOS
+# Supports: Linux (Ubuntu/Debian/CentOS/RHEL), macOS, and WSL2
 # Modes: Simple (default) and Advanced (--advanced)
 #==============================================================================
 
 # Script metadata
-readonly SCRIPT_VERSION="2.1.0"
+readonly SCRIPT_VERSION="2.2.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-#==============================================================================
-# OS Detection & Paths
-#==============================================================================
-detect_os() {
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        if [[ -f /etc/os-release ]]; then
-            source /etc/os-release
-            if [[ "$ID" == "ubuntu" || "$ID" == "debian" ]]; then
-                echo "linux"
-                return 0
-            fi
+# Source cross-platform utilities
+# shellcheck source=scripts/lib/utils.sh
+source "${SCRIPT_DIR}/scripts/lib/utils.sh" 2>/dev/null || {
+    # Fallback if utils.sh is not available
+    detect_os() {
+        case "$(uname -s)" in
+            Linux*)
+                if [[ -n "${WSL_DISTRO_NAME:-}" ]] || grep -qi microsoft /proc/version 2>/dev/null; then
+                    echo "wsl2"
+                else
+                    echo "linux"
+                fi
+                ;;
+            Darwin*)    echo "macos";;
+            MINGW*|CYGWIN*|MSYS*) echo "windows";;
+            *)          echo "unknown";;
+        esac
+    }
+    readonly OS=$(detect_os)
+
+    sed_inplace() {
+        local pattern="$1"
+        local file="$2"
+        if [[ "$OS" == "macos" ]]; then
+            sed -i '' "$pattern" "$file"
+        else
+            sed -i "$pattern" "$file"
         fi
-        echo "unsupported"
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        echo "macos"
-    else
-        echo "unsupported"
-    fi
+    }
+
+    to_upper() { echo "$1" | tr '[:lower:]' '[:upper:]'; }
+    to_lower() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
 }
 
-readonly OS=$(detect_os)
+# Ensure OS is set
+if [[ -z "${OS:-}" ]]; then
+    readonly OS=$(detect_os)
+fi
 
 # Set OS-specific paths
 if [[ "$OS" == "macos" ]]; then
@@ -120,19 +137,6 @@ error() {
     echo -e "$msg" | sed 's/\\033\[[0-9;]*m//g' >> "$LOG_FILE" 2>/dev/null || true
     echo -e "${RED}✗${NC} $1" >&2
     exit 1
-}
-
-#==============================================================================
-# Cross-platform utilities (GNU vs BSD)
-#==============================================================================
-sed_inplace() {
-    local pattern="$1"
-    local file="$2"
-    if [[ "$OS" == "macos" ]]; then
-        sed -i '' "$pattern" "$file"
-    else
-        sed -i "$pattern" "$file"
-    fi
 }
 
 #==============================================================================
@@ -238,32 +242,45 @@ check_root() {
 
 check_os_compatibility() {
     case "$OS" in
-        linux)
+        linux|wsl2)
             if [[ -f /etc/os-release ]]; then
+                # shellcheck source=/dev/null
                 source /etc/os-release
-                if [[ "$ID" == "ubuntu" ]]; then
-                    local version
-                    version=$(echo "$VERSION_ID" | cut -d. -f1)
-                    if [[ "$version" -ge 20 ]]; then
-                        log "Detected Ubuntu $VERSION_ID (supported)"
+                case "$ID" in
+                    ubuntu)
+                        local version
+                        version=$(echo "$VERSION_ID" | cut -d. -f1)
+                        if [[ "$version" -ge 20 ]]; then
+                            log "Detected Ubuntu $VERSION_ID (supported)"
+                            [[ "$OS" == "wsl2" ]] && info "Running on WSL2"
+                            return 0
+                        fi
+                        ;;
+                    debian)
+                        local version
+                        version=$(echo "$VERSION_ID" | cut -d. -f1)
+                        if [[ "$version" -ge 11 ]]; then
+                            log "Detected Debian $VERSION_ID (supported)"
+                            return 0
+                        fi
+                        ;;
+                    centos|rhel|fedora|rocky|almalinux)
+                        log "Detected $NAME (supported)"
+                        warn "CentOS/RHEL/Fedora support is experimental"
                         return 0
-                    fi
-                elif [[ "$ID" == "debian" ]]; then
-                    local version
-                    version=$(echo "$VERSION_ID" | cut -d. -f1)
-                    if [[ "$version" -ge 11 ]]; then
-                        log "Detected Debian $VERSION_ID (supported)"
-                        return 0
-                    fi
-                fi
+                        ;;
+                esac
             fi
-            warn "Unsupported Linux distribution. Ubuntu 20.04+ or Debian 11+ recommended."
+            warn "Unsupported Linux distribution. Ubuntu 20.04+/Debian 11+ recommended."
             ;;
         macos)
             local mac_version
             mac_version=$(sw_vers -productVersion | cut -d. -f1-2)
             log "Detected macOS $mac_version"
             info "Note: Docker Desktop is required on macOS"
+            ;;
+        windows)
+            error "Windows is not directly supported. Please use WSL2 with Docker Desktop."
             ;;
         *)
             error "Unsupported operating system: $OSTYPE"
