@@ -100,6 +100,7 @@ args=(
     --mine
     --gasprice 1
     --targetgaslimit 420000000
+    --ipcdisable
 )
 
 # Add wallet unlock if available
