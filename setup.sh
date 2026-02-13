@@ -200,8 +200,12 @@ XDC Node Setup - Production-ready XDC Network node deployment
 Usage: $(basename "$0") [OPTIONS]
 
 Options:
+  --simple            Run in simple mode (default, minimal prompts)
   --advanced          Run in advanced mode (interactive prompts)
-  --simple            Run in simple mode (default, no prompts)
+  --email EMAIL       Email for SkyNet alerts (optional)
+  --tg, --telegram    Telegram handle for SkyNet alerts (optional)
+  --client CLIENT     Client type: xdc, geth (default: xdc)
+  --type TYPE         Node type: full, archive, masternode (default: full)
   --status            Check current installation status
   --uninstall         Remove XDC node and all configurations
   --help, -h          Show this help message
@@ -225,8 +229,11 @@ Examples:
   # Simple mode (default)
   curl -sSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/setup.sh | sudo bash
 
-  # Advanced mode
-  curl -sSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/setup.sh | sudo bash -s -- --advanced
+  # With SkyNet registration (email + Telegram alerts)
+  curl -sSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/setup.sh | sudo bash -s -- --email anil@xinfin.org --tg @anilchinchawale
+
+  # Advanced mode with all options
+  sudo ./setup.sh --advanced --email alerts@example.com --type archive
 
   # Check status
   sudo ./setup.sh --status
@@ -1395,7 +1402,8 @@ uninstall_node() {
 # SkyNet Registration
 #==============================================================================
 register_with_skynet() {
-    local email=""
+    local email="${SKYNET_EMAIL:-}"
+    local telegram="${SKYNET_TELEGRAM:-}"
     local hostname
     local public_ip
     local node_role
@@ -1414,13 +1422,6 @@ register_with_skynet() {
         fi
     fi
     
-    # Ask user for contact info (both optional)
-    local telegram=""
-    echo ""
-    echo -e "${CYAN}${BOLD}📡 SkyNet Dashboard Registration${NC}"
-    echo "Register your node for monitoring and alerts on https://net.xdc.network"
-    echo ""
-    
     # Mask sensitive input: show first 2 and last 2 chars, rest as *
     mask_value() {
         local val="$1"
@@ -1432,17 +1433,33 @@ register_with_skynet() {
         fi
     }
     
-    read -rp "* Email for alerts (optional, press Enter to skip): " email
-    if [[ -n "$email" && ! "$email" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
-        warn "Invalid email format — skipping"
-        email=""
-    elif [[ -n "$email" ]]; then
-        info "Email: $(mask_value "$email")"
+    # If email/telegram not provided via CLI, prompt interactively
+    if [[ -z "$email" || -z "$telegram" ]]; then
+        echo ""
+        echo -e "${CYAN}${BOLD}📡 SkyNet Dashboard Registration${NC}"
+        echo "Register your node for monitoring and alerts on https://net.xdc.network"
+        echo ""
     fi
     
-    read -rp "* Telegram handle for alerts (optional, e.g. @username — press Enter to skip): " telegram
-    if [[ -n "$telegram" ]]; then
-        info "Telegram: $(mask_value "$telegram")"
+    if [[ -z "$email" ]]; then
+        read -rp "* Email for alerts (optional, press Enter to skip): " email
+        if [[ -n "$email" && ! "$email" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+            warn "Invalid email format — skipping"
+            email=""
+        elif [[ -n "$email" ]]; then
+            info "Email: $(mask_value "$email")"
+        fi
+    else
+        info "Using email from command line: $(mask_value "$email")"
+    fi
+    
+    if [[ -z "$telegram" ]]; then
+        read -rp "* Telegram handle for alerts (optional, e.g. @username — press Enter to skip): " telegram
+        if [[ -n "$telegram" ]]; then
+            info "Telegram: $(mask_value "$telegram")"
+        fi
+    else
+        info "Using Telegram from command line: $(mask_value "$telegram")"
     fi
     
     # Auto-detect node information
@@ -1658,9 +1675,13 @@ print_summary() {
 main() {
     # Parse arguments
     MODE="simple"
+    SKYNET_EMAIL=""
+    SKYNET_TELEGRAM=""
+    NODE_CLIENT="xdc"
+    NODE_TYPE="full"
     
-    for arg in "$@"; do
-        case $arg in
+    while [[ $# -gt 0 ]]; do
+        case $1 in
             --advanced)
                 MODE="advanced"
                 shift
@@ -1668,6 +1689,22 @@ main() {
             --simple)
                 MODE="simple"
                 shift
+                ;;
+            --email)
+                SKYNET_EMAIL="$2"
+                shift 2
+                ;;
+            --tg|--telegram)
+                SKYNET_TELEGRAM="$2"
+                shift 2
+                ;;
+            --client)
+                NODE_CLIENT="$2"
+                shift 2
+                ;;
+            --type)
+                NODE_TYPE="$2"
+                shift 2
                 ;;
             --status)
                 init_logging
@@ -1689,6 +1726,10 @@ main() {
             --version|-v)
                 echo "XDC Node Setup v$SCRIPT_VERSION"
                 exit 0
+                ;;
+            *)
+                warn "Unknown option: $1"
+                shift
                 ;;
         esac
     done
