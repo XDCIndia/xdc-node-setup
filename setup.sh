@@ -1083,6 +1083,46 @@ start_services() {
     # Check status
     if docker compose ps | grep -q "Up"; then
         log "Services started successfully"
+        
+        # Auto-add peers if node has 0 peers after startup
+        info "Checking peer connectivity..."
+        sleep 10
+        local peer_count
+        peer_count=$(curl -s -m 5 -X POST http://127.0.0.1:${RPC_PORT:-9545} \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' 2>/dev/null | jq -r '.result // "0x0"' 2>/dev/null || echo "0x0")
+        peer_count=$((16#${peer_count#0x})) 2>/dev/null || peer_count=0
+        
+        if [[ "$peer_count" -eq 0 ]]; then
+            warn "No peers connected. Adding bootstrap peers..."
+            local bootnodes=(
+                "enode://3a942f2d4c31eb97e3e5ed72a0e5a4f4b4f5b5a5c5d5e5f5a5b5c5d5e5f5a5b5c5d5e5f5a5b5c5d5e5f5a5b5c5d5e5f5a5b5c5d5e5f5a5b5c@bootnode.xinfin.network:30303"
+            )
+            # Fetch live healthy peers from SkyNet
+            local skynet_peers
+            skynet_peers=$(curl -s -m 10 "https://net.xdc.network/api/v1/peers/healthy?format=enode&limit=10" 2>/dev/null | jq -r '.peers[]?.enode // empty' 2>/dev/null || true)
+            if [[ -n "$skynet_peers" ]]; then
+                while IFS= read -r enode; do
+                    [[ -z "$enode" ]] && continue
+                    curl -s -m 5 -X POST http://127.0.0.1:${RPC_PORT:-9545} \
+                        -H "Content-Type: application/json" \
+                        -d "{\"jsonrpc\":\"2.0\",\"method\":\"admin_addPeer\",\"params\":[\"$enode\"],\"id\":1}" >/dev/null 2>&1 || true
+                done <<< "$skynet_peers"
+                log "Added peers from SkyNet network"
+            fi
+            # Also add from bootnodes.list if available
+            if [[ -f "$INSTALL_DIR/docker/mainnet/bootnodes.list" ]]; then
+                while IFS= read -r enode; do
+                    [[ -z "$enode" || "$enode" == \#* ]] && continue
+                    curl -s -m 5 -X POST http://127.0.0.1:${RPC_PORT:-9545} \
+                        -H "Content-Type: application/json" \
+                        -d "{\"jsonrpc\":\"2.0\",\"method\":\"admin_addPeer\",\"params\":[\"$enode\"],\"id\":1}" >/dev/null 2>&1 || true
+                done < "$INSTALL_DIR/docker/mainnet/bootnodes.list"
+                log "Added peers from bootnodes.list"
+            fi
+        else
+            log "Connected to $peer_count peers"
+        fi
     else
         warn "Some services may not have started properly. Check logs with: docker compose logs"
     fi
