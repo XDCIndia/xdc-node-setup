@@ -812,30 +812,33 @@ EOF
 EOF
     fi
 
-    # Add SkyNet agent service (will be started after registration)
+    # Add unified xdc-monitoring container (Prometheus exporter + SkyNet agent)
     cat >> "$INSTALL_DIR/docker/docker-compose.yml" << 'EOF'
 
-  skynet-agent:
+  xdc-monitoring:
     image: alpine:3.19
-    container_name: skynet-agent
+    container_name: xdc-monitoring
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ./skynet-agent.sh:/agent.sh:ro
+      - ./skynet-agent.sh:/opt/skynet/agent.sh:ro
       - ./skynet.conf:/etc/xdc-node/skynet.conf:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /etc/ssh/sshd_config:/host/sshd_config:ro
       - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
     environment:
       - SKYNET_CONF=/etc/xdc-node/skynet.conf
+      - XDC_RPC_URL=http://127.0.0.1:${RPC_PORT:-8545}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         apk add --no-cache bash curl jq bc procps >/dev/null 2>&1
-        chmod +x /agent.sh
-        echo "SkyNet Agent started - reporting every 60s"
+        chmod +x /opt/skynet/agent.sh
+        echo "=== XDC Monitoring Container ==="
+        echo "SkyNet Agent: heartbeat every 60s"
         while true; do
-          /agent.sh 2>/dev/null
+          /opt/skynet/agent.sh 2>/dev/null && echo "[$(date '+%H:%M:%S')] heartbeat ok" || echo "[$(date '+%H:%M:%S')] heartbeat failed"
           sleep 60
         done
     depends_on:
@@ -1336,12 +1339,11 @@ SKYNET_TELEGRAM=
 EOF
         chmod 600 "$skynet_conf"
         
-        # Set up skynet-agent for heartbeat reporting
+        # Start xdc-monitoring container for heartbeat reporting
         if [[ -f "$INSTALL_DIR/docker/skynet-agent.sh" ]]; then
-            # Start skynet-agent container using the skynet profile
-            if grep -q "skynet-agent:" "$INSTALL_DIR/docker/docker-compose.yml" 2>/dev/null; then
-                (cd "$INSTALL_DIR/docker" && docker compose --profile skynet up -d skynet-agent 2>/dev/null) || \
-                    warn "Could not start skynet-agent container. Start manually with: cd $INSTALL_DIR/docker && docker compose --profile skynet up -d skynet-agent"
+            if grep -q "xdc-monitoring:" "$INSTALL_DIR/docker/docker-compose.yml" 2>/dev/null; then
+                (cd "$INSTALL_DIR/docker" && docker compose up -d xdc-monitoring 2>/dev/null) || \
+                    warn "Could not start xdc-monitoring container. Start manually with: cd $INSTALL_DIR/docker && docker compose up -d xdc-monitoring"
             fi
             
             log "SkyNet agent running as Docker container (heartbeat every 60s)"
