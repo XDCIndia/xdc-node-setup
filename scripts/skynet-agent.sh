@@ -549,6 +549,26 @@ EOF
 }
 
 #==============================================================================
+# Write Heartbeat Status File
+#==============================================================================
+write_heartbeat_status() {
+    local status="$1"
+    local error="${2:-}"
+    
+    # Write status to shared file for dashboard
+    cat > /tmp/skynet-heartbeat.json <<EOF
+{
+    "lastHeartbeat": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+    "status": "$status",
+    "skynetUrl": "$SKYNET_API",
+    "nodeId": "$NODE_ID",
+    "nodeName": "$NODE_NAME",
+    "error": "$error"
+}
+EOF
+}
+
+#==============================================================================
 # Push Heartbeat
 #==============================================================================
 push_heartbeat() {
@@ -559,6 +579,7 @@ push_heartbeat() {
     response=$(api_call POST "/nodes/heartbeat" "$payload")
     
     if echo "$response" | jq -e '.ok' >/dev/null 2>&1; then
+        write_heartbeat_status "success" ""
         local commands
         commands=$(echo "$response" | jq -r '.commands[]?' 2>/dev/null)
         if [[ -n "$commands" ]]; then
@@ -570,6 +591,7 @@ push_heartbeat() {
         local error_msg
         error_msg=$(echo "$response" | jq -r '.error // "Unknown error"')
         err "Heartbeat failed: $error_msg"
+        write_heartbeat_status "failed" "$error_msg"
         
         # If node not found, re-register
         if [[ "$error_msg" == *"not found"* || "$error_msg" == *"NOT_FOUND"* ]]; then
@@ -784,9 +806,17 @@ main() {
             load_state
             if [[ -z "$NODE_ID" ]]; then
                 log "Not registered yet, auto-registering..."
-                register_node || { err "Registration failed"; exit 1; }
+                register_node || { 
+                    err "Registration failed"
+                    write_heartbeat_status "registration_failed" "Failed to register node"
+                    exit 1
+                }
             fi
-            push_heartbeat && log "✅ Heartbeat sent" || err "Heartbeat failed"
+            if push_heartbeat; then
+                log "✅ Heartbeat sent"
+            else
+                err "Heartbeat failed"
+            fi
             ;;
         --help|-h)
             echo "XDC SkyNet Agent — Monitor your XDC node"

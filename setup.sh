@@ -1263,6 +1263,50 @@ setup_security() {
 }
 
 #==============================================================================
+# Log Rotation Cron Setup
+#==============================================================================
+setup_log_rotation_cron() {
+    log "Setting up log rotation cron job..."
+    
+    # Ensure log rotation script exists and is executable
+    local log_rotate_script="${SCRIPT_DIR}/scripts/log-rotate.sh"
+    if [[ ! -f "$log_rotate_script" ]]; then
+        warn "Log rotation script not found at $log_rotate_script, skipping cron setup"
+        return 0
+    fi
+    
+    chmod +x "$log_rotate_script"
+    
+    # Create cron job for log rotation (runs daily at 2:00 AM)
+    local cron_cmd="0 2 * * * ${log_rotate_script} >> /var/log/xdc-logrotate.log 2>&1"
+    local cron_comment="# XDC Node log rotation (daily 2:00 AM)"
+    
+    # Check if cron job already exists
+    if crontab -l 2>/dev/null | grep -qF "$log_rotate_script"; then
+        info "Log rotation cron job already exists"
+        return 0
+    fi
+    
+    # Add cron job
+    (
+        crontab -l 2>/dev/null || true
+        echo ""
+        echo "$cron_comment"
+        echo "$cron_cmd"
+    ) | crontab -
+    
+    log "Log rotation cron job installed (runs daily at 2:00 AM)"
+    info "Log rotation policy: compress daily, keep 90 days, auto-delete old logs"
+    info "Manual rotation: xdc logs --rotate"
+    info "Clean old logs: xdc logs --clean"
+    
+    # Ensure log directory exists
+    mkdir -p /var/log
+    touch /var/log/xdc-logrotate.log
+    chmod 644 /var/log/xdc-logrotate.log
+}
+
+#==============================================================================
 # CLI Tool Installation
 #==============================================================================
 install_cli_tool() {
@@ -1942,6 +1986,7 @@ main() {
     setup_docker_compose
     setup_monitoring || warn "Monitoring setup had issues (non-fatal)"
     setup_security || warn "Security setup had issues (non-fatal)"
+    setup_log_rotation_cron || warn "Log rotation cron setup had issues (non-fatal)"
     install_cli_tool || warn "CLI tool installation had issues (non-fatal)"
     
     # Start services — this is the critical step

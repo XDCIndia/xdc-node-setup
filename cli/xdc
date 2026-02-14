@@ -1532,12 +1532,16 @@ cmd_logs() {
     local lines=50
     local follow=false
     local client=""
+    local rotate=false
+    local clean=false
     
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --lines|-n) lines="$2"; shift 2 ;;
             --follow|-f) follow=true; shift ;;
             --client) client="$2"; shift 2 ;;
+            --rotate) rotate=true; shift ;;
+            --clean) clean=true; shift ;;
             --help|-h)
                 cat << EOF
 $(c BOLD)xdc-node logs$(c NC) — Tail node logs
@@ -1549,10 +1553,20 @@ $(c BOLD)OPTIONS:$(c NC)
     --lines, -n N    Number of lines to show (default: 50)
     --follow, -f     Follow log output (like tail -f)
     --client NAME    Specific client logs (geth, erigon)
+    --rotate         Manually trigger log rotation (move, compress, cleanup)
+    --clean          Remove all old logs from oldlogs/ directory
     --help           Show this help
 
-$(c BOLD)EXAMPLE:$(c NC)
-    xdc-node logs -f -n 100
+$(c BOLD)EXAMPLES:$(c NC)
+    xdc-node logs -f -n 100        # Follow logs with 100 lines
+    xdc-node logs --rotate         # Manually rotate logs
+    xdc-node logs --clean          # Remove all old logs
+
+$(c BOLD)LOG ROTATION:$(c NC)
+    Logs are automatically rotated daily via cron (2:00 AM).
+    - Logs older than 24 hours are moved to oldlogs/ and compressed
+    - Logs older than 90 days are automatically deleted
+    - Docker container logs use json-file driver (max-size: 100m, max-file: 5)
 
 EOF
                 return 0
@@ -1560,6 +1574,62 @@ EOF
             *) shift ;;
         esac
     done
+    
+    # Handle log rotation command
+    if [[ "$rotate" == "true" ]]; then
+        info "Manually triggering log rotation..."
+        local rotate_script="${SCRIPTS_DIR}/log-rotate.sh"
+        
+        if [[ ! -f "$rotate_script" ]]; then
+            die "Log rotation script not found at $rotate_script"
+        fi
+        
+        if [[ ! -x "$rotate_script" ]]; then
+            chmod +x "$rotate_script" 2>/dev/null || true
+        fi
+        
+        if bash "$rotate_script"; then
+            log "Log rotation completed successfully"
+        else
+            die "Log rotation failed. Check ${XDC_NETWORK:-mainnet}/.xdc-node/log-rotation.log for details"
+        fi
+        return 0
+    fi
+    
+    # Handle clean old logs command
+    if [[ "$clean" == "true" ]]; then
+        local oldlogs_dir="${PROJECT_DIR}/${XDC_NETWORK}/xdcchain/oldlogs"
+        
+        if [[ ! -d "$oldlogs_dir" ]]; then
+            warn "No oldlogs directory found at $oldlogs_dir"
+            return 0
+        fi
+        
+        local count
+        count=$(find "$oldlogs_dir" -type f 2>/dev/null | wc -l)
+        
+        if [[ $count -eq 0 ]]; then
+            info "No old logs found to clean"
+            return 0
+        fi
+        
+        echo ""
+        warn "This will permanently delete $count old log file(s) from $oldlogs_dir"
+        read -p "$(echo -e "$(c BOLD)Are you sure? [y/N]$(c NC) ")" -n 1 -r
+        echo ""
+        
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            info "Removing old logs..."
+            if rm -rf "${oldlogs_dir:?}"/*; then
+                log "Successfully removed $count old log file(s)"
+            else
+                die "Failed to remove old logs"
+            fi
+        else
+            info "Clean cancelled"
+        fi
+        return 0
+    fi
     
     # Find log files
     local log_file=""
@@ -1569,6 +1639,7 @@ EOF
         "${XDC_DATA}/xdc.log"
         "${XDC_DATA}/geth.log"
         "${XDC_DATA}/erigon.log"
+        "${XDC_DATA}/XDC.log"
     )
     
     for log in "${possible_logs[@]}"; do

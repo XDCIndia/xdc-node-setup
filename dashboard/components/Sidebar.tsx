@@ -36,6 +36,15 @@ interface NetworkStatus {
   online: boolean;
 }
 
+interface HeartbeatStatus {
+  enabled: boolean;
+  connected: boolean;
+  lastHeartbeat: string | null;
+  lastHeartbeatSeconds: number | null;
+  statusText: string;
+  nodeId: string | null;
+}
+
 function formatBlock(num: number): string {
   if (num >= 1e6) return (num / 1e6).toFixed(1) + 'M';
   if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
@@ -55,6 +64,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [networkStatus, setNetworkStatus] = useState<NetworkStatus | null>(null);
+  const [heartbeatStatus, setHeartbeatStatus] = useState<HeartbeatStatus | null>(null);
   const [lastFetched, setLastFetched] = useState<number>(0);
   const [, setTick] = useState(0);
 
@@ -71,9 +81,32 @@ export default function Sidebar() {
     }
   };
 
+  const fetchHeartbeatStatus = async () => {
+    try {
+      const res = await fetch('/api/heartbeat', { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setHeartbeatStatus({
+          enabled: data.enabled,
+          connected: data.connected,
+          lastHeartbeat: data.lastHeartbeat,
+          lastHeartbeatSeconds: data.lastHeartbeatSeconds,
+          statusText: data.statusText,
+          nodeId: data.nodeId,
+        });
+      }
+    } catch {
+      setHeartbeatStatus(null);
+    }
+  };
+
   useEffect(() => {
     fetchNetworkStatus();
-    const interval = setInterval(fetchNetworkStatus, 30000);
+    fetchHeartbeatStatus();
+    const interval = setInterval(() => {
+      fetchNetworkStatus();
+      fetchHeartbeatStatus();
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
