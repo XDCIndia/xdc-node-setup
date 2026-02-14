@@ -1524,7 +1524,8 @@ EOF
 # Command: start
 #==============================================================================
 cmd_start() {
-    local skip_install=false
+    local network=""
+    local install_args=""
     
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -1533,16 +1534,27 @@ cmd_start() {
 $(c BOLD)xdc-node start$(c NC) — Start node
 
 $(c BOLD)USAGE:$(c NC)
-    xdc-node start
+    xdc-node start [OPTIONS]
 
 $(c BOLD)DESCRIPTION:$(c NC)
     Starts the XDC node. If no configuration is found, runs install.sh first.
 
 $(c BOLD)OPTIONS:$(c NC)
-    --help    Show this help
+    --network NETWORK   Network: mainnet, testnet, devnet, apothem (default: mainnet)
+    --help              Show this help
+
+$(c BOLD)EXAMPLES:$(c NC)
+    xdc-node start                          # Start mainnet
+    xdc-node start --network testnet        # Start testnet
+    xdc-node start --network devnet         # Start devnet
 
 EOF
                 return 0
+                ;;
+            --network)
+                network="$2"
+                install_args="$install_args --network $network"
+                shift 2
                 ;;
             *) shift ;;
         esac
@@ -1576,9 +1588,9 @@ EOF
             fi
         fi
         
-        # Run install.sh
-        log "Running $install_script..."
-        if bash "$install_script"; then
+        # Run install.sh with network arg
+        log "Running $install_script $install_args..."
+        if bash "$install_script" $install_args; then
             log "Installation complete. Starting node..."
         else
             die "Installation failed. Please check the output above."
@@ -1614,20 +1626,34 @@ EOF
         
         cd "$(dirname "$docker_compose")" || die "Failed to change to docker directory"
         
-        if docker compose up -d xdc-node xdc-dashboard 2>/dev/null; then
-            stop_spinner true "Node started"
-            log "XDC node started via docker compose"
-            
-            # Wait for RPC
-            sleep 5
-            
-            # Inject peers
-            inject_peers || true
-            return 0
+        # Set network if specified
+        local network_env=""
+        [[ -n "$network" ]] && network_env="NETWORK=$network"
+        
+        if [[ -n "$network_env" ]]; then
+            if $network_env docker compose up -d xdc-node xdc-dashboard 2>/dev/null; then
+                stop_spinner true "Node started ($network)"
+            else
+                stop_spinner false "Start failed"
+                die "Failed to start XDC node. Check 'docker compose logs' for details."
+            fi
         else
-            stop_spinner false "Start failed"
-            die "Failed to start XDC node. Check 'docker compose logs' for details."
+            if docker compose up -d xdc-node xdc-dashboard 2>/dev/null; then
+                stop_spinner true "Node started"
+            else
+                stop_spinner false "Start failed"
+                die "Failed to start XDC node. Check 'docker compose logs' for details."
+            fi
         fi
+        
+        log "XDC node started via docker compose"
+        
+        # Wait for RPC
+        sleep 5
+        
+        # Inject peers
+        inject_peers || true
+        return 0
     fi
     
     # Fall back to systemctl
