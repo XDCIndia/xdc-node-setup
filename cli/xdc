@@ -1586,12 +1586,13 @@ $(c BOLD)DESCRIPTION:$(c NC)
 
 $(c BOLD)OPTIONS:$(c NC)
     --network NETWORK   Network: mainnet, testnet, devnet, apothem (default: mainnet)
+    --monitoring        Start with full monitoring stack (Prometheus, Grafana, etc.)
     --help              Show this help
 
 $(c BOLD)EXAMPLES:$(c NC)
     xdc-node start                          # Start mainnet
+    xdc-node start --monitoring             # Start with monitoring stack
     xdc-node start --network testnet        # Start testnet
-    xdc-node start --network devnet         # Start devnet
 
 EOF
                 return 0
@@ -1600,6 +1601,10 @@ EOF
                 network="$2"
                 install_args="$install_args --network $network"
                 shift 2
+                ;;
+            --monitoring)
+                local monitoring=true
+                shift
                 ;;
             *) shift ;;
         esac
@@ -1671,19 +1676,26 @@ EOF
         
         cd "$(dirname "$docker_compose")" || die "Failed to change to docker directory"
         
-        # Set network if specified
-        local network_env=""
-        [[ -n "$network" ]] && network_env="NETWORK=$network"
+        # Build compose command with optional monitoring stack
+        local compose_cmd="docker compose"
+        if [[ "${monitoring:-false}" == "true" ]] && [[ -f "docker-compose.monitoring.yml" ]]; then
+            compose_cmd="docker compose -f docker-compose.yml -f docker-compose.monitoring.yml"
+            info "Including monitoring stack (Prometheus, Grafana, etc.)"
+        fi
         
-        if [[ -n "$network_env" ]]; then
-            if $network_env docker compose up -d 2>/dev/null; then
+        # Set network env and start
+        local env_prefix=""
+        [[ -n "$network" ]] && env_prefix="NETWORK=$network"
+        
+        if [[ -n "$env_prefix" ]]; then
+            if $env_prefix $compose_cmd up -d 2>/dev/null; then
                 stop_spinner true "Node started ($network)"
             else
                 stop_spinner false "Start failed"
                 die "Failed to start XDC node. Check 'docker compose logs' for details."
             fi
         else
-            if docker compose up -d 2>/dev/null; then
+            if $compose_cmd up -d 2>/dev/null; then
                 stop_spinner true "Node started"
             else
                 stop_spinner false "Start failed"

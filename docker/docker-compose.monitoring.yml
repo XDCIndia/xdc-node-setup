@@ -1,0 +1,235 @@
+#==============================================================================
+# XDC Node Monitoring Stack
+# Usage: docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+# Or:    xdc start --monitoring
+#==============================================================================
+
+services:
+  #--------------------------------------------------------------------------
+  # Prometheus - Metrics collection
+  #--------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: xdc-prometheus
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=10GB'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--alertmanager.url=http://alertmanager:9093'
+    networks:
+      - xdc-monitoring
+    depends_on:
+      xdc-node:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  #--------------------------------------------------------------------------
+  # Node Exporter - System metrics
+  #--------------------------------------------------------------------------
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: xdc-node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+      - /var/lib/node_exporter/textfile_collector:/textfile_collector:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|run|var/run)($$|/)'
+      - '--collector.filesystem.fs-types-exclude=^(sys|proc|auto|cgroup|devpts|ns|au|fuse\.lxc|mqueue)(fs|)$$'
+      - '--collector.textfile.directory=/textfile_collector'
+    networks:
+      - xdc-monitoring
+    expose:
+      - "9100"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9100/metrics | grep -q 'node_' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  #--------------------------------------------------------------------------
+  # cAdvisor - Container metrics
+  #--------------------------------------------------------------------------
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: xdc-cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /dev/disk/:/dev/disk:ro
+      - /etc/machine-id:/etc/machine-id:ro
+    command:
+      - '--housekeeping_interval=15s'
+      - '--docker_only=true'
+      - '--store_container_labels=true'
+      - '--allow_dynamic_housekeeping=true'
+      - '--enable_load_reader=true'
+    networks:
+      - xdc-monitoring
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  #--------------------------------------------------------------------------
+  # Grafana - Visualization (port 3000)
+  #--------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: xdc-grafana
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-changeme}
+      - GF_SECURITY_SECRET_KEY=${GRAFANA_SECRET_KEY:-xdc-grafana-secret}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_USERS_AUTO_ASSIGN_ORG=true
+      - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Viewer
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3000}
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_UNIFIED_ALERTING_ENABLED=true
+      - GF_ALERTING_ENABLED=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ../monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ../monitoring/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ../monitoring/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+    networks:
+      - xdc-monitoring
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health | grep -q 'ok' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  #--------------------------------------------------------------------------
+  # Alertmanager - Alert routing (Telegram/webhook notifications)
+  #--------------------------------------------------------------------------
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: xdc-alertmanager
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ../configs/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+      - '--web.listen-address=:9093'
+    networks:
+      - xdc-monitoring
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  #--------------------------------------------------------------------------
+  # XDC Metrics Collector - Owner-focused metrics via RPC
+  #--------------------------------------------------------------------------
+  xdc-metrics-collector:
+    image: alpine:latest
+    container_name: xdc-metrics-collector
+    restart: unless-stopped
+    environment:
+      - RPC_URL=http://xdc-node:8545
+      - DATADIR=/work/xdcchain
+      - TEXTFILE_DIR=/textfile_collector
+      - COLLECTION_INTERVAL=60
+    volumes:
+      - /var/lib/node_exporter/textfile_collector:/textfile_collector:rw
+      - ../${NETWORK:-mainnet}/xdcchain:/work/xdcchain:ro
+      - ../scripts/node-owner-metrics.sh:/usr/local/bin/node-owner-metrics.sh:ro
+    command:
+      - /bin/sh
+      - -c
+      - |
+        apk add --no-cache curl jq bash coreutils 2>/dev/null
+        chmod +x /usr/local/bin/node-owner-metrics.sh
+        echo "Starting XDC metrics collector (interval: $${COLLECTION_INTERVAL}s)..."
+        while true; do
+          /usr/local/bin/node-owner-metrics.sh || echo "Metrics collection failed"
+          sleep $${COLLECTION_INTERVAL}
+        done
+    networks:
+      - xdc-monitoring
+    depends_on:
+      xdc-node:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  xdc-monitoring:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  alertmanager-data:
+    driver: local

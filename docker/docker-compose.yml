@@ -1,13 +1,12 @@
 #==============================================================================
-# XDC Node Docker Compose Configuration - Production Grade
-# Implements monitoring standards from XDC-NODE-STANDARDS.md
-# Features: Network isolation, health checks, proper volumes, security hardening
+# XDC Node Docker Compose — Core Services
+# For monitoring stack: docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+# Or simply: xdc start --monitoring
 #==============================================================================
 
 services:
   #--------------------------------------------------------------------------
   # XDC Node - Main blockchain client
-  # Uses official entrypoint flow: entry.sh -> start.sh
   #--------------------------------------------------------------------------
   xdc-node:
     image: xinfinorg/xdposchain:v2.6.8
@@ -16,17 +15,19 @@ services:
     ports:
       - "${PORT:-30303}:30303"
       - "${PORT:-30303}:30303/udp"
-      - "8545:8545"
-      - "8546:8546"
+      - "127.0.0.1:${RPC_PORT:-8545}:8545"
+      - "127.0.0.1:${WS_PORT:-8546}:8546"
     volumes:
-      - ./${NETWORK:-mainnet}/xdcchain:/work/xdcchain
-      - ./${NETWORK:-mainnet}/.xdc-node:/work/.xdc-node
+      - ../${NETWORK:-mainnet}/xdcchain:/work/xdcchain
       - ./${NETWORK:-mainnet}/genesis.json:/work/genesis.json:ro
       - ./${NETWORK:-mainnet}/start-node.sh:/work/start.sh:ro
       - ./${NETWORK:-mainnet}/bootnodes.list:/work/bootnodes.list:ro
       - ./${NETWORK:-mainnet}/.pwd:/work/.pwd:ro
+      - ./entrypoint.sh:/work/entrypoint.sh:ro
       - ../${NETWORK:-mainnet}/.xdc-node/config.toml:/etc/xdc-node/config.toml:ro
       - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - ../${NETWORK:-mainnet}/.xdc-node/.env
     environment:
       - NETWORK=${NETWORK:-mainnet}
       - SYNC_MODE=${SYNC_MODE:-full}
@@ -34,11 +35,9 @@ services:
       - RPC_PORT=${RPC_PORT:-8545}
       - WS_PORT=${WS_PORT:-8546}
       - INSTANCE_NAME=${INSTANCE_NAME:-xdc-node}
-    # Override image entrypoint — use our start.sh which auto-detects --rpc vs --http flags
-    entrypoint: ["/bin/bash", "/work/start.sh"]
+    entrypoint: ["/bin/bash", "/work/entrypoint.sh"]
     networks:
       - xdc-network
-      - xdc-monitoring
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8545 --post-data='{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' --header='Content-Type: application/json' | grep -q 'result' || exit 1"]
       interval: 30s
@@ -50,9 +49,6 @@ services:
       options:
         max-size: "100m"
         max-file: "5"
-    # Resource limits - adjust based on available hardware
-    # For production: recommend 8 CPUs / 32GB RAM
-    # For minimum: 4 CPUs / 8GB RAM works for basic sync
     deploy:
       resources:
         limits:
@@ -61,7 +57,6 @@ services:
         reservations:
           cpus: '2'
           memory: 4G
-    # Security options
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -72,200 +67,7 @@ services:
       - SETUID
 
   #--------------------------------------------------------------------------
-  # Prometheus - Metrics collection
-  # Auto-starts with xdc-node for dashboard alerts
-  #--------------------------------------------------------------------------
-  prometheus:
-    image: prom/prometheus:v2.48.0
-    container_name: xdc-prometheus
-    restart: unless-stopped
-    # Only accessible via localhost for security
-    ports:
-      - "127.0.0.1:9090:9090"
-    volumes:
-      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ../monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
-      - prometheus-data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=30d'
-      - '--storage.tsdb.retention.size=10GB'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-      - '--web.enable-lifecycle'
-      - '--web.enable-admin-api'
-      - '--alertmanager.url=http://alertmanager:9093'
-    networks:
-      - xdc-monitoring
-    depends_on:
-      - xdc-node
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "3"
-
-  #--------------------------------------------------------------------------
-  # Node Exporter - System metrics + XDC textfile collector
-  #--------------------------------------------------------------------------
-  node-exporter:
-    image: prom/node-exporter:v1.7.0
-    container_name: xdc-node-exporter
-    restart: unless-stopped
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
-      - /var/lib/node_exporter/textfile_collector:/textfile_collector:ro
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.rootfs=/rootfs'
-      - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|run|var/run)($$|/)'
-      - '--collector.filesystem.fs-types-exclude=^(sys|proc|auto|cgroup|devpts|ns|au|fuse\.lxc|mqueue)(fs|)$$'
-      - '--collector.textfile.directory=/textfile_collector'
-      - '--collector.systemd'
-    networks:
-      - xdc-monitoring
-    expose:
-      - "9100"
-    profiles:
-      - monitoring
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9100/metrics | grep -q 'node_' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  #--------------------------------------------------------------------------
-  # cAdvisor - Container metrics
-  #--------------------------------------------------------------------------
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.47.2
-    container_name: xdc-cadvisor
-    restart: unless-stopped
-    privileged: true
-    devices:
-      - /dev/kmsg:/dev/kmsg
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /dev/disk/:/dev/disk:ro
-      - /etc/machine-id:/etc/machine-id:ro
-    command:
-      - '--housekeeping_interval=15s'
-      - '--docker_only=true'
-      - '--store_container_labels=true'
-      - '--allow_dynamic_housekeeping=true'
-      - '--enable_load_reader=true'
-    networks:
-      - xdc-monitoring
-    expose:
-      - "8080"
-    profiles:
-      - monitoring
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  #--------------------------------------------------------------------------
-  # Grafana - Visualization
-  # Exposed on 0.0.0.0:3000 - restrict via firewall in production
-  #--------------------------------------------------------------------------
-  grafana:
-    image: grafana/grafana:10.2.3
-    container_name: xdc-grafana
-    restart: unless-stopped
-    # Exposed on all interfaces - restrict via firewall in production
-    ports:
-      - "0.0.0.0:3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-changeme}
-      - GF_SECURITY_SECRET_KEY=${GRAFANA_SECRET_KEY:-xdc-grafana-secret}
-      - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_USERS_AUTO_ASSIGN_ORG=true
-      - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Viewer
-      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3000}
-      - GF_SERVER_SERVE_FROM_SUB_PATH=false
-      - GF_AUTH_DISABLE_LOGIN_FORM=false
-      - GF_AUTH_ANONYMOUS_ENABLED=false
-      - GF_SECURITY_CSRF_ADDITIONAL_HEADERS=X-Forwarded-Host
-      - GF_UNIFIED_ALERTING_ENABLED=true
-      - GF_ALERTING_ENABLED=false
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - /opt/xdc-node/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - /opt/xdc-node/monitoring/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
-      - /opt/xdc-node/monitoring/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
-    networks:
-      - xdc-monitoring
-    depends_on:
-      - prometheus
-    profiles:
-      - monitoring
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health | grep -q 'ok' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "3"
-
-  #--------------------------------------------------------------------------
-  # Alertmanager - Alert routing (optional, for Telegram notifications)
-  # Auto-starts with xdc-node for dashboard alerts
-  #--------------------------------------------------------------------------
-  alertmanager:
-    image: prom/alertmanager:v0.26.0
-    container_name: xdc-alertmanager
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:9093:9093"
-    volumes:
-      - ../configs/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - alertmanager-data:/alertmanager
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
-      - '--web.external-url=http://localhost:9093'
-      - '--web.listen-address=:9093'
-    networks:
-      - xdc-monitoring
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  #--------------------------------------------------------------------------
-  # Dashboard - Web UI + SkyNet Agent (merged)
-  # Uses nginx:alpine for lightweight serving + SkyNet agent sidecar
+  # Dashboard - Web UI (nginx)
   #--------------------------------------------------------------------------
   dashboard:
     image: nginx:alpine
@@ -276,36 +78,15 @@ services:
     volumes:
       - ../dashboard/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ../dashboard/html:/usr/share/nginx/html:ro
-      # SkyNet Agent volumes
-      - ./skynet-agent.sh:/agent.sh:ro
-      - ../${NETWORK:-mainnet}/.xdc-node/skynet.conf:/etc/xdc-node/skynet.conf:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /etc/ssh/sshd_config:/host/sshd_config:ro
-      - /proc:/host/proc:ro
     environment:
-      - SKYNET_CONF=/etc/xdc-node/skynet.conf
       - RPC_URL=http://xdc-node:8545
-    # Install curl/jq and run nginx + skynet agent
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        apk add --no-cache curl jq bash bc procps >/dev/null 2>&1
-        echo "Starting SkyNet Agent in background..."
-        (
-          while true; do
-            /agent.sh 2>/dev/null
-            sleep 60
-          done
-        ) &
-        echo "Starting nginx..."
-        exec nginx -g 'daemon off;'
     networks:
-      - xdc-monitoring
+      - xdc-network
     depends_on:
       xdc-node:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -316,42 +97,33 @@ services:
         max-file: "3"
 
   #--------------------------------------------------------------------------
-  # XDC Owner Metrics Collector - Collects owner-focused metrics via RPC
-  # Runs every 60 seconds and writes to node-exporter textfile collector
+  # SkyNet Agent - Fleet monitoring heartbeats (runs on host network)
   #--------------------------------------------------------------------------
-  xdc-metrics-collector:
-    image: alpine:latest
-    container_name: xdc-metrics-collector
+  xdc-monitoring:
+    image: alpine:3.19
+    container_name: xdc-monitoring
     restart: unless-stopped
-    environment:
-      - RPC_URL=http://xdc-node:8545
-      - DATADIR=/work/xdcchain
-      - TEXTFILE_DIR=/textfile_collector
-      - COLLECTION_INTERVAL=60
+    network_mode: host
     volumes:
-      - /var/lib/node_exporter/textfile_collector:/textfile_collector:rw
-      - ../scripts/node-owner-metrics.sh:/usr/local/bin/node-owner-metrics.sh:ro
-      - ./mainnet/xdcchain:/work/xdcchain:ro
+      - ./skynet-agent.sh:/opt/skynet/agent.sh:ro
+      - ../${NETWORK:-mainnet}/.xdc-node/skynet.conf:/etc/xdc-node/skynet.conf:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/host/proc:ro
+    environment:
+      - SKYNET_CONF=/etc/xdc-node/skynet.conf
+      - XDC_RPC_URL=http://127.0.0.1:${RPC_PORT:-8545}
+    entrypoint: ["/bin/sh", "-c"]
     command:
-      - /bin/sh
-      - -c
       - |
-        apk add --no-cache curl jq bc bash coreutils dc 2>/dev/null || apk add --no-cache curl jq bash coreutils
-        chmod +x /usr/local/bin/node-owner-metrics.sh
-        echo "Starting XDC metrics collector..."
-        echo "RPC_URL: $$RPC_URL"
-        echo "Collection interval: $$COLLECTION_INTERVAL seconds"
+        apk add --no-cache bash curl jq bc procps >/dev/null 2>&1
+        chmod +x /opt/skynet/agent.sh
+        echo "SkyNet Agent: heartbeat every 60s"
         while true; do
-          /usr/local/bin/node-owner-metrics.sh || echo "Metrics collection failed, retrying..."
-          sleep $$COLLECTION_INTERVAL
+          /opt/skynet/agent.sh 2>/dev/null
+          sleep 60
         done
-    networks:
-      - xdc-monitoring
-    depends_on:
-      - xdc-node
-      - node-exporter
     profiles:
-      - monitoring
+      - skynet
     logging:
       driver: "json-file"
       options:
@@ -362,29 +134,5 @@ services:
 # Networks
 #==============================================================================
 networks:
-  # Internal network for XDC node communication
   xdc-network:
     driver: bridge
-    internal: false
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
-  
-  # Isolated network for monitoring stack
-  xdc-monitoring:
-    driver: bridge
-    internal: false
-    ipam:
-      config:
-        - subnet: 172.21.0.0/16
-
-#==============================================================================
-# Volumes
-#==============================================================================
-volumes:
-  prometheus-data:
-    driver: local
-  grafana-data:
-    driver: local
-  alertmanager-data:
-    driver: local
