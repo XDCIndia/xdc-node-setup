@@ -35,7 +35,7 @@ export async function GET() {
     let configUrl = null;
     
     try {
-      if (fs.existsSync(SKYNET_CONF)) {
+      if (fs.existsSync(SKYNET_CONF) && fs.statSync(SKYNET_CONF).isFile()) {
         const config = fs.readFileSync(SKYNET_CONF, 'utf-8');
         skynetEnabled = config.includes('SKYNET_API_URL') && !config.includes('#SKYNET_API_URL');
         const urlMatch = config.match(/SKYNET_API_URL=["']?([^"'\n]+)["']?/);
