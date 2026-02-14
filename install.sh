@@ -273,6 +273,13 @@ install_dependencies() {
 # Download and Run Setup
 #==============================================================================
 run_setup() {
+    # Check if user is already in the cloned repo
+    if [[ -f "setup.sh" ]] && [[ -d "scripts" ]] && grep -q "XDC Node Setup Script" setup.sh 2>/dev/null; then
+        log "Running from existing XDC Node Setup repository"
+        bash setup.sh "$@"
+        return 0
+    fi
+    
     info "Downloading XDC Node Setup..."
     
     local temp_dir
@@ -303,6 +310,8 @@ run_setup() {
                 cp -r "$temp_dir/xdc-node-setup/configs" "$temp_dir/configs" 2>/dev/null || true
                 cp -r "$temp_dir/xdc-node-setup/cli" "$temp_dir/cli" 2>/dev/null || true
                 cp -r "$temp_dir/xdc-node-setup/docker" "$temp_dir/docker" 2>/dev/null || true
+                cp -r "$temp_dir/xdc-node-setup/monitoring" "$temp_dir/monitoring" 2>/dev/null || true
+                cp -r "$temp_dir/xdc-node-setup/dashboard" "$temp_dir/dashboard" 2>/dev/null || true
                 download_ok=true
                 log "Cloned repository successfully"
             else
@@ -313,6 +322,8 @@ run_setup() {
                     cp -r "$temp_dir/xdc-node-setup/configs" "$temp_dir/configs" 2>/dev/null || true
                     cp -r "$temp_dir/xdc-node-setup/cli" "$temp_dir/cli" 2>/dev/null || true
                     cp -r "$temp_dir/xdc-node-setup/docker" "$temp_dir/docker" 2>/dev/null || true
+                    cp -r "$temp_dir/xdc-node-setup/monitoring" "$temp_dir/monitoring" 2>/dev/null || true
+                    cp -r "$temp_dir/xdc-node-setup/dashboard" "$temp_dir/dashboard" 2>/dev/null || true
                     download_ok=true
                     log "Cloned repository via SSH"
                 fi
@@ -322,18 +333,35 @@ run_setup() {
     
     if [ "$download_ok" = false ]; then
         error "Failed to download XDC Node Setup. Please clone manually:\n  git clone ${REPO_URL}.git\n  cd xdc-node-setup && bash setup.sh"
+        exit 1
     fi
     
     chmod +x "$temp_dir/setup.sh"
     
-    log "Setup script ready"
-    info "Running setup..."
+    # Create install directory in user's current working directory
+    INSTALL_TARGET="${PWD}/xdc-node"
+    log "Creating install directory: $INSTALL_TARGET"
+    mkdir -p "$INSTALL_TARGET"
     
-    # Run setup with any additional arguments passed to this script
-    "$temp_dir/setup.sh" "$@"
+    # Copy all needed files there
+    cp "$temp_dir/setup.sh" "$INSTALL_TARGET/"
+    cp -r "$temp_dir/scripts" "$INSTALL_TARGET/" 2>/dev/null || true
+    cp -r "$temp_dir/configs" "$INSTALL_TARGET/" 2>/dev/null || true
+    cp -r "$temp_dir/cli" "$INSTALL_TARGET/" 2>/dev/null || true
+    cp -r "$temp_dir/docker" "$INSTALL_TARGET/" 2>/dev/null || true
+    cp -r "$temp_dir/monitoring" "$INSTALL_TARGET/" 2>/dev/null || true
+    cp -r "$temp_dir/dashboard" "$INSTALL_TARGET/" 2>/dev/null || true
     
-    # Cleanup
+    log "Setup files copied to $INSTALL_TARGET"
+    
+    # Cleanup temp directory
     rm -rf "$temp_dir"
+    
+    # Change to install directory and run setup
+    cd "$INSTALL_TARGET"
+    log "Running setup from $INSTALL_TARGET"
+    
+    bash setup.sh "$@"
 }
 
 #==============================================================================

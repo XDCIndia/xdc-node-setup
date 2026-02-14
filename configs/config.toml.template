@@ -1,0 +1,91 @@
+# XDC Node Configuration (TOML format)
+# Generated during setup - edit and restart node to apply changes
+
+[Node]
+DataDir = "{{DATA_DIR}}"
+NetworkId = {{CHAIN_ID}}
+SyncMode = "{{SYNC_MODE}}"
+GCMode = "full"
+
+[Node.P2P]
+ListenAddr = ":{{P2P_PORT}}"
+MaxPeers = {{MAX_PEERS}}
+NoDiscovery = false
+BootstrapNodes = [
+{{BOOTNODES}}
+]
+
+[Node.HTTP]
+Enabled = true
+Host = "0.0.0.0"
+Port = {{RPC_PORT}}
+CORSDomains = ["*"]
+VirtualHosts = ["*"]
+Modules = [{{RPC_API}}]
+
+[Node.WS]
+Enabled = true
+Host = "0.0.0.0"
+Port = {{WS_PORT}}
+Origins = ["*"]
+Modules = [{{WS_API}}]
+
+[Node.GraphQL]
+Enabled = false
+
+[Eth]
+NetworkId = {{CHAIN_ID}}
+NoPruning = {{NO_PRUNING}}
+NoPrefetch = false
+LightPeers = 100
+UltraLightFraction = 75
+DatabaseCache = {{CACHE_SIZE}}
+DatabaseFreezer = ""
+TrieCleanCache = {{TRIE_CACHE}}
+TrieCleanCacheJournal = "triecache"
+TrieCleanCacheRejournal = 3600000000000
+TrieDirtyCache = {{DIRTY_CACHE}}
+TrieTimeout = 600000000000
+SnapshotCache = {{SNAPSHOT_CACHE}}
+Preimages = false
+FilterLogCacheSize = 32
+
+[Eth.Miner]
+GasFloor = 8000000
+GasCeil = {{GAS_LIMIT}}
+GasPrice = {{GAS_PRICE}}
+Recommit = 3000000000
+Noverify = false
+
+[Eth.TxPool]
+Locals = []
+NoLocals = false
+Journal = "transactions.rlp"
+Rejournal = 3600000000000
+PriceLimit = 1
+PriceBump = 10
+AccountSlots = 16
+GlobalSlots = 5120
+AccountQueue = 64
+GlobalQueue = 1024
+Lifetime = 10800000000000
+
+[Metrics]
+Enabled = {{METRICS_ENABLED}}
+HTTP = "0.0.0.0"
+Port = {{METRICS_PORT}}
+InfluxDBEnabled = false
+InfluxDBEndpoint = "http://localhost:8086"
+InfluxDBDatabase = "xdc"
+InfluxDBUsername = "xdc"
+InfluxDBPassword = "xdc"
+InfluxDBTags = "host=localhost"
+
+[Logging]
+Verbosity = {{VERBOSITY}}
+VModule = ""
+BacktraceAt = ""
+Debug = false
+CPUProfile = ""
+MemProfile = ""
+Trace = ""

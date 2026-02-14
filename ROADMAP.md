@@ -43,7 +43,7 @@ Unlike generic cloud providers or complex DIY setups, XDC Node Setup delivers:
 
 ## Current Sprint — Pending Tasks (Feb 2026)
 
-### ✅ Completed (Feb 14, 2026):
+### ✅ Completed (Feb 14, 2026)
 - [x] Fix `/var/lib/xdc` permission denied — switched to configurable XDC_STATE_DIR (commit 5b430eb)
 - [x] Fix `free: command not found` — portable /proc/meminfo parsing
 - [x] Fix data directory not found — auto-create before disk checks
@@ -59,29 +59,36 @@ Unlike generic cloud providers or complex DIY setups, XDC Node Setup delivers:
 - [x] Docker entrypoint.sh for XDC-mainnet → XDC symlink
 - [x] TOML config support
 - [x] Shell completions (bash/zsh)
+- [x] Fix install.sh project directory creation (setup runs from proper install directory)
+- [x] Fix setup.sh PROJECT_ROOT to use SCRIPT_DIR instead of PWD
+- [x] config.toml generation during setup with network-specific settings
+- [x] Mount config.toml in docker-compose.yml
 
-### 🔴 Bugs / High Priority:
+### 🔄 In Progress
+- [ ] Validate config.toml is actually used by XDC binary at startup
+- [ ] Test install.sh → setup.sh flow on clean system (both repo and curl install methods)
+
+### 🔴 Bugs / High Priority
 - [ ] `admin_addPeer` RPC not available — verify `--rpcapi` includes `admin` in running container
 - [ ] Dashboard not loading on first attempt — may need wait-for-healthy logic before nginx starts
 - [ ] `top` command may fail on minimal systems (same portability issue as `free`)
+- [ ] Verify Docker doesn't expose RPC externally (should be 127.0.0.1:9545 only)
 
-### 🏗️ Build & Ship:
+### 🏗️ Technical Backlog
 - [ ] End-to-end install test on clean Ubuntu 22.04 + clean macOS ARM64
 - [ ] `xdc snapshot download` — needs real snapshot URLs in configs/snapshots.json
 - [ ] Verify `xdc config` command works with TOML
 - [ ] Verify shell completions install correctly
 - [ ] Production build validation for dashboard
-
-### 🔒 Security:
 - [ ] Server hardening on 95.217.56.168 (scored 50/100)
-- [ ] Verify Docker doesn't expose RPC externally (should be 127.0.0.1:9545 only)
-
-### 📖 Docs & Polish:
 - [ ] Update README.md with new directory structure + CLI examples
 - [ ] Video guides / interactive tutorials
 - [ ] Man pages (referenced in CHANGELOG but not created)
+- [ ] Verify SkyNet agent scripts on remote servers use updated endpoints (netown→skynet rename)
+- [ ] `xdc monitor` credential rotation tracking
+- [ ] Global Node Monitor (P2P crawler, validator leaderboard, network map)
 
-### 🚀 Q1 Roadmap Items:
+### 🚀 Q1 2026 Roadmap (Current Quarter)
 - [ ] AWS AMI (us-east-1, eu-west-1, ap-southeast-1)
 - [ ] DigitalOcean 1-Click Marketplace listing
 - [ ] Azure ARM templates
@@ -89,10 +96,24 @@ Unlike generic cloud providers or complex DIY setups, XDC Node Setup delivers:
 - [ ] Terraform modules validation
 - [ ] CLI v2.0 UX improvements
 
-### 🔌 Integrations:
-- [ ] Verify SkyNet agent scripts on remote servers use updated endpoints (netown→skynet rename)
-- [ ] `xdc monitor` credential rotation tracking
-- [ ] Global Node Monitor (P2P crawler, validator leaderboard, network map)
+### 🔮 Future (Q2-Q4 2026)
+- GUI Installer (React web-based) — visual deployment wizard for non-technical users
+- Auto-update system — seamless client updates with rollback capabilities
+- Multi-client support — easy switching between Geth and Erigon implementations
+- Node marketplace — curated directory of verified hosting providers and managed services
+- Staking integration — one-click validator setup and delegation management
+- Mobile companion app — iOS/Android monitoring and basic node controls
+
+### 🌐 2027-2028 Vision
+Transform XDC Node Setup into the industry-standard infrastructure deployment platform:
+
+**Multi-Client Maturity:** Support for Geth, Erigon, Besu, and Nethermind with seamless switching and performance benchmarking tools.
+
+**Managed Service:** Fully managed node offering with 99.99% SLA, 24/7 monitoring, and automatic failover for enterprise customers.
+
+**AI Operations:** Predictive scaling, automated security patching, intelligent client selection, anomaly detection, and self-healing infrastructure.
+
+**Market Position:** 25,000+ deployed nodes, $4.5M ARR, becoming the default choice for XDC infrastructure deployment with presence across all major cloud marketplaces (AWS, Azure, GCP, DigitalOcean, Hetzner).
 
 ---
 

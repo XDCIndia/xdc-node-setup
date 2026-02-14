@@ -52,8 +52,8 @@ if [[ -z "${OS:-}" ]]; then
 fi
 
 # Set OS-specific paths
-# Project root is where setup.sh runs from
-readonly PROJECT_ROOT="${PWD}"
+# Project root is the directory containing setup.sh (repo root), NOT where it's called from
+readonly PROJECT_ROOT="${SCRIPT_DIR}"
 readonly LOG_FILE="${PROJECT_ROOT}/xdc-node-setup.log"
 
 #==============================================================================
@@ -686,6 +686,82 @@ EOF
 }
 
 #==============================================================================
+# Generate config.toml
+#==============================================================================
+generate_config_toml() {
+    log "Generating config.toml..."
+    
+    local config_toml="$PROJECT_ROOT/config.toml"
+    local template="$CONFIG_DIR/config.toml.template"
+    
+    # Check if template exists
+    if [[ ! -f "$template" ]]; then
+        warn "config.toml.template not found, skipping TOML generation"
+        return 0
+    fi
+    
+    # Set defaults for TOML generation
+    local MAX_PEERS="${MAX_PEERS:-25}"
+    local CACHE_SIZE="${CACHE_SIZE:-4096}"
+    local TRIE_CACHE=$((CACHE_SIZE / 4))
+    local DIRTY_CACHE=$((CACHE_SIZE / 4))
+    local SNAPSHOT_CACHE=$((CACHE_SIZE / 4))
+    local GAS_LIMIT="${GAS_LIMIT:-420000000}"
+    local GAS_PRICE="${GAS_PRICE:-1}"
+    local METRICS_ENABLED="true"
+    local METRICS_PORT="${METRICS_PORT:-6060}"
+    local VERBOSITY="${VERBOSITY:-3}"
+    
+    # Archive nodes don't prune
+    local NO_PRUNING="false"
+    [[ "$NODE_TYPE" == "archive" ]] && NO_PRUNING="true"
+    
+    # Load bootnodes based on network
+    local BOOTNODES=""
+    local bootnode_file="$CONFIG_DIR/bootnodes-${NETWORK}.json"
+    if [[ -f "$bootnode_file" ]]; then
+        BOOTNODES=$(jq -r '.bootnodes[]' "$bootnode_file" 2>/dev/null | sed 's/^/  "/' | sed 's/$/"/' | paste -sd, - || echo "")
+    fi
+    
+    # Fallback to hardcoded mainnet bootnodes if empty
+    if [[ -z "$BOOTNODES" && "$NETWORK" == "mainnet" ]]; then
+        BOOTNODES='  "enode://9a977b1ac4320fa2c862dcaf536aaaea3a8f8f7cd14e3bcde32e5a1c0152bd17bd18bfdc3c2ca8c4a0f3da153c62935fea1dc040cc1e66d2c07d6b4c91e2ed42@bootnode.xinfin.network:30303"'
+    fi
+    
+    # RPC API modules
+    local RPC_API='"eth", "net", "web3", "XDPoS"'
+    local WS_API='"eth", "net", "web3", "XDPoS"'
+    
+    # Create config.toml from template
+    cp "$template" "$config_toml"
+    
+    # Replace placeholders
+    sed_inplace "s|{{DATA_DIR}}|/work/xdcchain|g" "$config_toml"
+    sed_inplace "s|{{CHAIN_ID}}|$CHAIN_ID|g" "$config_toml"
+    sed_inplace "s|{{SYNC_MODE}}|$SYNC_MODE|g" "$config_toml"
+    sed_inplace "s|{{P2P_PORT}}|$P2P_PORT|g" "$config_toml"
+    sed_inplace "s|{{MAX_PEERS}}|$MAX_PEERS|g" "$config_toml"
+    sed_inplace "s|{{BOOTNODES}}|$BOOTNODES|g" "$config_toml"
+    sed_inplace "s|{{RPC_PORT}}|8545|g" "$config_toml"
+    sed_inplace "s|{{RPC_API}}|$RPC_API|g" "$config_toml"
+    sed_inplace "s|{{WS_PORT}}|8546|g" "$config_toml"
+    sed_inplace "s|{{WS_API}}|$WS_API|g" "$config_toml"
+    sed_inplace "s|{{NO_PRUNING}}|$NO_PRUNING|g" "$config_toml"
+    sed_inplace "s|{{CACHE_SIZE}}|$CACHE_SIZE|g" "$config_toml"
+    sed_inplace "s|{{TRIE_CACHE}}|$TRIE_CACHE|g" "$config_toml"
+    sed_inplace "s|{{DIRTY_CACHE}}|$DIRTY_CACHE|g" "$config_toml"
+    sed_inplace "s|{{SNAPSHOT_CACHE}}|$SNAPSHOT_CACHE|g" "$config_toml"
+    sed_inplace "s|{{GAS_LIMIT}}|$GAS_LIMIT|g" "$config_toml"
+    sed_inplace "s|{{GAS_PRICE}}|$GAS_PRICE|g" "$config_toml"
+    sed_inplace "s|{{METRICS_ENABLED}}|$METRICS_ENABLED|g" "$config_toml"
+    sed_inplace "s|{{METRICS_PORT}}|$METRICS_PORT|g" "$config_toml"
+    sed_inplace "s|{{VERBOSITY}}|$VERBOSITY|g" "$config_toml"
+    
+    chmod 644 "$config_toml"
+    log "config.toml generated at $config_toml"
+}
+
+#==============================================================================
 # Docker Compose Setup
 #==============================================================================
 setup_docker_compose() {
@@ -863,6 +939,7 @@ services:
       - ./entrypoint.sh:/work/entrypoint.sh
       - ./mainnet/bootnodes.list:/work/bootnodes.list
       - ./mainnet/.pwd:/work/.pwd
+      - ../config.toml:/etc/xdc-node/config.toml:ro
     env_file:
       - ./mainnet/.env
     entrypoint: /work/entrypoint.sh
@@ -1793,6 +1870,7 @@ main() {
     
     # Configure and setup
     configure_node
+    generate_config_toml
     setup_docker_compose
     setup_monitoring || warn "Monitoring setup had issues (non-fatal)"
     setup_security || warn "Security setup had issues (non-fatal)"
