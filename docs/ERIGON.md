@@ -412,13 +412,15 @@ curl -s -X POST http://localhost:8547 \
 
 ## Port Reference
 
-| Port | Protocol | Purpose | Firewall |
-|------|----------|---------|----------|
-| 8547 | HTTP | JSON-RPC API | Allow (if public RPC) |
-| 30304 | TCP/UDP | P2P eth/63 (XDC compatible) ✅ | **Required** |
-| 30311 | TCP/UDP | P2P eth/68 (standard Ethereum) | Optional |
-| 9092 | gRPC | Erigon internal API | Block (internal only) |
-| 7070 | HTTP | SkyOne Dashboard | Allow (monitoring) |
+| Port | Protocol | Purpose | XDC Compatible | Firewall |
+|------|----------|---------|----------------|----------|
+| 8547 | HTTP | JSON-RPC API | N/A | Allow (if public RPC) |
+| **30304** | TCP/UDP | **P2P eth/63** | ✅ **YES** | **Required** |
+| 30311 | TCP/UDP | P2P eth/68 (standard Ethereum) | ❌ **NO** | Optional |
+| 9092 | gRPC | Erigon internal API | N/A | Block (internal only) |
+| 7070 | HTTP | SkyOne Dashboard | N/A | Allow (monitoring) |
+
+> ⚠️ **WARNING**: Port 30304 (eth/63) is the ONLY port compatible with XDC geth nodes. Port 30311 (eth/68) uses a newer Ethereum protocol that XDC nodes do not support. Always use port 30304 for XDC peer connections.
 
 **Open required ports:**
 
