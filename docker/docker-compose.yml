@@ -19,17 +19,17 @@ services:
       - "8545:8545"
       - "8546:8546"
     volumes:
-      - ./mainnet/xdcchain:/work/xdcchain
-      - ./mainnet/.xdc-node:/work/.xdc-node
-      - ./mainnet/genesis.json:/work/genesis.json:ro
-      - ./mainnet/start-node.sh:/work/start.sh:ro
-      - ./mainnet/bootnodes.list:/work/bootnodes.list:ro
-      - ./mainnet/.pwd:/work/.pwd:ro
-      - ./mainnet/.env:/work/.env:ro
+      - ./${NETWORK:-mainnet}/xdcchain:/work/xdcchain
+      - ./${NETWORK:-mainnet}/.xdc-node:/work/.xdc-node
+      - ./${NETWORK:-mainnet}/genesis.json:/work/genesis.json:ro
+      - ./${NETWORK:-mainnet}/start-node.sh:/work/start.sh:ro
+      - ./${NETWORK:-mainnet}/bootnodes.list:/work/bootnodes.list:ro
+      - ./${NETWORK:-mainnet}/.pwd:/work/.pwd:ro
+      - ./${NETWORK:-mainnet}/.env:/work/.env:ro
       - ./config.toml:/etc/xdc-node/config.toml:ro
       - /etc/localtime:/etc/localtime:ro
     env_file:
-      - ./mainnet/.env
+      - ./${NETWORK:-mainnet}/.env
     environment:
       # Network must be set for official entry.sh to create correct symlink
       - NETWORK=${NETWORK:-mainnet}

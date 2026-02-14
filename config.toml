@@ -5,7 +5,7 @@
 # Network Configuration
 #==============================================================================
 [network]
-name = "mainnet"          # mainnet, testnet, or apothem
+name = "mainnet"          # mainnet, testnet, devnet, or apothem
 instance_name = "xdc-node"
 
 #==============================================================================

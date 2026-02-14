@@ -206,7 +206,7 @@ Options:
   --tg, --telegram    Telegram handle for SkyNet alerts (optional)
   --client CLIENT     Client type: xdc, geth (default: xdc)
   --type TYPE         Node type: full, archive, masternode (default: full)
-  --network NETWORK   Network: mainnet, testnet, apothem (default: mainnet)
+  --network NETWORK   Network: mainnet, testnet, devnet, apothem (default: mainnet)
   --status            Check current installation status
   --uninstall         Remove XDC node and all configurations
   --help, -h          Show this help message
@@ -492,11 +492,20 @@ init_config() {
     INSTALL_CLI="${INSTALL_CLI:-true}"
     
     # Chain ID based on network
-    if [[ "$NETWORK" == "mainnet" ]]; then
-        CHAIN_ID=50
-    else
-        CHAIN_ID=51
-    fi
+    case "${NETWORK:-mainnet}" in
+        mainnet)
+            CHAIN_ID=50
+            ;;
+        testnet|apothem)
+            CHAIN_ID=51
+            ;;
+        devnet)
+            CHAIN_ID=551
+            ;;
+        *)
+            CHAIN_ID=50
+            ;;
+    esac
 }
 
 #==============================================================================
@@ -508,15 +517,17 @@ prompt_network() {
     echo "===================="
     echo "1) Mainnet (XDC Network - Production) - Chain ID: 50"
     echo "2) Testnet (Apothem - Development) - Chain ID: 51"
+    echo "3) Devnet (Local Development) - Chain ID: 551"
     echo ""
     
     while true; do
-        read -rp "Select network [1-2] (default: 1): " choice
+        read -rp "Select network [1-3] (default: 1): " choice
         choice=${choice:-1}
         case $choice in
             1) NETWORK="mainnet"; CHAIN_ID=50; break ;;
             2) NETWORK="testnet"; CHAIN_ID=51; break ;;
-            *) echo "Invalid selection. Please choose 1-2." ;;
+            3) NETWORK="devnet"; CHAIN_ID=551; break ;;
+            *) echo "Invalid selection. Please choose 1-3." ;;
         esac
     done
     
