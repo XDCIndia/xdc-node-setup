@@ -33,7 +33,20 @@ NC='\033[0m'
 # Configuration
 readonly XDC_RPC_URL="${XDC_RPC_URL:-http://localhost:8545}"
 readonly GOVERNANCE_CONTRACT="${XDC_GOVERNANCE_CONTRACT:-0x0000000000000000000000000000000000000088}"
-readonly XDC_STATE_DIR="${XDC_STATE_DIR:-${XDC_DATA:-/root/xdcchain}/.state}"
+# Detect network for network-aware directory structure
+detect_network() {
+    local network="${NETWORK:-}"
+    if [[ -z "$network" && -f "$(pwd)/config.toml" ]]; then
+        network=$(grep -E '^\s*name\s*=' "$(pwd)/config.toml" 2>/dev/null | sed -E 's/.*=\s*"([^"]+)".*/\1/' | head -1)
+    fi
+    if [[ -z "$network" && -f "/opt/xdc-node/config.toml" ]]; then
+        network=$(grep -E '^\s*name\s*=' "/opt/xdc-node/config.toml" 2>/dev/null | sed -E 's/.*=\s*"([^"]+)".*/\1/' | head -1)
+    fi
+    echo "${network:-mainnet}"
+}
+readonly XDC_NETWORK="${XDC_NETWORK:-$(detect_network)}"
+readonly XDC_DATA="${XDC_DATA:-$(pwd)/${XDC_NETWORK}/xdcchain}"
+readonly XDC_STATE_DIR="${XDC_STATE_DIR:-$(pwd)/${XDC_NETWORK}/.xdc-node}"
 
 # State files
 readonly VOTE_HISTORY="${XDC_STATE_DIR}/governance-votes.json"
@@ -152,7 +165,7 @@ cast_vote() {
     
     # If no address provided, try to get from coinbase
     if [[ -z "$voter_address" ]]; then
-        local coinbase_file="${XDC_DATADIR:-/root/xdcchain}/.coinbase"
+        local coinbase_file="${XDC_DATA}/.coinbase"
         if [[ -f "$coinbase_file" ]]; then
             voter_address=$(cat "$coinbase_file")
         fi

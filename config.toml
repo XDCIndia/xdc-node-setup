@@ -60,6 +60,8 @@ level = 2                 # 0=silent, 1=error, 2=warn, 3=info, 4=debug
 
 #==============================================================================
 # Data Directories
+# Network-aware structure: <project_dir>/<network>/xdcchain and .xdc-node
+# Change "mainnet" below to match the active network (testnet, devnet, etc.)
 #==============================================================================
 [paths]
 data_dir = "/opt/xdc-node/mainnet/xdcchain"

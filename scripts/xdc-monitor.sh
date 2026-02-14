@@ -27,7 +27,19 @@ NC='\033[0m'
 
 # Configuration
 readonly XDC_RPC_URL="${XDC_RPC_URL:-http://localhost:8545}"
-readonly XDC_DATADIR="${XDC_DATADIR:-/root/xdcchain}"
+# Detect network for network-aware directory structure
+detect_network() {
+    local network="${NETWORK:-}"
+    if [[ -z "$network" && -f "$(pwd)/config.toml" ]]; then
+        network=$(grep -E '^\s*name\s*=' "$(pwd)/config.toml" 2>/dev/null | sed -E 's/.*=\s*"([^"]+)".*/\1/' | head -1)
+    fi
+    if [[ -z "$network" && -f "/opt/xdc-node/config.toml" ]]; then
+        network=$(grep -E '^\s*name\s*=' "/opt/xdc-node/config.toml" 2>/dev/null | sed -E 's/.*=\s*"([^"]+)".*/\1/' | head -1)
+    fi
+    echo "${network:-mainnet}"
+}
+readonly XDC_NETWORK="${XDC_NETWORK:-$(detect_network)}"
+readonly XDC_DATADIR="${XDC_DATADIR:-$(pwd)/${XDC_NETWORK}/xdcchain}"
 readonly EPOCH_LENGTH=900
 readonly BLOCK_TIME=2
 readonly MASTERNODE_STAKE=10000000
@@ -42,9 +54,11 @@ declare -a PUBLIC_RPCS=(
 # State tracking
 CONTINUOUS_MODE=false
 CHECK_INTERVAL=60  # seconds between checks in continuous mode
-XDC_STATE_DIR="${XDC_STATE_DIR:-${XDC_DATA:-/root/xdcchain}/.state}"
-REPORT_FILE="${XDC_STATE_DIR}/monitor-report.json"
-HISTORY_FILE="/var/lib/xdc-node/monitor-history.json"
+# XDC_STATE_DIR is set below (after network detection)
+REPORT_FILE="${XDC_STATE_DIR:-/var/lib/xdc-node}/monitor-report.json"
+# Use network-aware state directory for history
+XDC_STATE_DIR="${XDC_STATE_DIR:-$(pwd)/${XDC_NETWORK}/.xdc-node}"
+HISTORY_FILE="${XDC_STATE_DIR}/monitor-history.json"
 
 #==============================================================================
 # Utility Functions

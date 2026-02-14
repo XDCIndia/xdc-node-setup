@@ -30,9 +30,29 @@ find_install_dir() {
 }
 readonly INSTALL_DIR="$(find_install_dir)"
 
-# Runtime directories
+# Detect network from config.toml or environment
+detect_network() {
+    local network="${NETWORK:-}"
+    
+    # Try to read from config.toml if it exists
+    if [[ -z "$network" && -f "${PROJECT_DIR}/config.toml" ]]; then
+        network=$(grep -E '^\s*name\s*=' "${PROJECT_DIR}/config.toml" 2>/dev/null | sed -E 's/.*=\s*"([^"]+)".*/\1/' | head -1)
+    fi
+    
+    # Try XDC_HOME/config.toml as fallback
+    if [[ -z "$network" && -f "${XDC_HOME:-/opt/xdc-node}/config.toml" ]]; then
+        network=$(grep -E '^\s*name\s*=' "${XDC_HOME:-/opt/xdc-node}/config.toml" 2>/dev/null | sed -E 's/.*=\s*"([^"]+)".*/\1/' | head -1)
+    fi
+    
+    # Default to mainnet
+    echo "${network:-mainnet}"
+}
+
+# Runtime directories with network-aware defaults
 readonly XDC_HOME="${XDC_HOME:-/opt/xdc-node}"
-readonly XDC_DATA="${XDC_DATA:-/root/xdcchain}"
+readonly XDC_NETWORK="$(detect_network)"
+readonly XDC_DATA="${XDC_DATA:-${PROJECT_DIR}/${XDC_NETWORK}/xdcchain}"
+readonly XDC_STATE_DIR="${XDC_STATE_DIR:-${PROJECT_DIR}/${XDC_NETWORK}/.xdc-node}"
 readonly XDC_LOGS="${XDC_LOGS:-/var/log}"
 readonly XDC_BACKUP="${XDC_BACKUP:-/backup/xdc-node}"
 

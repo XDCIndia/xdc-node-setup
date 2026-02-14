@@ -650,8 +650,18 @@ prompt_advanced() {
 configure_node() {
     log "Configuring XDC node..."
     
-    # Create directories
-    mkdir -p "$DATA_DIR"/{XDC,keystore}
+    # Create network-based directory structure
+    mkdir -p "${INSTALL_DIR}/mainnet/xdcchain"/{XDC,keystore}
+    mkdir -p "${INSTALL_DIR}/mainnet/.xdc-node"
+    mkdir -p "${INSTALL_DIR}/testnet/xdcchain"/{XDC,keystore}
+    mkdir -p "${INSTALL_DIR}/testnet/.xdc-node"
+    mkdir -p "${INSTALL_DIR}/devnet/xdcchain"/{XDC,keystore}
+    mkdir -p "${INSTALL_DIR}/devnet/.xdc-node"
+    
+    # Create legacy DATA_DIR for backward compatibility (if set)
+    if [[ -n "${DATA_DIR:-}" ]]; then
+        mkdir -p "$DATA_DIR"/{XDC,keystore}
+    fi
     mkdir -p "$INSTALL_DIR"/{configs,scripts,logs}
     
     # Set permissions
@@ -1144,9 +1154,14 @@ install_cli_tool() {
         chmod +x "$INSTALL_DIR/scripts/xdc-node"
     fi
     
-    # Create state directories for CLI
+    # Create state directories for CLI (legacy location for shared state)
     mkdir -p /var/lib/xdc-node
     chmod 750 /var/lib/xdc-node
+    
+    # Ensure network-specific directories exist
+    mkdir -p "${INSTALL_DIR}/mainnet/.xdc-node"
+    mkdir -p "${INSTALL_DIR}/testnet/.xdc-node"
+    mkdir -p "${INSTALL_DIR}/devnet/.xdc-node"
     
     # Create symlink — try /usr/local/bin first, fall back to ~/.local/bin
     if [[ -w /usr/local/bin ]]; then

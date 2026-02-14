@@ -222,7 +222,19 @@ configure_backups() {
 
 # Directories
 BACKUP_DIR=/backup/xdc-node
-DATA_DIR=/root/xdcchain
+# Detect network for network-aware directory structure
+detect_network() {
+    local network="${NETWORK:-}"
+    if [[ -z "$network" && -f "$(pwd)/config.toml" ]]; then
+        network=$(grep -E '^\s*name\s*=' "$(pwd)/config.toml" 2>/dev/null | sed -E 's/.*=\s*"([^"]+)".*/\1/' | head -1)
+    fi
+    if [[ -z "$network" && -f "/opt/xdc-node/config.toml" ]]; then
+        network=$(grep -E '^\s*name\s*=' "/opt/xdc-node/config.toml" 2>/dev/null | sed -E 's/.*=\s*"([^"]+)".*/\1/' | head -1)
+    fi
+    echo "${network:-mainnet}"
+}
+XDC_NETWORK="${XDC_NETWORK:-$(detect_network)}"
+DATA_DIR="${DATA_DIR:-$(pwd)/${XDC_NETWORK}/xdcchain}"
 CONFIG_DIR=/opt/xdc-node
 
 # Retention (days)
