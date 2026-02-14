@@ -95,7 +95,19 @@ export default function StoragePanel({ data }: StoragePanelProps) {
         </div>
         <div>
           <h2 className="text-lg font-semibold text-[#F9FAFB]">Storage & Database</h2>
-          <div className="text-sm text-[#6B7280]">Chain data metrics</div>
+          <div className="text-sm text-[#6B7280] flex items-center gap-2">
+            <span>Chain data metrics</span>
+            {(data as any).storageType && (data as any).storageType !== 'unknown' && (
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                (data as any).storageType?.includes('NVMe') ? 'bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/20' :
+                (data as any).storageType?.includes('SSD') ? 'bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/20' :
+                'bg-[#F59E0B]/10 text-[#F59E0B] border border-[#F59E0B]/20'
+              }`}>
+                {(data as any).storageType}
+                {(data as any).iopsEstimate > 0 && ` · ~${((data as any).iopsEstimate / 1000).toFixed(1)}K IOPS`}
+              </span>
+            )}
+          </div>
         </div>
       </div>
       

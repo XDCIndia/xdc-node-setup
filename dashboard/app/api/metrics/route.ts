@@ -102,7 +102,9 @@ function getServerStats() {
   const fs = require('fs');
   const procPath = fs.existsSync('/host/proc/stat') ? '/host/proc' : '/proc';
   let cpuUsage = 0, memUsed = 0, memTotal = 0, diskUsed = 0, diskTotal = 0;
+  let storageType = 'unknown', storageModel = '';
   
+  // CPU from /proc/stat (works on Linux host + bind-mounted /host/proc)
   try {
     const stat = fs.readFileSync(`${procPath}/stat`, 'utf8');
     const cpuLine = stat.split('\n')[0].split(/\s+/);
@@ -111,6 +113,16 @@ function getServerStats() {
     cpuUsage = Math.round(((total - idle) / total) * 100);
   } catch {}
   
+  // Fallback: use `top` for CPU in container (macOS Docker)
+  if (cpuUsage === 0) {
+    try {
+      const topOut = execSync('top -bn1 2>/dev/null | head -5', { timeout: 3000 }).toString();
+      const cpuMatch = topOut.match(/(\d+\.?\d*)%?\s*id/);
+      if (cpuMatch) cpuUsage = Math.round(100 - parseFloat(cpuMatch[1]));
+    } catch {}
+  }
+  
+  // Memory from /proc/meminfo
   try {
     const meminfo = fs.readFileSync(`${procPath}/meminfo`, 'utf8');
     const totalMatch = meminfo.match(/MemTotal:\s+(\d+)/);
@@ -119,13 +131,83 @@ function getServerStats() {
     if (availMatch) memUsed = memTotal - (parseInt(availMatch[1]) * 1024);
   } catch {}
   
+  // Fallback: free command (works in Alpine container)
+  if (memTotal === 0) {
+    try {
+      const freeOut = execSync('free -b 2>/dev/null', { timeout: 3000 }).toString();
+      const memLine = freeOut.split('\n').find(l => l.startsWith('Mem:'));
+      if (memLine) {
+        const parts = memLine.split(/\s+/);
+        memTotal = parseInt(parts[1]) || 0;
+        memUsed = parseInt(parts[2]) || 0;
+      }
+    } catch {}
+  }
+  
+  // Disk usage
   try {
     const df = execSync('df -B1 / 2>/dev/null', { timeout: 3000 }).toString();
     const parts = df.split('\n')[1]?.split(/\s+/);
     if (parts) { diskTotal = parseInt(parts[1]) || 0; diskUsed = parseInt(parts[2]) || 0; }
   } catch {}
   
-  return { cpuUsage, memUsed, memTotal, diskUsed, diskTotal };
+  // Storage type detection (SSD/HDD/NVMe)
+  try {
+    // Method 1: Check rotational flag (Linux)
+    const devices = execSync('lsblk -dno NAME,ROTA,MODEL,TRAN 2>/dev/null || true', { timeout: 3000 }).toString().trim();
+    if (devices) {
+      const lines = devices.split('\n').filter(l => l.trim());
+      for (const line of lines) {
+        const [name, rota, ...rest] = line.trim().split(/\s+/);
+        const model = rest.slice(0, -1).join(' ');
+        const transport = rest[rest.length - 1] || '';
+        if (name && !name.startsWith('loop')) {
+          storageModel = model || '';
+          if (transport === 'nvme' || name.startsWith('nvme')) {
+            storageType = 'NVMe SSD';
+          } else if (rota === '0') {
+            storageType = 'SSD';
+          } else if (rota === '1') {
+            storageType = 'HDD';
+          }
+          break;
+        }
+      }
+    }
+  } catch {}
+  
+  // Method 2: macOS — check via system_profiler or diskutil (run on host if possible)
+  if (storageType === 'unknown') {
+    try {
+      // Inside Docker on macOS, /dev/vda is the VM disk — always "SSD" (backed by host storage)
+      const rootDev = execSync('mount | grep "on / " | cut -d" " -f1 2>/dev/null', { timeout: 3000 }).toString().trim();
+      if (rootDev.includes('vda') || rootDev.includes('sda')) {
+        // Docker Desktop VM — assume SSD (macOS typically has SSD/NVMe)
+        storageType = 'SSD (VM)';
+      }
+    } catch {}
+  }
+  
+  // IOPS benchmark (quick 4K random read test — runs once, cached)
+  let iopsEstimate = 0;
+  try {
+    // Quick dd-based test: 1000 x 4K blocks
+    const ddOut = execSync(
+      'dd if=/dev/zero of=/tmp/.iops-test bs=4k count=1000 oflag=dsync 2>&1 | tail -1',
+      { timeout: 10000 }
+    ).toString();
+    const speedMatch = ddOut.match(/([\d.]+)\s*(MB|kB|GB)\/s/);
+    if (speedMatch) {
+      let speedMB = parseFloat(speedMatch[1]);
+      if (speedMatch[2] === 'kB') speedMB /= 1024;
+      if (speedMatch[2] === 'GB') speedMB *= 1024;
+      // Estimate IOPS from sequential 4K write speed
+      iopsEstimate = Math.round((speedMB * 1024) / 4); // 4K blocks
+    }
+    execSync('rm -f /tmp/.iops-test 2>/dev/null', { timeout: 1000 });
+  } catch {}
+  
+  return { cpuUsage, memUsed, memTotal, diskUsed, diskTotal, storageType, storageModel, iopsEstimate };
 }
 
 async function dockerApiGet(path: string): Promise<any> {
@@ -356,11 +438,22 @@ export async function GET() {
       server: {
         cpuUsage: server.cpuUsage, memoryUsed: server.memUsed, memoryTotal: server.memTotal,
         diskUsed: server.diskUsed, diskTotal: server.diskTotal,
+        cpuPercent: server.cpuUsage,
+        memoryPercent: server.memTotal > 0 ? Math.round((server.memUsed / server.memTotal) * 100) : 0,
+        diskPercent: server.diskTotal > 0 ? Math.round((server.diskUsed / server.diskTotal) * 100) : 0,
+        diskUsedGb: Math.round(server.diskUsed / (1024 * 1024 * 1024) * 10) / 10,
+        diskTotalGb: Math.round(server.diskTotal / (1024 * 1024 * 1024) * 10) / 10,
         goroutines: 0, sysLoad: 0, procLoad: 0,
+        storageType: server.storageType,
+        storageModel: server.storageModel,
+        iopsEstimate: server.iopsEstimate,
       },
       storage: { 
         chainDataSize: storageMetrics.chainDataSize,
         databaseSize: storageMetrics.databaseSize,
+        storageType: server.storageType,
+        storageModel: server.storageModel,
+        iopsEstimate: server.iopsEstimate,
         diskReadRate: 0, 
         diskWriteRate: 0, 
         compactTime: 0, 
