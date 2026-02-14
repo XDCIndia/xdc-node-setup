@@ -146,7 +146,7 @@ args=(
     --mine
     --gasprice 1
     --targetgaslimit 420000000
-    --ipcpath /work/xdcchain/XDC.ipc
+    --ipcpath /tmp/XDC.ipc
 )
 
 # Add wallet
