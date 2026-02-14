@@ -444,7 +444,7 @@ export async function GET() {
         errors: diagnostics.errors,
         lastKnownBlock: diagnostics.lastBlock || '0',
       },
-      blockchain: { blockHeight: 0, highestBlock: 0, syncPercent: 0, isSyncing: false, peers: 0, peersInbound: 0, peersOutbound: 0, uptime: 0, chainId: '50', coinbase: '', ethstatsName: '', clientVersion: '', clientType: 'unknown' },
+      blockchain: { blockHeight: 0, highestBlock: 0, networkHeight: 0, syncPercent: 0, isSyncing: false, peers: 0, peersInbound: 0, peersOutbound: 0, uptime: 0, chainId: '50', coinbase: '', ethstatsName: '', clientVersion: '', clientType: 'unknown' },
       consensus: { epoch: 0, epochProgress: 0, masternodeStatus: 'Not Configured', coinbase: '', blockTime: 0, signingRate: 0, stakeAmount: 0, walletBalance: 0, totalRewards: 0, penalties: 0 },
       sync: { syncRate: 0, reorgsAdd: 0, reorgsDrop: 0 },
       txpool: { pending: 0, queued: 0, isSyncing: false, available: false, slots: 0, valid: 0, invalid: 0, underpriced: 0 },

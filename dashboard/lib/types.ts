@@ -7,6 +7,7 @@ export interface NodeConfig {
 export interface BlockchainData {
   blockHeight: number;
   highestBlock: number;
+  networkHeight: number;
   syncPercent: number;
   isSyncing: boolean;
   peers: number;
