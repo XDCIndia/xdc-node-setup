@@ -11,6 +11,7 @@ erigon/
 
 # Node data directories
 /data/
+.xdc-node/
 *.db
 *.ldb
 
