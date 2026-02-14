@@ -108,6 +108,14 @@ Erigon uses a **multi-sentry architecture** where P2P networking is separated fr
 
 ## Peer Connection (CRITICAL)
 
+> ⚠️ **WARNING - P2P Port Compatibility**
+> 
+> **Port 30304 (eth/63)** is for **XDC peers** — this is the ONLY port compatible with XDC geth nodes.
+> 
+> **Port 30311 (eth/68)** is NOT compatible with XDC geth nodes — it uses a newer Ethereum protocol that XDC nodes do not support.
+> 
+> **Always use port 30304** when connecting Erigon to XDC geth nodes or when advertising your enode to other XDC nodes.
+
 ### Understanding Dual Sentries
 
 Erigon runs **TWO separate P2P sentries** on different ports with different protocol versions:
@@ -115,13 +123,13 @@ Erigon runs **TWO separate P2P sentries** on different ports with different prot
 | Sentry | Port | Protocol | XDC Compatible | Use For |
 |--------|------|----------|----------------|---------|
 | **Sentry 1** | **30304** | **eth/63** | ✅ **YES** | **XDC geth nodes** |
-| Sentry 2 | 30311 | eth/68 | ❌ NO | Standard Ethereum nodes |
+| Sentry 2 | 30311 | eth/68 | ❌ NO | Standard Ethereum nodes (NOT XDC) |
 
 **XDC Network Reality:**
 - XDC geth nodes only support: `eth/62`, `eth/63`, `eth/100`
 - They **DO NOT** support `eth/68`
 - You **MUST** connect XDC peers to port **30304** (eth/63 sentry)
-- Port 30311 is for future Ethereum compatibility testing
+- Port 30311 is for future Ethereum compatibility testing only
 
 ### Connecting XDC Peers
 

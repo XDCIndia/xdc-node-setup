@@ -146,8 +146,16 @@ Select client [1-3] (default: 1):
 The **Erigon-XDC** client provides multi-client diversity with a dual-sentry architecture:
 
 - **eth/63 sentry** on port **30304** — connects to XDC Network peers
-- **eth/68 sentry** on port **30311** — standard Ethereum P2P (for future compatibility)
+- **eth/68 sentry** on port **30311** — standard Ethereum P2P (NOT compatible with XDC)
 - **RPC** on port **8547** — JSON-RPC API endpoint
+
+> ⚠️ **WARNING - P2P Port Compatibility**
+> 
+> **Port 30304 (eth/63)** is for **XDC peers** — this is the ONLY port compatible with XDC geth nodes.
+> 
+> **Port 30311 (eth/68)** is NOT compatible with XDC geth nodes — it uses a newer Ethereum protocol.
+> 
+> **Always use port 30304** when connecting Erigon to XDC geth nodes.
 
 > **Note:** Erigon builds from source which takes approximately **10-15 minutes** during initial setup.
 

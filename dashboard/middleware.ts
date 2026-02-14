@@ -30,15 +30,17 @@ function parseBasicAuth(header: string): { username: string; password: string } 
 }
 
 function validateCredentials(username: string, password: string): boolean {
-  const expectedUser = process.env.DASHBOARD_USER;
-  const expectedPass = process.env.DASHBOARD_PASSWORD;
-  
-  // If credentials not configured, allow access (backwards compatible for local use)
-  if (!expectedUser || !expectedPass) {
-    return true;
-  }
+  const expectedUser = process.env.DASHBOARD_USER || 'admin';
+  const expectedPass = process.env.DASHBOARD_PASS || 'xdc-skyone';
   
   return username === expectedUser && password === expectedPass;
+}
+
+function isAuthEnabled(): boolean {
+  const authEnabled = process.env.DASHBOARD_AUTH_ENABLED;
+  // If not set or set to "true", auth is enabled
+  // Only disable if explicitly set to "false"
+  return authEnabled !== 'false';
 }
 
 export function middleware(req: NextRequest) {
@@ -49,12 +51,8 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
   
-  // Check if auth is configured
-  const expectedUser = process.env.DASHBOARD_USER;
-  const expectedPass = process.env.DASHBOARD_PASSWORD;
-  
-  // If credentials not set, allow access (backwards compatible for local use)
-  if (!expectedUser || !expectedPass) {
+  // Check if auth is enabled
+  if (!isAuthEnabled()) {
     const response = NextResponse.next();
     // Add security headers even when auth is disabled
     response.headers.set('X-Frame-Options', 'DENY');
