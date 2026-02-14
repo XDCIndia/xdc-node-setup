@@ -822,7 +822,7 @@ for bin in XDC XDC-mainnet XDC-testnet XDC-devnet; do
 done
 command -v XDC &>/dev/null || { echo "FATAL: No XDC binary"; exit 1; }
 : "${SYNC_MODE:=full}" "${GC_MODE:=full}" "${LOG_LEVEL:=2}" "${RPC_ADDR:=0.0.0.0}" "${RPC_PORT:=8545}"
-: "${RPC_API:=eth,net,web3,XDPoS}" "${WS_ADDR:=0.0.0.0}" "${WS_PORT:=8546}"
+: "${RPC_API:=admin,eth,net,web3,XDPoS}" "${WS_ADDR:=0.0.0.0}" "${WS_PORT:=8546}"
 if [ ! -d /work/xdcchain/XDC/chaindata ]; then
     wallet=$(XDC account new --password /work/.pwd --datadir /work/xdcchain 2>/dev/null | awk -F '[{}]' '{print $2}')
     echo "$wallet" > /work/xdcchain/coinbase.txt
@@ -895,12 +895,12 @@ ENABLE_RPC=true
 ENABLE_WS=true
 RPC_ADDR=0.0.0.0
 RPC_PORT=8545
-RPC_API=eth,net,web3,XDPoS
+RPC_API=admin,eth,net,web3,XDPoS
 RPC_CORS_DOMAIN=*
 RPC_VHOSTS=*
 WS_ADDR=0.0.0.0
 WS_PORT=8546
-WS_API=eth,net,web3,XDPoS
+WS_API=admin,eth,net,web3,XDPoS
 WS_ORIGINS=*
 ENVEOF
 
