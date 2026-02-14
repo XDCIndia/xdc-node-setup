@@ -661,8 +661,8 @@ configure_node() {
     chmod 700 "$DATA_DIR/keystore" 2>/dev/null || true
     
     # Create environment file
-    ensure_file_path "$CONFIG_DIR/node.env"
-    cat > "$CONFIG_DIR/node.env" << EOF
+    ensure_file_path "$STATE_DIR/node.env"
+    cat > "$STATE_DIR/node.env" << EOF
 # XDC Node Configuration
 # Generated on $(date)
 NETWORK=$NETWORK
@@ -681,7 +681,7 @@ ENABLE_NOTIFICATIONS=$ENABLE_NOTIFICATIONS
 ENABLE_UPDATES=$ENABLE_UPDATES
 EOF
     
-    chmod 600 "$CONFIG_DIR/node.env"
+    chmod 600 "$STATE_DIR/node.env"
     log "Node configuration saved"
 }
 
@@ -691,7 +691,7 @@ EOF
 generate_config_toml() {
     log "Generating config.toml..."
     
-    local config_toml="$PROJECT_ROOT/config.toml"
+    local config_toml="$STATE_DIR/config.toml"
     local template="$CONFIG_DIR/config.toml.template"
     
     # Check if template exists
@@ -886,8 +886,8 @@ ENTRYEOF
     chmod +x "$docker_dir/entrypoint.sh"
     
     # Create .env file
-    ensure_file_path "$network_dir/.env"
-    cat > "$network_dir/.env" << ENVEOF
+    ensure_file_path "$STATE_DIR/.env"
+    cat > "$STATE_DIR/.env" << ENVEOF
 INSTANCE_NAME=XDC_Node
 CONTACT_DETAILS=admin@localhost
 SYNC_MODE=${SYNC_MODE}
@@ -939,9 +939,9 @@ services:
       - ./entrypoint.sh:/work/entrypoint.sh
       - ./mainnet/bootnodes.list:/work/bootnodes.list
       - ./mainnet/.pwd:/work/.pwd
-      - ../config.toml:/etc/xdc-node/config.toml:ro
+      - ../${NETWORK}/.xdc-node/config.toml:/etc/xdc-node/config.toml:ro
     env_file:
-      - ./mainnet/.env
+      - ../${NETWORK}/.xdc-node/.env
     entrypoint: /work/entrypoint.sh
       --ws
       --wsaddr 0.0.0.0
@@ -1025,7 +1025,7 @@ EOF
     network_mode: host
     volumes:
       - ./skynet-agent.sh:/opt/skynet/agent.sh:ro
-      - ./skynet.conf:/etc/xdc-node/skynet.conf:ro
+      - ../${NETWORK}/.xdc-node/skynet.conf:/etc/xdc-node/skynet.conf:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /etc/ssh/sshd_config:/host/sshd_config:ro
       - /proc:/host/proc:ro
@@ -1056,9 +1056,9 @@ EOF
     chmod +x "$PROJECT_ROOT/docker/skynet-agent.sh"
     
     # Create initial skynet.conf from template (will be updated after registration)
-    if [[ ! -f "$PROJECT_ROOT/docker/skynet.conf" ]]; then
-        cp "$SCRIPT_DIR/configs/skynet.conf.template" "$PROJECT_ROOT/docker/skynet.conf" 2>/dev/null || \
-            curl -sSL "https://raw.githubusercontent.com/XDC-Node-Setup/main/configs/skynet.conf.template" -o "$PROJECT_ROOT/docker/skynet.conf"
+    if [[ ! -f "$STATE_DIR/skynet.conf" ]]; then
+        cp "$SCRIPT_DIR/configs/skynet.conf.template" "$STATE_DIR/skynet.conf" 2>/dev/null || \
+            curl -sSL "https://raw.githubusercontent.com/XDC-Node-Setup/main/configs/skynet.conf.template" -o "$STATE_DIR/skynet.conf"
     fi
 
     # Close the compose file

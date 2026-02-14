@@ -25,7 +25,7 @@ services:
       - ./${NETWORK:-mainnet}/start-node.sh:/work/start.sh:ro
       - ./${NETWORK:-mainnet}/bootnodes.list:/work/bootnodes.list:ro
       - ./${NETWORK:-mainnet}/.pwd:/work/.pwd:ro
-      - ./config.toml:/etc/xdc-node/config.toml:ro
+      - ../${NETWORK:-mainnet}/.xdc-node/config.toml:/etc/xdc-node/config.toml:ro
       - /etc/localtime:/etc/localtime:ro
     environment:
       - NETWORK=${NETWORK:-mainnet}
@@ -278,7 +278,7 @@ services:
       - ../dashboard/html:/usr/share/nginx/html:ro
       # SkyNet Agent volumes
       - ./skynet-agent.sh:/agent.sh:ro
-      - ./skynet.conf:/etc/xdc-node/skynet.conf:ro
+      - ../${NETWORK:-mainnet}/.xdc-node/skynet.conf:/etc/xdc-node/skynet.conf:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /etc/ssh/sshd_config:/host/sshd_config:ro
       - /proc:/host/proc:ro
