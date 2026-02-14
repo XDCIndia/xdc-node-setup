@@ -3,6 +3,11 @@
 # XDC Node Log Rotation Script
 # Compress daily logs, move to oldlogs/, and delete logs older than 90 days
 # Compatible with: bash 3.2+ (macOS, Linux)
+#
+# NOTE: Docker container logs are handled separately by Docker's json-file
+#       logging driver with max-size: 100m and max-file: 5 (configured in
+#       docker-compose.yml). This script manages XDC node application logs
+#       in {network}/xdcchain/ directory.
 #==============================================================================
 
 set -euo pipefail
