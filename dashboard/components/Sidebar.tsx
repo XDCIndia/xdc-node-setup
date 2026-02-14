@@ -146,8 +146,8 @@ export default function Sidebar() {
         </div>
         {(!collapsed || isMobile) && (
           <div className="overflow-hidden">
-            <h1 className="text-sm font-bold text-[var(--text-primary)] whitespace-nowrap">XDC Node</h1>
-            <p className="text-[10px] text-[var(--text-tertiary)] whitespace-nowrap">Setup Dashboard</p>
+            <h1 className="text-sm font-bold text-[var(--text-primary)] whitespace-nowrap">XDC SkyOne</h1>
+            <p className="text-[10px] text-[var(--text-tertiary)] whitespace-nowrap">Node Dashboard</p>
           </div>
         )}
         {isMobile && (
@@ -291,7 +291,7 @@ export default function Sidebar() {
               <div className="w-7 h-7 rounded-lg flex items-center justify-center overflow-hidden">
                 <img src="https://s2.coinmarketcap.com/static/img/coins/200x200/2634.png" alt="XDC" width={28} height={28} className="rounded-lg" />
               </div>
-              <span className="text-sm font-bold text-[var(--text-primary)]">XDC Node</span>
+              <span className="text-sm font-bold text-[var(--text-primary)]">XDC SkyOne</span>
             </div>
           </div>
           

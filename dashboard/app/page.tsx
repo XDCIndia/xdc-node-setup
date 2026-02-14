@@ -285,7 +285,7 @@ export default function Home() {
         {/* Footer */}
         <div className="border-t border-[var(--border-subtle)] pt-6 mt-8">
           <div className="text-center text-sm text-[var(--text-tertiary)]">
-            <p>XDC Node Dashboard &copy; {new Date().getFullYear()}</p>
+            <p>XDC SkyOne &copy; {new Date().getFullYear()}</p>
             <p className="mt-1">
               Built with Next.js 14 &middot; Auto-refresh every {REFRESH_INTERVAL}s
             </p>
