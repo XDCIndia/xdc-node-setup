@@ -60,7 +60,7 @@ readonly LOG_FILE="${PROJECT_ROOT}/xdc-node-setup.log"
 # Colors & UI
 #==============================================================================
 # Guard to prevent "readonly variable" error if colors already defined (e.g., from utils.sh)
-if [[ -z "${RED:-}" ]]; then
+if ! declare -p RED &>/dev/null; then
     if [[ -t 1 ]]; then
         readonly RED='\033[0;31m'
         readonly GREEN='\033[0;32m'
