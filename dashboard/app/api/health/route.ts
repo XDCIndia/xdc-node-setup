@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const RPC_URL = process.env.RPC_URL || 'http://xdc-node:8545';
+function getRpcUrl() { return process.env.RPC_URL || 'http://xdc-node:8545'; }
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +11,7 @@ export async function GET() {
   };
 
   try {
-    const rpcResponse = await fetch(RPC_URL, {
+    const rpcResponse = await fetch(getRpcUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 }),

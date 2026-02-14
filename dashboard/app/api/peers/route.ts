@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:38545';
+function getRpcUrl() { return process.env.RPC_URL || 'http://xdc-node:8545'; }
 const GEO_CACHE_TTL = parseInt(process.env.GEO_CACHE_TTL || '300000'); // 5 minutes
 
 interface PeerNetwork {
@@ -153,7 +153,7 @@ export const revalidate = 0;
 export async function GET() {
   try {
     // Fetch peers from XDC RPC
-    const response = await fetch(RPC_URL, {
+    const response = await fetch(getRpcUrl(), {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',

@@ -5,8 +5,8 @@ import os from 'os';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const RPC_URL = process.env.RPC_URL || 'http://xdc-node:8545';
-const MAINNET_RPC = 'https://erpc.xinfin.network';
+function getRpcUrl() { return process.env.RPC_URL || 'http://xdc-node:8545'; }
+function getMainnetRpc() { return process.env.MAINNET_RPC || 'https://erpc.xinfin.network'; }
 
 async function rpcCall(url: string, method: string, params: unknown[] = []): Promise<unknown> {
   try {
@@ -82,14 +82,14 @@ export async function GET() {
       peersResult,
       mainnetBlockResult,
     ] = await Promise.all([
-      rpcCall(RPC_URL, 'eth_blockNumber'),
-      rpcCall(RPC_URL, 'eth_syncing'),
-      rpcCall(RPC_URL, 'net_peerCount'),
-      rpcCall(RPC_URL, 'admin_nodeInfo'),
-      rpcCall(RPC_URL, 'eth_coinbase'),
-      rpcCall(RPC_URL, 'txpool_status'),
-      rpcCall(RPC_URL, 'admin_peers'),
-      rpcCall(MAINNET_RPC, 'eth_blockNumber'),
+      rpcCall(getRpcUrl(), 'eth_blockNumber'),
+      rpcCall(getRpcUrl(), 'eth_syncing'),
+      rpcCall(getRpcUrl(), 'net_peerCount'),
+      rpcCall(getRpcUrl(), 'admin_nodeInfo'),
+      rpcCall(getRpcUrl(), 'eth_coinbase'),
+      rpcCall(getRpcUrl(), 'txpool_status'),
+      rpcCall(getRpcUrl(), 'admin_peers'),
+      rpcCall(getMainnetRpc(), 'eth_blockNumber'),
     ]);
 
     const blockHeight = hexToNumber(blockNumberResult as string);
