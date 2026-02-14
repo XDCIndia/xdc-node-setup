@@ -11,7 +11,7 @@ echo "Starting SkyNet Agent..."
   done
 ) &
 
-# Start Dashboard (production mode)
+# Start Dashboard (dev mode — no build step needed)
 echo "Starting XDC Dashboard on port 3000..."
 cd /app
-exec npx next start -p 3000 -H 0.0.0.0
+exec npx next dev -p 3000 -H 0.0.0.0

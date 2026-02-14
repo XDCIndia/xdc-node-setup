@@ -11,9 +11,6 @@ RUN npm ci --include=dev
 # Copy source code
 COPY . .
 
-# Build for production
-RUN npx next build
-
 # Copy startup script
 COPY combined-start.sh /combined-start.sh
 RUN chmod +x /combined-start.sh
