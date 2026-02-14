@@ -2059,6 +2059,16 @@ EOF
         export RPC_PORT="$rpc_port" WS_PORT="$ws_port" PORT="$p2p_port" P2P_PORT="$p2p_port" DASHBOARD_PORT="$dash_port"
         [[ -n "$network" ]] && export NETWORK="$network"
         
+        # Ensure skynet.conf exists as a file (Docker creates a directory if missing)
+        local _skynet_conf="../${network:-mainnet}/.xdc-node/skynet.conf"
+        if [[ -d "$_skynet_conf" ]]; then
+            rm -rf "$_skynet_conf"
+        fi
+        if [[ ! -f "$_skynet_conf" ]]; then
+            mkdir -p "$(dirname "$_skynet_conf")"
+            touch "$_skynet_conf"
+        fi
+        
         if $compose_cmd up -d 2>/dev/null; then
             stop_spinner true "Node started"
         else

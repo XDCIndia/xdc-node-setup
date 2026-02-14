@@ -3,10 +3,17 @@
 
 # Load SkyNet config if available (provides SKYNET_NODE_ID, SKYNET_API_KEY, etc.)
 SKYNET_CONF="${SKYNET_CONF:-/etc/xdc-node/skynet.conf}"
-# Docker may create skynet.conf as a directory if mount source was missing — skip if so
+# Docker may create skynet.conf as a directory if mount source was missing — fix it
 if [ -d "$SKYNET_CONF" ]; then
-  echo "WARNING: $SKYNET_CONF is a directory (Docker mount artifact). Skipping SkyNet config."
-  SKYNET_CONF=""
+  echo "WARNING: $SKYNET_CONF is a directory (Docker mount artifact). Replacing with file."
+  rm -rf "$SKYNET_CONF"
+  # Create minimal config — auto-registration will fill in the rest
+  cat > "$SKYNET_CONF" <<EOCONF
+SKYNET_API_URL=https://net.xdc.network/api/v1
+SKYNET_API_KEY=${SKYNET_API_KEY:-}
+SKYNET_NODE_NAME=$(hostname)
+SKYNET_ROLE=fullnode
+EOCONF
 fi
 if [ -f "$SKYNET_CONF" ]; then
   echo "Loading SkyNet config from $SKYNET_CONF"
