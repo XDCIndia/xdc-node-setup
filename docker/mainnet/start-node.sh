@@ -198,6 +198,7 @@ args=(
     --gasprice 1
     --targetgaslimit 420000000
     --ipcpath /tmp/XDC.ipc
+    --nat=any
 )
 
 # Add wallet unlock if available

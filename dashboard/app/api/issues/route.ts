@@ -19,17 +19,22 @@ const ISSUE_EXPIRY_MS = 30 * 60 * 1000;
 /**
  * Store or update detected issues
  * Called by the metrics endpoint after detection
+ * Note: This is accessed via the global object to avoid Next.js route export restrictions
  */
-export function updateActiveIssues(issues: DetectedIssue[]): void {
+declare global {
+  var updateActiveIssues: ((issues: DetectedIssue[]) => void) | undefined;
+}
+
+function updateActiveIssues(issues: DetectedIssue[]): void {
   const now = Date.now();
   
   // Clear expired issues
-  for (const [type, issue] of activeIssues.entries()) {
+  Array.from(activeIssues.entries()).forEach(([type, issue]) => {
     const issueTime = new Date(issue.detectedAt).getTime();
     if (now - issueTime > ISSUE_EXPIRY_MS) {
       activeIssues.delete(type);
     }
-  }
+  });
   
   // Update with new detections
   for (const issue of issues) {
@@ -39,6 +44,11 @@ export function updateActiveIssues(issues: DetectedIssue[]): void {
   lastCheckTime = new Date().toISOString();
 }
 
+// Expose via global for other API routes to use
+if (typeof global !== 'undefined') {
+  global.updateActiveIssues = updateActiveIssues;
+}
+
 /**
  * GET /api/issues
  * Returns currently active issues
@@ -46,12 +56,12 @@ export function updateActiveIssues(issues: DetectedIssue[]): void {
 export async function GET() {
   // Clean up expired issues before returning
   const now = Date.now();
-  for (const [type, issue] of activeIssues.entries()) {
+  Array.from(activeIssues.entries()).forEach(([type, issue]) => {
     const issueTime = new Date(issue.detectedAt).getTime();
     if (now - issueTime > ISSUE_EXPIRY_MS) {
       activeIssues.delete(type);
     }
-  }
+  });
   
   const issues = Array.from(activeIssues.values());
   

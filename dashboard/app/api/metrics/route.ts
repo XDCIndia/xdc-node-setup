@@ -2,9 +2,8 @@ import { NextResponse } from 'next/server';
 import { execSync } from 'child_process';
 import { pushToSkyNet } from '@/lib/skynet-bridge';
 import { addSnapshot, getRawHistory } from '@/lib/metrics-history';
-import { detectIssues } from '@/lib/issue-detector';
+import { detectIssues, DetectedIssue } from '@/lib/issue-detector';
 import { reportIssues } from '@/lib/issue-reporter';
-import { updateActiveIssues } from '@/app/api/issues/route';
 import { lfgCheck } from '@/lib/lfg';
 
 export const dynamic = 'force-dynamic';
@@ -12,6 +11,11 @@ export const revalidate = 0;
 
 // Module-level storage for issue detection
 let previousMetrics: any = null;
+
+// Global type declaration for updateActiveIssues
+declare global {
+  var updateActiveIssues: ((issues: DetectedIssue[]) => void) | undefined;
+}
 
 function getRpcUrl() { return process.env.RPC_URL || 'http://xdc-node:8545'; }
 function getMainnetRpc() { return process.env.MAINNET_RPC || 'https://erpc.xinfin.network'; }
@@ -368,8 +372,10 @@ export async function GET() {
     const metricsHistory = getRawHistory();
     const detectedIssues = detectIssues(response, previousMetrics, metricsHistory);
     
-    // Update active issues tracker
-    updateActiveIssues(detectedIssues);
+    // Update active issues tracker via global function
+    if (typeof global !== 'undefined' && global.updateActiveIssues) {
+      global.updateActiveIssues(detectedIssues);
+}
     
     // Report to SkyNet (fire and forget)
     reportIssues(detectedIssues).catch(() => {});
