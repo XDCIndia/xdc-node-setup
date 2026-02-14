@@ -23,7 +23,9 @@ export interface BlockchainData {
 export interface ConsensusData {
   epoch: number;
   epochProgress: number;
-  masternodeStatus: 'Active' | 'Inactive' | 'Slashed';
+  masternodeStatus: 'Active' | 'Inactive' | 'Slashed' | 'Not Configured';
+  coinbase?: string;
+  blockTime?: number;
   signingRate: number;
   stakeAmount: number;
   walletBalance: number;
@@ -44,6 +46,8 @@ export interface TxPoolData {
   valid: number;
   invalid: number;
   underpriced: number;
+  isSyncing?: boolean;
+  available?: boolean;
 }
 
 export interface ServerData {

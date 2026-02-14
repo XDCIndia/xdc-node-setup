@@ -246,6 +246,13 @@ export async function GET() {
     const epoch = Math.floor(blockHeight / 900);
     const epochProgress = ((blockHeight % 900) / 900) * 100;
     
+    // Determine masternode status based on coinbase
+    const hasCoinbase = coinbase && coinbase !== '' && coinbase !== '0x' && coinbase !== '0x0000000000000000000000000000000000000000';
+    const masternodeStatus = hasCoinbase ? 'Active' : 'Not Configured';
+    
+    // Estimate block time (XDC has 2 second block time)
+    const blockTime = 2.0;
+    
     // Get diagnostics (especially useful when RPC is down)
     const diagnostics = !rpcConnected ? await getNodeDiagnostics() : { containerStatus: 'running healthy', recentLogs: [], errors: [], lastBlock: '' };
     
@@ -310,12 +317,17 @@ export async function GET() {
       consensus: {
         epoch,
         epochProgress: Math.round(epochProgress * 10) / 10,
-        masternodeStatus: 'Inactive' as string,
+        masternodeStatus,
+        coinbase: coinbase ? coinbase.replace('0x', 'xdc') : '',
+        blockTime,
         signingRate: 0, stakeAmount: 0, walletBalance: 0, totalRewards: 0, penalties: 0,
       },
       sync: { syncRate: 0, reorgsAdd: 0, reorgsDrop: 0 },
       txpool: {
-        pending: hexToNumber(txpool.pending), queued: hexToNumber(txpool.queued),
+        pending: hexToNumber(txpool?.pending),
+        queued: hexToNumber(txpool?.queued),
+        isSyncing,
+        available: txpoolRes.result !== null && txpoolRes.error === null,
         slots: 0, valid: 0, invalid: 0, underpriced: 0,
       },
       server: {
@@ -391,9 +403,9 @@ export async function GET() {
         lastKnownBlock: diagnostics.lastBlock || '0',
       },
       blockchain: { blockHeight: 0, highestBlock: 0, syncPercent: 0, isSyncing: false, peers: 0, peersInbound: 0, peersOutbound: 0, uptime: 0, chainId: '50', coinbase: '', ethstatsName: '', clientVersion: '', clientType: 'unknown' },
-      consensus: { epoch: 0, epochProgress: 0, masternodeStatus: 'Inactive', signingRate: 0, stakeAmount: 0, walletBalance: 0, totalRewards: 0, penalties: 0 },
+      consensus: { epoch: 0, epochProgress: 0, masternodeStatus: 'Not Configured', coinbase: '', blockTime: 0, signingRate: 0, stakeAmount: 0, walletBalance: 0, totalRewards: 0, penalties: 0 },
       sync: { syncRate: 0, reorgsAdd: 0, reorgsDrop: 0 },
-      txpool: { pending: 0, queued: 0, slots: 0, valid: 0, invalid: 0, underpriced: 0 },
+      txpool: { pending: 0, queued: 0, isSyncing: false, available: false, slots: 0, valid: 0, invalid: 0, underpriced: 0 },
       server: { cpuUsage: server.cpuUsage, memoryUsed: server.memUsed, memoryTotal: server.memTotal, diskUsed: server.diskUsed, diskTotal: server.diskTotal, goroutines: 0, sysLoad: 0, procLoad: 0 },
       storage: { chainDataSize: 0, databaseSize: 0, diskReadRate: 0, diskWriteRate: 0, compactTime: 0, trieCacheHitRate: 0, trieCacheMiss: 0 },
       network: { totalPeers: 0, inboundTraffic: 0, outboundTraffic: 0, dialSuccess: 0, dialTotal: 0, eth100Traffic: 0, eth63Traffic: 0, connectionErrors: 0 },
