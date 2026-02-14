@@ -46,6 +46,7 @@ Your node will be running and syncing within 5 minutes. Access the SkyOne dashbo
 - [Features](#features)
 - [Requirements](#requirements)
 - [Multi-Client Support](#multi-client-support)
+- [Cloud Deployment](#cloud-deployment)
 - [CLI Reference](#cli-reference)
 - [SkyOne Dashboard](#skyone-dashboard)
 - [SkyNet Integration](#skynet-integration)
@@ -144,6 +145,106 @@ xdc client
 - ✅ **Performance Options**: Choose the best client for your use case
 - ✅ **Future-Proof**: Easy migration as clients evolve
 - ✅ **Diversity**: Contributes to XDC network health
+
+---
+
+## ☁️ Cloud Deployment
+
+XDC Node Setup provides ready-to-use deployment templates for popular cloud platforms:
+
+### AWS AMI (Packer)
+
+Build a custom AMI with XDC node pre-installed:
+
+```bash
+cd deploy/aws
+packer build packer.json
+```
+
+**Features:**
+- Ubuntu 22.04 LTS base
+- Docker and Docker Compose pre-installed
+- XDC node auto-configuration
+- CloudWatch agent for monitoring
+
+**Deploy:**
+```bash
+# Launch instance from your new AMI
+aws ec2 run-instances \
+  --image-id ami-xxxxxxxx \
+  --instance-type t3.xlarge \
+  --key-name your-key \
+  --security-group-ids sg-xxxxxxxxx
+```
+
+### DigitalOcean 1-Click
+
+Deploy with DigitalOcean Marketplace:
+
+```bash
+# Build the snapshot
+cd deploy/digitalocean
+packer build marketplace.yaml
+
+# Or deploy via DO API
+curl -X POST https://api.digitalocean.com/v2/droplets \
+  -H "Authorization: Bearer $DO_TOKEN" \
+  -d '{"name":"xdc-node","region":"nyc3","size":"s-4vcpu-8gb","image":"ubuntu-22-04-x64"}'
+```
+
+**Features:**
+- One-click deployment from DO Marketplace
+- SkyOne dashboard pre-configured
+- Automatic firewall setup
+- First-boot configuration script
+
+### Akash Network (Decentralized Cloud)
+
+Deploy on the decentralized Akash cloud:
+
+```bash
+# Install Akash CLI first, then:
+akash tx deployment create deploy/akash/deploy.yaml --from your-key
+```
+
+**Features:**
+- Decentralized hosting
+- Pay with AKT tokens
+- Global provider network
+- Competitive pricing
+
+### Docker Hub
+
+Pull the official image:
+
+```bash
+docker pull xinfinorg/xdposchain:v2.6.8
+```
+
+Or build your own:
+
+```bash
+cd deploy/docker
+docker build -t xdc-node:latest .
+```
+
+See [deploy/docker/README.md](deploy/docker/README.md) for automated build setup instructions.
+
+### Cloud Deployment Comparison
+
+| Platform | Deployment Time | Cost/Month | Best For |
+|----------|-----------------|------------|----------|
+| **AWS** | ~5 min | $140 | Enterprise, scaling |
+| **DigitalOcean** | ~3 min | $48 | Simple setup, dev/test |
+| **Akash** | ~10 min | $20-40 | Decentralized, cost-saving |
+| **Self-hosted** | ~15 min | Hardware | Full control |
+
+### Quick Links
+
+- [AWS Packer Template](deploy/aws/packer.json)
+- [DigitalOcean Marketplace](deploy/digitalocean/marketplace.yaml)
+- [Akash SDL Manifest](deploy/akash/deploy.yaml)
+- [Docker Hub Setup](deploy/docker/README.md)
 
 ---
 

@@ -1,0 +1,13 @@
+name: XDC Network Node
+description: One-click XDC Network full node with SkyOne monitoring dashboard
+image:
+  distribution: Ubuntu
+  version: "22.04"
+  size: 160GB
+software:
+  - Docker
+  - XDC Node Setup CLI
+  - SkyOne Dashboard
+scripts:
+  setup: deploy/digitalocean/setup.sh
+  first-boot: deploy/digitalocean/first-boot.sh

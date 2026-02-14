@@ -1,0 +1,27 @@
+{
+  "builders": [{
+    "type": "amazon-ebs",
+    "region": "us-east-1",
+    "source_ami_filter": {
+      "filters": {
+        "name": "ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*",
+        "virtualization-type": "hvm"
+      },
+      "owners": ["099720109477"],
+      "most_recent": true
+    },
+    "instance_type": "t3.xlarge",
+    "ssh_username": "ubuntu",
+    "ami_name": "xdc-node-{{timestamp}}"
+  }],
+  "provisioners": [{
+    "type": "shell",
+    "inline": [
+      "sudo apt-get update",
+      "sudo apt-get install -y docker.io docker-compose-plugin git curl",
+      "sudo systemctl enable docker",
+      "curl -sSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/install.sh | sudo bash",
+      "sudo xdc setup --network mainnet --type full"
+    ]
+  }]
+}
