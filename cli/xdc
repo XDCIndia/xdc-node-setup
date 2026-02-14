@@ -119,47 +119,47 @@ EOF
 
 print_help() {
     cat << EOF
-$(c BOLD)xdc-node$(c NC) — XDC Network Node Management CLI
+$(c BOLD)xdc$(c NC) — XDC Network Node Management CLI
 
 $(c BOLD)USAGE:$(c NC)
-    xdc-node <command> [options]
+    xdc <command> [options]
 
 $(c BOLD)XDC-SPECIFIC COMMANDS:$(c NC)
 
-    $(c GREEN)masternode$(c NC)  Setup and manage masternode (stake check, keystore, registration)
-    $(c GREEN)rewards$(c NC)     Masternode rewards analytics (history, APY, exports)
-    $(c GREEN)cluster$(c NC)     Multi-node cluster management (failover, health)
-    $(c GREEN)stake$(c NC)       Stake management (delegations, auto-compound, tax)
-    $(c GREEN)peers$(c NC)       Optimize peer connections (latency ranking, NAT detection)
-    $(c GREEN)snapshot$(c NC)    Manage chain snapshots (download/create/verify)
-    $(c GREEN)monitor$(c NC)     XDC-specific monitoring (epoch, rewards, fork detection)
-    $(c GREEN)sync$(c NC)        Sync optimization (status, ETA, pruning)
-    $(c GREEN)rpc-secure$(c NC)  RPC security hardening (method filtering, rate limits)
-    $(c GREEN)network$(c NC)      Network intelligence (peer map, fork readiness, diversity)
-    $(c GREEN)consensus$(c NC)   XDPoS v2 consensus monitoring (epoch, rounds, votes, penalties)
-    $(c GREEN)network-stats$(c NC) Network-wide statistics and validator rankings
-    $(c GREEN)governance$(c NC)  Governance participation (proposals, voting, history)
+    $(c GREEN)masternode$(c NC)     Setup and manage masternode (stake check, keystore, registration)
+    $(c GREEN)rewards$(c NC)        Masternode rewards analytics (history, APY, exports)
+    $(c GREEN)cluster$(c NC)        Multi-node cluster management (failover, health)
+    $(c GREEN)stake$(c NC)          Stake management (delegations, auto-compound, tax)
+    $(c GREEN)peers$(c NC)          Optimize peer connections (latency ranking, NAT detection)
+    $(c GREEN)snapshot$(c NC)       Manage chain snapshots (download/create/verify)
+    $(c GREEN)monitor$(c NC)        XDC-specific monitoring (epoch, rewards, fork detection)
+    $(c GREEN)sync$(c NC)           Sync optimization (status, ETA, pruning)
+    $(c GREEN)rpc-secure$(c NC)     RPC security hardening (method filtering, rate limits)
+    $(c GREEN)network$(c NC)        Network intelligence (peer map, fork readiness, diversity)
+    $(c GREEN)consensus$(c NC)      XDPoS v2 consensus monitoring (epoch, rounds, votes, penalties)
+    $(c GREEN)network-stats$(c NC)  Network-wide statistics and validator rankings
+    $(c GREEN)governance$(c NC)     Governance participation (proposals, voting, history)
 
 $(c BOLD)GENERAL COMMANDS:$(c NC)
-    $(c GREEN)init$(c NC)          Interactive setup wizard (wraps setup.sh)
-    $(c GREEN)status$(c NC)        Quick node status overview
-    $(c GREEN)info$(c NC)          Alias for status (node information)
-    $(c GREEN)health$(c NC)        Run health check (wraps node-health-check.sh)
-    $(c GREEN)security$(c NC)      Run security audit (wraps security-harden.sh)
-    $(c GREEN)update$(c NC)        Check and apply version updates
-    $(c GREEN)backup$(c NC)        Trigger backup (wraps backup.sh)
-    $(c GREEN)restore$(c NC)       Restore from backup
-    $(c GREEN)logs$(c NC)          Tail node logs
-    $(c GREEN)restart$(c NC)       Graceful node restart
-    $(c GREEN)stop$(c NC)          Stop node
-    $(c GREEN)start$(c NC)         Start node
-    $(c GREEN)addpeers$(c NC)      Add peers from bootnodes.list (manual injection)
-    $(c GREEN)attach$(c NC)        Attach to XDC console (tries IPC first, falls back to RPC)
-    $(c GREEN)config$(c NC)        View/edit configuration
-    $(c GREEN)notify$(c NC)        Test notifications or send custom alert
-    $(c GREEN)dashboard$(c NC)     Start web dashboard
-    $(c GREEN)version$(c NC)       Show CLI and client versions
-    $(c GREEN)help$(c NC)          Show this help message
+    $(c GREEN)init$(c NC)           Interactive setup wizard (wraps setup.sh)
+    $(c GREEN)status$(c NC)         Quick node status overview with setup progress
+    $(c GREEN)info$(c NC)           Alias for status (node information)
+    $(c GREEN)health$(c NC)         Run health check (wraps node-health-check.sh)
+    $(c GREEN)security$(c NC)       Run security audit (advisory only, --fix to apply)
+    $(c GREEN)update$(c NC)         Check and apply version updates
+    $(c GREEN)backup$(c NC)         Trigger backup (wraps backup.sh)
+    $(c GREEN)restore$(c NC)        Restore from backup
+    $(c GREEN)logs$(c NC)           Tail node logs
+    $(c GREEN)restart$(c NC)        Graceful node restart
+    $(c GREEN)stop$(c NC)           Stop all XDC containers
+    $(c GREEN)start$(c NC)          Start node (auto-detects ports if in use)
+    $(c GREEN)addpeers$(c NC)       Add peers from bootnodes.list (manual injection)
+    $(c GREEN)attach$(c NC)         Attach to XDC console (IPC first, then RPC fallback)
+    $(c GREEN)config$(c NC)         View/edit configuration
+    $(c GREEN)notify$(c NC)         Test notifications or send custom alert
+    $(c GREEN)dashboard$(c NC)      Start web dashboard
+    $(c GREEN)version$(c NC)        Show CLI and client versions
+    $(c GREEN)help$(c NC)           Show this help message
 
 $(c BOLD)GLOBAL OPTIONS:$(c NC)
     --json        Output in JSON format
@@ -169,14 +169,18 @@ $(c BOLD)GLOBAL OPTIONS:$(c NC)
     --rpc URL     Override RPC endpoint URL
 
 $(c BOLD)EXAMPLES:$(c NC)
-    xdc-node init                    # Start interactive setup wizard
-    xdc-node status --watch          # Monitor status in real-time
-    xdc-node health --full --notify  # Full health check with notifications
-    xdc-node backup --encrypt        # Create encrypted backup
-    xdc-node logs --follow           # Tail logs continuously
+    xdc init                    # Start interactive setup wizard
+    xdc status                  # Show node status with setup progress
+    xdc status --watch          # Monitor status in real-time
+    xdc health --full --notify  # Full health check with notifications
+    xdc security                # Run security audit (advisory only)
+    xdc security --fix          # Apply security fixes (with confirmation)
+    xdc backup --encrypt        # Create encrypted backup
+    xdc logs --follow           # Tail logs continuously
+    xdc attach                  # Attach to XDC JavaScript console
 
 $(c BOLD)MORE INFO:$(c NC)
-    Run 'xdc-node <command> --help' for command-specific help.
+    Run 'xdc <command> --help' for command-specific help.
     Documentation: https://github.com/XinFinOrg/XDC-Node-Setup
 
 EOF
