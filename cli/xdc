@@ -671,19 +671,39 @@ EOF
             block_height=$((16#${hex_height#0x}))
         fi
         
-        # Get mainnet height for sync %
-        response=$(rpc_call "$mainnet_rpc" "eth_blockNumber")
-        hex_height=$(echo "$response" | jq -r '.result // "0x0"')
-        local mainnet_height=0
-        if [[ "$hex_height" != "0x0" && -n "$hex_height" && "$hex_height" != "null" ]]; then
-            mainnet_height=$((16#${hex_height#0x}))
-        fi
+        # Get sync status (dynamic, not just percentage)
+        response=$(rpc_call "$rpc_url" "eth_syncing")
+        local syncing=$(echo "$response" | jq -r '.result')
+        local sync_status="synced"
+        local sync_pct=100
         
-        # Calculate sync percentage
-        local sync_pct=0
-        if [[ $mainnet_height -gt 0 ]]; then
-            sync_pct=$((block_height * 100 / mainnet_height))
-            [[ $sync_pct -gt 100 ]] && sync_pct=100
+        if [[ "$syncing" != "false" && "$syncing" != "null" ]]; then
+            # Node is syncing - get current and highest block
+            local current_block=$(echo "$syncing" | jq -r '.currentBlock // "0x0"')
+            local highest_block=$(echo "$syncing" | jq -r '.highestBlock // "0x0"')
+            
+            if [[ "$current_block" != "0x0" && "$highest_block" != "0x0" ]]; then
+                local current=$((16#${current_block#0x}))
+                local highest=$((16#${highest_block#0x}))
+                if [[ $highest -gt 0 ]]; then
+                    sync_pct=$((current * 100 / highest))
+                    sync_status="syncing"
+                fi
+            fi
+        else
+            # Node reports synced - double-check against mainnet
+            response=$(rpc_call "$mainnet_rpc" "eth_blockNumber")
+            hex_height=$(echo "$response" | jq -r '.result // "0x0"')
+            local mainnet_height=0
+            if [[ "$hex_height" != "0x0" && -n "$hex_height" && "$hex_height" != "null" ]]; then
+                mainnet_height=$((16#${hex_height#0x}))
+            fi
+            
+            if [[ $mainnet_height -gt 0 ]]; then
+                sync_pct=$((block_height * 100 / mainnet_height))
+                [[ $sync_pct -gt 100 ]] && sync_pct=100
+                [[ $sync_pct -lt 99 ]] && sync_status="syncing"
+            fi
         fi
         
         # Get peer count
@@ -693,6 +713,35 @@ EOF
         local peers=0
         if [[ "$hex_peers" != "0x0" && -n "$hex_peers" && "$hex_peers" != "null" ]]; then
             peers=$((16#${hex_peers#0x}))
+        fi
+        
+        # Get node info (client version, node name, network)
+        response=$(rpc_call "$rpc_url" "admin_nodeInfo")
+        local client_version=$(echo "$response" | jq -r '.result.name // "unknown"')
+        local node_name=$(echo "$response" | jq -r '.result.id // "unknown"' | cut -d'@' -f1)
+        local network_id=$(echo "$response" | jq -r '.result.protocols.eth.network // .result.protocols.XDPoS.network // "unknown"')
+        
+        # Map network ID to name
+        local network="unknown"
+        case "$network_id" in
+            50|"50") network="mainnet" ;;
+            51|"51") network="testnet/apothem" ;;
+            89|"89") network="devnet" ;;
+            *) network="network-$network_id" ;;
+        esac
+        
+        # Get Docker container status
+        local container_status="not running"
+        local container=$(find_container 2>/dev/null || echo "")
+        if [[ -n "$container" ]]; then
+            local container_state=$(docker inspect -f '{{.State.Status}}' "$container" 2>/dev/null || echo "unknown")
+            case "$container_state" in
+                running) container_status="running" ;;
+                exited) container_status="exited" ;;
+                paused) container_status="paused" ;;
+                restarting) container_status="restarting" ;;
+                *) container_status="$container_state" ;;
+            esac
         fi
         
         # Get system stats
@@ -712,7 +761,7 @@ EOF
         if [[ $block_height -eq 0 ]]; then
             status="$(c RED)●$(c NC) Offline"
             status_json="offline"
-        elif [[ $sync_pct -lt 99 ]]; then
+        elif [[ "$sync_status" == "syncing" ]]; then
             status="$(c YELLOW)●$(c NC) Syncing"
             status_json="syncing"
         elif [[ $peers -lt 3 ]]; then
@@ -720,21 +769,27 @@ EOF
             status_json="low_peers"
         fi
         
-        # Detect client
+        # Extract just client name from version string
         local client
-        client=$(detect_client)
+        client=$(echo "$client_version" | cut -d'/' -f1)
         
         if json_output ""; then
             cat << EOF
 {
   "client": "$client",
+  "clientVersion": "$client_version",
+  "nodeName": "$node_name",
+  "network": "$network",
+  "networkId": "$network_id",
   "blockHeight": $block_height,
-  "mainnetHeight": $mainnet_height,
   "syncPercent": $sync_pct,
+  "syncStatus": "$sync_status",
   "peers": $peers,
   "cpu": $cpu_usage,
   "ram": $ram_usage,
   "disk": $disk_usage,
+  "containerStatus": "$container_status",
+  "rpcUrl": "$rpc_url",
   "status": "$status_json",
   "timestamp": "$(date -Iseconds)"
 }
@@ -760,11 +815,17 @@ EOF
             "$status"
         echo -e "$(c BOLD)└─────────────┴───────────┴───────┴───────┴───────┴───────┴───────┴──────────┘$(c NC)"
         echo ""
+        echo -e "$(c BOLD)Node Information:$(c NC)"
+        echo -e "  Client:    $(c CYAN)${client_version}$(c NC)"
+        echo -e "  Node Name: $(c CYAN)${node_name:0:40}$(c NC)"
+        echo -e "  Network:   $(c CYAN)${network} (ID: ${network_id})$(c NC)"
+        echo -e "  Container: $(c CYAN)${container_status}$(c NC)"
+        echo ""
         echo -e "$(c BOLD)RPC Endpoints:$(c NC)"
-        echo -e "  HTTP: $(c CYAN)${rpc_url}$(c NC)"
-        echo -e "  WS:   $(c CYAN)ws://127.0.0.1:${WS_PORT:-8546}$(c NC)"
-        echo -e "  IPC:  $(c CYAN)${XDC_DATA}/XDC.ipc$(c NC)"
-        echo -e "  Dashboard: $(c CYAN)http://localhost:8888$(c NC)"
+        echo -e "  HTTP:      $(c CYAN)${rpc_url}$(c NC)"
+        echo -e "  WS:        $(c CYAN)ws://127.0.0.1:${WS_PORT:-8546}$(c NC)"
+        echo -e "  IPC:       $(c CYAN)${XDC_DATA}/XDC.ipc$(c NC)"
+        echo -e "  Dashboard: $(c CYAN)http://localhost:${DASHBOARD_PORT:-8888}$(c NC)"
         echo ""
         echo -e "$(c DIM)Updated: $(date '+%Y-%m-%d %H:%M:%S')$(c NC)"
     }
