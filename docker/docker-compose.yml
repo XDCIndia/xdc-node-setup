@@ -91,7 +91,7 @@ services:
       - xdc-network
     depends_on:
       xdc-node:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health/live || exit 1"]
       interval: 30s
