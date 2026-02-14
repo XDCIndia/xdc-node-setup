@@ -956,24 +956,30 @@ cmd_security() {
             --fix) fix=true; shift ;;
             --help|-h)
                 cat << EOF
-$(c BOLD)xdc-node security$(c NC) — Run security audit
+$(c BOLD)xdc security$(c NC) — Run security audit
 
 $(c BOLD)USAGE:$(c NC)
-    xdc-node security [options]
+    xdc security [options]
 
 $(c BOLD)OPTIONS:$(c NC)
-    --audit-only  Check only, don't apply changes
-    --fix         Apply recommended security fixes
+    --audit-only  Check only, don't apply changes (default)
+    --fix         Apply recommended security fixes (requires confirmation)
     --json        Output in JSON format
     --help        Show this help
+
+$(c BOLD)DESCRIPTION:$(c NC)
+    By default, this command only audits your security configuration
+    and provides recommendations. No files are modified unless you
+    explicitly use --fix.
 
 $(c BOLD)CHECKS:$(c NC)
     - SSH configuration
     - Firewall rules
     - File permissions
     - User accounts
-    - Network exposure
+    - Network exposure (RPC/WS)
     - Fail2ban status
+    - Automatic updates
 
 EOF
                 return 0
@@ -984,19 +990,13 @@ EOF
     
     require_root
     
-    local script="${SCRIPTS_DIR}/security-harden.sh"
-    
-    if [[ ! -f "$script" ]]; then
-        die "Security script not found at $script"
-    fi
-    
     if [[ "$QUIET" != "true" ]]; then
         print_banner
-        echo -e "$(c BOLD)Security Audit$(c NC)"
+        echo -e "$(c BOLD)Security Audit$(c NC) $(c DIM)(read-only, no changes will be made)$(c NC)"
         echo ""
     fi
     
-    # Security checks
+    # Security checks (read-only)
     declare -A checks=(
         ["SSH Key-Only Auth"]="grep -q 'PasswordAuthentication no' /etc/ssh/sshd_config 2>/dev/null"
         ["SSH Non-Standard Port"]="! grep -qE '^Port 22$' /etc/ssh/sshd_config 2>/dev/null"
@@ -1008,9 +1008,20 @@ EOF
         ["Automatic Updates"]="systemctl is-enabled unattended-upgrades &>/dev/null"
     )
     
+    declare -A advice=(
+        ["SSH Key-Only Auth"]="Edit /etc/ssh/sshd_config: Set 'PasswordAuthentication no', then run 'systemctl restart sshd'"
+        ["SSH Non-Standard Port"]="Edit /etc/ssh/sshd_config: Set 'Port <non-22-port>', then run 'systemctl restart sshd'"
+        ["Firewall Enabled"]="Enable firewall: 'ufw allow 30303/tcp && ufw allow 30303/udp && ufw enable'"
+        ["Fail2ban Active"]="Install fail2ban: 'apt install fail2ban -y && systemctl enable fail2ban && systemctl start fail2ban'"
+        ["Root Login Restricted"]="Edit /etc/ssh/sshd_config: Set 'PermitRootLogin no', then run 'systemctl restart sshd'"
+        ["RPC Not Exposed"]="Check docker-compose.yml: RPC should bind to 127.0.0.1:8545 not 0.0.0.0:8545"
+        ["WebSocket Not Exposed"]="Check docker-compose.yml: WS should bind to 127.0.0.1:8546 not 0.0.0.0:8546"
+        ["Automatic Updates"]="Enable unattended-upgrades: 'apt install unattended-upgrades -y && dpkg-reconfigure -plow unattended-upgrades'"
+    )
+    
     local total=0
     local passed=0
-    local results=()
+    local failed_checks=()
     
     for check in "${!checks[@]}"; do
         total=$((total + 1))
@@ -1021,9 +1032,9 @@ EOF
             passed=$((passed + 1))
             status="pass"
             icon="$(c GREEN)✓$(c NC)"
+        else
+            failed_checks+=("$check")
         fi
-        
-        results+=("$icon $check")
         
         if [[ "$OUTPUT_JSON" != "true" ]]; then
             echo -e "$icon $check"
@@ -1056,13 +1067,41 @@ EOF
     echo -e "$(c BOLD)━━━ Security Score ━━━$(c NC)"
     echo -e "${score_color}${score}/100$(c NC) ($passed/$total checks passed)"
     
-    if [[ "$fix" == "true" && "$audit_only" != "true" ]]; then
+    # Show recommendations for failed checks
+    if [[ ${#failed_checks[@]} -gt 0 ]]; then
         echo ""
-        info "Applying security fixes..."
-        bash "$script"
+        echo -e "$(c BOLD)━━━ Recommendations ━━━$(c NC)"
+        for check in "${failed_checks[@]}"; do
+            echo ""
+            echo -e "$(c YELLOW)⚠$(c NC) $(c BOLD)$check$(c NC)"
+            echo -e "  $(c DIM)${advice[$check]}$(c NC)"
+        done
+        echo ""
+        echo -e "$(c CYAN)ℹ$(c NC) For more help: $(c BOLD)xdc -h$(c NC) or visit https://github.com/XinFinOrg/XDC-Node-Setup"
+    fi
+    
+    # Only offer --fix if score is low and user didn't already use it
+    if [[ "$fix" == "true" ]]; then
+        local script="${SCRIPTS_DIR}/security-harden.sh"
+        if [[ -f "$script" ]]; then
+            echo ""
+            warn "You are about to apply automated security fixes."
+            echo ""
+            read -p "$(echo -e "$(c BOLD)Continue? [y/N]$(c NC) ")" -n 1 -r
+            echo ""
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                info "Applying security fixes..."
+                bash "$script"
+            else
+                info "Security fixes cancelled. No changes were made."
+            fi
+        else
+            warn "Security hardening script not found at $script"
+        fi
     elif [[ $score -lt 80 ]]; then
         echo ""
-        warn "Run 'xdc-node security --fix' to apply recommended fixes"
+        info "To apply automated fixes: $(c BOLD)xdc security --fix$(c NC)"
+        info "Or apply recommendations manually using the commands above."
     fi
 }
 
