@@ -1438,10 +1438,17 @@ cmd_stop() {
         case "$1" in
             --help|-h)
                 cat << EOF
-$(c BOLD)xdc-node stop$(c NC) — Stop node
+$(c BOLD)xdc-node stop$(c NC) — Stop all XDC node containers
 
 $(c BOLD)USAGE:$(c NC)
     xdc-node stop
+
+$(c BOLD)DESCRIPTION:$(c NC)
+    Stops all XDC-related Docker containers including:
+    - xdc-node (main blockchain node)
+    - xdc-dashboard (web dashboard)
+    - skynet-agent (fleet monitoring)
+    - xdc-metrics-collector (metrics collection)
 
 $(c BOLD)OPTIONS:$(c NC)
     --help    Show this help
@@ -1453,40 +1460,62 @@ EOF
         esac
     done
     
-    # Try Docker first
-    local container
-    if container=$(find_container) && [[ -n "$container" ]]; then
-        info "Found Docker container: $container"
-        start_spinner "Stopping Docker container"
+    # Find and stop all XDC-related containers
+    local containers
+    containers=$(docker ps -q --filter "name=xdc" --filter "name=skynet" 2>/dev/null || true)
+    
+    if [[ -n "$containers" ]]; then
+        local count
+        count=$(echo "$containers" | wc -l)
+        info "Found $count XDC container(s)"
+        start_spinner "Stopping all XDC containers"
         
-        if docker stop "$container" >/dev/null 2>&1; then
-            stop_spinner true "Container stopped"
-            log "Docker container $container stopped"
+        if docker stop $containers >/dev/null 2>&1; then
+            stop_spinner true "All containers stopped"
+            log "Stopped $count XDC container(s)"
+        else
+            stop_spinner false "Some containers failed to stop"
+            warn "Some containers may not have stopped cleanly"
+        fi
+        return 0
+    fi
+    
+    # Try specific container names as fallback
+    local specific_containers="xdc-node xdc-dashboard skynet-agent xdc-metrics-collector"
+    local found_any=false
+    
+    for container in $specific_containers; do
+        if docker ps -q --filter "name=$container" | grep -q .; then
+            found_any=true
+            start_spinner "Stopping $container"
+            if docker stop "$container" >/dev/null 2>&1; then
+                stop_spinner true "$container stopped"
+            else
+                stop_spinner false "Failed to stop $container"
+            fi
+        fi
+    done
+    
+    if [[ "$found_any" == "false" ]]; then
+        # Fall back to systemctl
+        require_root
+        local service
+        service=$(detect_service)
+        
+        if [[ -z "$service" ]]; then
+            warn "No XDC node service or Docker container found"
             return 0
+        fi
+        
+        start_spinner "Stopping node"
+        
+        if systemctl stop "$service"; then
+            stop_spinner true "Node stopped"
+            log "Node $service stopped"
         else
             stop_spinner false "Stop failed"
-            die "Failed to stop Docker container $container"
+            die "Failed to stop $service"
         fi
-    fi
-    
-    # Fall back to systemctl
-    require_root
-    
-    local service
-    service=$(detect_service)
-    
-    if [[ -z "$service" ]]; then
-        die "No XDC node service or Docker container found"
-    fi
-    
-    start_spinner "Stopping node"
-    
-    if systemctl stop "$service"; then
-        stop_spinner true "Node stopped"
-        log "Node $service stopped"
-    else
-        stop_spinner false "Stop failed"
-        die "Failed to stop $service"
     fi
 }
 

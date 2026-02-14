@@ -819,9 +819,11 @@ ENVEOF
         rm -rf "$network_dir/.pwd"
     fi
     if [[ ! -f "$network_dir/.pwd" ]]; then
-        openssl rand -base64 32 > "$network_dir/.pwd" 2>/dev/null || echo "xdc-node-password" > "$network_dir/.pwd"
+        # Create empty password file (XDC will use empty password for account)
+        touch "$network_dir/.pwd"
+        chmod 600 "$network_dir/.pwd"
+        info "Created empty password file (.pwd)"
     fi
-    chmod 600 "$network_dir/.pwd" 2>/dev/null || true
     
     # Create docker-compose.yml
     cat > "$docker_dir/docker-compose.yml" << EOF
@@ -1196,7 +1198,7 @@ start_services() {
             local fname=$(basename "$f")
             curl -fsSL "$base_url/$fname" -o "$fpath" 2>/dev/null || warn "Failed to download $fname"
             [[ "$fname" == "start-node.sh" ]] && chmod +x "$fpath" 2>/dev/null || true
-            [[ "$fname" == ".pwd" ]] && { echo "xdc-node-password" > "$fpath"; chmod 600 "$fpath"; }
+            [[ "$fname" == ".pwd" ]] && { touch "$fpath"; chmod 600 "$fpath"; }
         fi
     done
     
