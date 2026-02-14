@@ -3,6 +3,7 @@
 # Chain data
 /root/xdcchain/
 xdcchain/
+!docker/*/xdcchain/.gitkeep
 chaindata/
 lightchaindata/
 nodes/
