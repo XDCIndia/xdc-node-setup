@@ -86,7 +86,7 @@ services:
     environment:
       # RPC_URL: Container-to-container uses internal port 8545
       # For external access (dev mode), use http://localhost:${RPC_PORT}
-      - RPC_URL=http://xdc-node:8545
+      - RPC_URL=${RPC_URL:-http://xdc-node:8545}
       - NODE_RPC_PORT=${RPC_PORT:-8545}
       - SKYNET_CONF=/etc/xdc-node/skynet.conf
       - NEXT_PUBLIC_REFRESH_INTERVAL=10
