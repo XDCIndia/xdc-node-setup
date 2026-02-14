@@ -156,7 +156,7 @@ args=(
     --mine
     --gasprice 1
     --targetgaslimit 420000000
-    --ipcdisable
+    --ipcpath /work/xdcchain/XDC.ipc
 )
 
 # Add wallet unlock if available

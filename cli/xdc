@@ -135,6 +135,7 @@ $(c BOLD)GENERAL COMMANDS:$(c NC)
     $(c GREEN)stop$(c NC)          Stop node
     $(c GREEN)start$(c NC)         Start node
     $(c GREEN)addpeers$(c NC)      Add peers from bootnodes.list (manual injection)
+    $(c GREEN)attach$(c NC)        Attach to XDC console via RPC
     $(c GREEN)config$(c NC)        View/edit configuration
     $(c GREEN)notify$(c NC)        Test notifications or send custom alert
     $(c GREEN)dashboard$(c NC)     Start web dashboard
@@ -2758,6 +2759,32 @@ EOF
 }
 
 #==============================================================================
+# Command: attach
+#==============================================================================
+cmd_attach() {
+    local rpc_url="${1:-http://127.0.0.1:8545}"
+    
+    # Detect container
+    local container
+    container=$(find_container)
+    
+    if [[ -n "$container" ]]; then
+        info "Attaching to XDC node in container: $container"
+        docker exec -it "$container" XDC attach "$rpc_url"
+    else
+        # Try direct attach via RPC
+        local xdc_bin
+        xdc_bin=$(which XDC 2>/dev/null || which xdc 2>/dev/null || echo "")
+        
+        if [[ -n "$xdc_bin" ]]; then
+            "$xdc_bin" attach "$rpc_url"
+        else
+            die "No XDC binary found. Cannot attach."
+        fi
+    fi
+}
+
+#==============================================================================
 # Main Entry Point
 #==============================================================================
 main() {
@@ -2804,6 +2831,7 @@ main() {
         cluster)      cmd_cluster "$@" ;;
         stake)        cmd_stake "$@" ;;
         addpeers|addpeer)     cmd_peers "add" "$@" ;;
+        attach)     cmd_attach "$@" ;;
         
         # General commands
         init)       cmd_init "$@" ;;
