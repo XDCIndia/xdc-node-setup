@@ -1523,6 +1523,8 @@ EOF
 # Command: start
 #==============================================================================
 cmd_start() {
+    local skip_install=false
+    
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --help|-h)
@@ -1531,6 +1533,9 @@ $(c BOLD)xdc-node start$(c NC) — Start node
 
 $(c BOLD)USAGE:$(c NC)
     xdc-node start
+
+$(c BOLD)DESCRIPTION:$(c NC)
+    Starts the XDC node. If no configuration is found, runs install.sh first.
 
 $(c BOLD)OPTIONS:$(c NC)
     --help    Show this help
@@ -1541,6 +1546,43 @@ EOF
             *) shift ;;
         esac
     done
+    
+    # Check if configuration exists
+    local config_dir="${INSTALL_DIR:-/opt/xdc-node}"
+    local docker_compose="$config_dir/docker/docker-compose.yml"
+    
+    if [[ ! -f "$docker_compose" ]]; then
+        warn "No XDC node configuration found at $config_dir"
+        info "Running install.sh to set up your node..."
+        
+        # Find install.sh
+        local install_script=""
+        for path in "$config_dir/install.sh" "$PROJECT_DIR/install.sh" "$HOME/xdc-node-setup/install.sh" "./install.sh"; do
+            if [[ -f "$path" ]]; then
+                install_script="$path"
+                break
+            fi
+        done
+        
+        if [[ -z "$install_script" ]]; then
+            # Download install.sh
+            info "Downloading install.sh..."
+            install_script="/tmp/xdc-install.sh"
+            if curl -fsSL "https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/install.sh" -o "$install_script" 2>/dev/null; then
+                chmod +x "$install_script"
+            else
+                die "Failed to download install.sh. Please run setup manually."
+            fi
+        fi
+        
+        # Run install.sh
+        log "Running $install_script..."
+        if bash "$install_script"; then
+            log "Installation complete. Starting node..."
+        else
+            die "Installation failed. Please check the output above."
+        fi
+    fi
     
     # Try Docker first
     local container
@@ -1561,6 +1603,29 @@ EOF
         else
             stop_spinner false "Start failed"
             die "Failed to start Docker container $container"
+        fi
+    fi
+    
+    # Try to start via docker compose
+    if [[ -f "$docker_compose" ]]; then
+        info "Starting with docker compose..."
+        start_spinner "Starting XDC node"
+        
+        cd "$(dirname "$docker_compose")" || die "Failed to change to docker directory"
+        
+        if docker compose up -d xdc-node xdc-dashboard 2>/dev/null; then
+            stop_spinner true "Node started"
+            log "XDC node started via docker compose"
+            
+            # Wait for RPC
+            sleep 5
+            
+            # Inject peers
+            inject_peers || true
+            return 0
+        else
+            stop_spinner false "Start failed"
+            die "Failed to start XDC node. Check 'docker compose logs' for details."
         fi
     fi
     
