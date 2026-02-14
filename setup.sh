@@ -219,7 +219,7 @@ Environment Variables:
   RPC_PORT            RPC port (default: 9545)
   P2P_PORT            P2P port (default: 30303)
   SYNC_MODE           Sync mode: full, snap (default: full)
-  ENABLE_MONITORING   Enable monitoring: true/false (default: true)
+  ENABLE_MONITORING   Enable monitoring (Prometheus/Grafana): true/false (default: false)
   ENABLE_SKYNET       Enable SkyNet fleet monitoring: true/false (default: false)
   ENABLE_SECURITY     Enable security hardening: true/false (default: true)
   ENABLE_UPDATES      Enable auto-updates: true/false (default: true)
@@ -235,6 +235,10 @@ Examples:
 
   # Advanced mode with all options
   sudo ./setup.sh --advanced --email alerts@example.com --type archive
+
+  # Enable Prometheus/Grafana monitoring
+  sudo ./setup.sh --advanced  # then select monitoring when prompted
+  # OR set ENABLE_MONITORING=true
 
   # Check status
   sudo ./setup.sh --status
@@ -480,7 +484,7 @@ init_config() {
     WS_PORT="${WS_PORT:-8546}"
     
     # Feature flags
-    ENABLE_MONITORING="${ENABLE_MONITORING:-true}"
+    ENABLE_MONITORING="${ENABLE_MONITORING:-false}"
     ENABLE_SKYNET="${ENABLE_SKYNET:-false}"
     ENABLE_SECURITY="${ENABLE_SECURITY:-true}"
     ENABLE_NOTIFICATIONS="${ENABLE_NOTIFICATIONS:-false}"
@@ -593,8 +597,8 @@ prompt_features() {
     echo -e "${BOLD}Feature Configuration${NC}"
     echo "======================"
     
-    read -rp "Enable monitoring (Grafana + Prometheus)? [Y/n]: " input
-    [[ ! "${input:-Y}" =~ ^[Nn]$ ]] && ENABLE_MONITORING="true" || ENABLE_MONITORING="false"
+    read -rp "Enable monitoring (Grafana + Prometheus)? [y/N]: " input
+    [[ "${input:-N}" =~ ^[Yy]$ ]] && ENABLE_MONITORING="true" || ENABLE_MONITORING="false"
     
     read -rp "Enable SkyNet fleet monitoring? [y/N]: " input
     [[ "${input:-N}" =~ ^[Yy]$ ]] && ENABLE_SKYNET="true" || ENABLE_SKYNET="false"
