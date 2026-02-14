@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
+import IssueBanner from '@/components/IssueBanner';
 import HeroSection from '@/components/HeroSection';
 import StatsGrid from '@/components/StatsGrid';
 import ConsensusPanel from '@/components/ConsensusPanel';
@@ -298,6 +299,9 @@ export default function Home() {
 
   return (
     <DashboardLayout>
+      {/* Issue Banner - Shows active detected issues */}
+      <IssueBanner />
+      
       <div className="space-y-6">
         {/* Error Banner with Diagnostics - Show when node is unhealthy */}
         {(error || metrics.nodeStatus === 'error' || metrics.nodeStatus === 'offline' || !metrics.rpcConnected) && metrics.diagnostics && (

@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 import { execSync } from 'child_process';
 import { pushToSkyNet } from '@/lib/skynet-bridge';
-import { addSnapshot } from '@/lib/metrics-history';
+import { addSnapshot, getRawHistory } from '@/lib/metrics-history';
+import { detectIssues } from '@/lib/issue-detector';
+import { reportIssues } from '@/lib/issue-reporter';
+import { updateActiveIssues } from '@/app/api/issues/route';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+// Module-level storage for issue detection
+let previousMetrics: any = null;
 
 function getRpcUrl() { return process.env.RPC_URL || 'http://xdc-node:8545'; }
 function getMainnetRpc() { return process.env.MAINNET_RPC || 'https://erpc.xinfin.network'; }
@@ -345,10 +351,29 @@ export async function GET() {
       txPoolPending: response.txpool.pending,
     });
 
-    // Push to SkyNet (fire and forget — don't await, don't block response)
-    pushToSkyNet(response).catch(() => {});
+    // Detect issues and report to SkyNet
+    const metricsHistory = getRawHistory();
+    const detectedIssues = detectIssues(response, previousMetrics, metricsHistory);
+    
+    // Update active issues tracker
+    updateActiveIssues(detectedIssues);
+    
+    // Report to SkyNet (fire and forget)
+    reportIssues(detectedIssues).catch(() => {});
+    
+    // Update previous metrics for next check
+    previousMetrics = response;
+    
+    // Add active issues count to response
+    const responseWithIssues = {
+      ...response,
+      activeIssues: detectedIssues.length,
+    };
 
-    return NextResponse.json(response);
+    // Push to SkyNet (fire and forget — don't await, don't block response)
+    pushToSkyNet(responseWithIssues).catch(() => {});
+
+    return NextResponse.json(responseWithIssues);
   } catch (error) {
     // Even on total failure, return diagnostics
     const diagnostics = await getNodeDiagnostics();
