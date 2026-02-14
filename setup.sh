@@ -720,7 +720,7 @@ generate_config_toml() {
     local BOOTNODES=""
     local bootnode_file="$CONFIG_DIR/bootnodes-${NETWORK}.json"
     if [[ -f "$bootnode_file" ]]; then
-        BOOTNODES=$(jq -r '.bootnodes[]' "$bootnode_file" 2>/dev/null | sed 's/^/  "/' | sed 's/$/"/' | paste -sd, - || echo "")
+        BOOTNODES=$(jq -r '.bootnodes[].enode' "$bootnode_file" 2>/dev/null | sed 's/^/  "/' | sed 's/$/"/' | paste -sd, - || echo "")
     fi
     
     # Fallback to hardcoded mainnet bootnodes if empty
@@ -797,11 +797,11 @@ setup_docker_compose() {
     for f in genesis.json start-node.sh bootnodes.list; do
         # 1. Try bundled from SCRIPT_DIR
         if [[ -f "$bundled_dir/$f" ]]; then
-            cp "$bundled_dir/$f" "$network_dir/$f"
+            [[ "$(realpath "$bundled_dir/$f")" != "$(realpath "$network_dir/$f" 2>/dev/null)" ]] && cp "$bundled_dir/$f" "$network_dir/$f"
             log "Using bundled $f"
         # 2. Try alternate bundled path
         elif [[ -f "$alt_bundled/$f" ]]; then
-            cp "$alt_bundled/$f" "$network_dir/$f"
+            [[ "$(realpath "$alt_bundled/$f")" != "$(realpath "$network_dir/$f" 2>/dev/null)" ]] && cp "$alt_bundled/$f" "$network_dir/$f"
             log "Using bundled $f"
         # 3. Try official XinFin URL
         elif curl -fsSL --connect-timeout 15 --retry 2 "$base_url/$f" -o "$network_dir/$f" 2>/dev/null && [[ -s "$network_dir/$f" ]]; then
