@@ -827,6 +827,107 @@ EOF
         echo -e "  IPC:       $(c CYAN)${XDC_DATA}/XDC.ipc$(c NC)"
         echo -e "  Dashboard: $(c CYAN)http://localhost:${DASHBOARD_PORT:-8888}$(c NC)"
         echo ""
+        
+        # Setup Completion Progress
+        echo -e "$(c BOLD)Setup Completion:$(c NC)"
+        
+        local setup_checks=()
+        local setup_total=0
+        local setup_done=0
+        
+        # Check 1: Node installed (if we got here, it's installed)
+        setup_total=$((setup_total + 1))
+        if [[ "$container_status" != "not running" || -d "$XDC_DATA" ]]; then
+            setup_done=$((setup_done + 1))
+            setup_checks+=("$(c GREEN)[✓]$(c NC) Node installed")
+        else
+            setup_checks+=("$(c DIM)[✗] Node installed$(c NC)")
+        fi
+        
+        # Check 2: Node running
+        setup_total=$((setup_total + 1))
+        if [[ "$container_status" == "running" || $block_height -gt 0 ]]; then
+            setup_done=$((setup_done + 1))
+            setup_checks+=("$(c GREEN)[✓]$(c NC) Node running")
+        else
+            setup_checks+=("$(c DIM)[✗] Node running$(c NC)")
+        fi
+        
+        # Check 3: Node synced (>99%)
+        setup_total=$((setup_total + 1))
+        if [[ $sync_pct -ge 99 ]]; then
+            setup_done=$((setup_done + 1))
+            setup_checks+=("$(c GREEN)[✓]$(c NC) Node synced (${sync_pct}%)")
+        else
+            setup_checks+=("$(c YELLOW)[⋯]$(c NC) Node synced (${sync_pct}%)")
+        fi
+        
+        # Check 4: Peers connected (>3)
+        setup_total=$((setup_total + 1))
+        if [[ $peers -gt 3 ]]; then
+            setup_done=$((setup_done + 1))
+            setup_checks+=("$(c GREEN)[✓]$(c NC) Peers connected ($peers)")
+        else
+            setup_checks+=("$(c YELLOW)[⋯]$(c NC) Peers connected ($peers/4+)")
+        fi
+        
+        # Check 5: Firewall configured
+        setup_total=$((setup_total + 1))
+        if ufw status 2>/dev/null | grep -q "Status: active"; then
+            setup_done=$((setup_done + 1))
+            setup_checks+=("$(c GREEN)[✓]$(c NC) Firewall configured")
+        else
+            setup_checks+=("$(c DIM)[✗] Firewall configured$(c NC)")
+        fi
+        
+        # Check 6: SkyNet registered
+        setup_total=$((setup_total + 1))
+        local skynet_conf="${PROJECT_DIR}/${NETWORK:-mainnet}/.xdc-node/skynet.conf"
+        if [[ -f "$skynet_conf" ]] && grep -q "skynet_id" "$skynet_conf" 2>/dev/null; then
+            setup_done=$((setup_done + 1))
+            setup_checks+=("$(c GREEN)[✓]$(c NC) SkyNet registered")
+        else
+            setup_checks+=("$(c DIM)[✗] SkyNet registered$(c NC)")
+        fi
+        
+        # Check 7: Monitoring enabled
+        setup_total=$((setup_total + 1))
+        if docker ps 2>/dev/null | grep -qE "prometheus|grafana" || systemctl is-active prometheus &>/dev/null; then
+            setup_done=$((setup_done + 1))
+            setup_checks+=("$(c GREEN)[✓]$(c NC) Monitoring enabled")
+        else
+            setup_checks+=("$(c DIM)[✗] Monitoring enabled$(c NC)")
+        fi
+        
+        # Calculate completion percentage
+        local completion_pct=$((setup_done * 100 / setup_total))
+        
+        # Draw progress bar
+        local bar_width=20
+        local filled=$((setup_done * bar_width / setup_total))
+        local empty=$((bar_width - filled))
+        
+        echo -n "  "
+        printf "%${filled}s" '' | tr ' ' '█'
+        printf "%${empty}s" '' | tr ' ' '░'
+        echo -e " $setup_done/$setup_total ($(c CYAN)${completion_pct}%%$(c NC))"
+        echo ""
+        
+        # Show checks in two columns
+        local i=0
+        for check in "${setup_checks[@]}"; do
+            if [[ $((i % 2)) -eq 0 ]]; then
+                echo -n "  $check"
+                # Pad to align second column
+                printf "%*s" $((40 - ${#check})) ""
+            else
+                echo "  $check"
+            fi
+            i=$((i + 1))
+        done
+        [[ $((i % 2)) -ne 0 ]] && echo ""  # New line if odd number
+        
+        echo ""
         echo -e "$(c DIM)Updated: $(date '+%Y-%m-%d %H:%M:%S')$(c NC)"
     }
     
