@@ -14,8 +14,8 @@ services:
     container_name: xdc-node
     restart: always
     ports:
-      - "${PORT:-30303}:30303"
-      - "${PORT:-30303}:30303/udp"
+      - "${P2P_PORT:-30303}:30303"
+      - "${P2P_PORT:-30303}:30303/udp"
       - "127.0.0.1:${RPC_PORT:-8545}:8545"
       - "127.0.0.1:${WS_PORT:-8546}:8546"
     volumes:
@@ -77,7 +77,7 @@ services:
     container_name: xdc-agent
     restart: unless-stopped
     ports:
-      - "0.0.0.0:8888:3000"
+      - "0.0.0.0:${DASHBOARD_PORT:-8888}:3000"
     volumes:
       - ./skynet-agent.sh:/agent.sh:ro
       - ../${NETWORK:-mainnet}/.xdc-node/skynet.conf:/etc/xdc-node/skynet.conf:ro

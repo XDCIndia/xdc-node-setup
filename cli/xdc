@@ -1687,6 +1687,48 @@ EOF
         
         cd "$(dirname "$docker_compose")" || die "Failed to change to docker directory"
         
+        # --- Port conflict auto-resolution ---
+        _find_free_port() {
+            local p="$1" tries=10 i=0
+            while [ $i -lt $tries ]; do
+                if ! ss -tlnH "sport = :$p" 2>/dev/null | grep -q ":$p" && \
+                   ! docker ps --format '{{.Ports}}' 2>/dev/null | grep -q "0.0.0.0:$p->"; then
+                    echo "$p"; return 0
+                fi
+                p=$((p + 1)); i=$((i + 1))
+            done
+            echo "$1"
+        }
+
+        # Load env file if exists
+        local env_file=""
+        for ef in "../${network:-mainnet}/.xdc-node/.env" "../mainnet/.xdc-node/.env" "../testnet/.xdc-node/.env" "../devnet/.xdc-node/.env"; do
+            [[ -f "$ef" ]] && env_file="$ef" && break
+        done
+        
+        # Read current ports from env or defaults
+        local rpc_port=8545 ws_port=8546 p2p_port=30303 dash_port=8888
+        if [[ -n "$env_file" ]]; then
+            rpc_port=$(grep -E '^RPC_PORT=' "$env_file" 2>/dev/null | cut -d= -f2 || echo 8545)
+            ws_port=$(grep -E '^WS_PORT=' "$env_file" 2>/dev/null | cut -d= -f2 || echo 8546)
+            p2p_port=$(grep -E '^P2P_PORT=' "$env_file" 2>/dev/null | cut -d= -f2 || echo 30303)
+            dash_port=$(grep -E '^DASHBOARD_PORT=' "$env_file" 2>/dev/null | cut -d= -f2 || echo 8888)
+        fi
+        : "${rpc_port:=8545}" "${ws_port:=8546}" "${p2p_port:=30303}" "${dash_port:=8888}"
+        
+        # Resolve conflicts
+        local orig_rpc=$rpc_port orig_ws=$ws_port orig_p2p=$p2p_port orig_dash=$dash_port
+        rpc_port=$(_find_free_port "$rpc_port")
+        ws_port=$(_find_free_port "$ws_port")
+        p2p_port=$(_find_free_port "$p2p_port")
+        dash_port=$(_find_free_port "$dash_port")
+        
+        # Log any changes
+        [[ "$rpc_port" != "$orig_rpc" ]] && warn "RPC port $orig_rpc in use → using $rpc_port"
+        [[ "$ws_port" != "$orig_ws" ]] && warn "WS port $orig_ws in use → using $ws_port"
+        [[ "$p2p_port" != "$orig_p2p" ]] && warn "P2P port $orig_p2p in use → using $p2p_port"
+        [[ "$dash_port" != "$orig_dash" ]] && warn "Dashboard port $orig_dash in use → using $dash_port"
+        
         # Build compose command with optional monitoring stack
         local compose_cmd="docker compose"
         if [[ "${monitoring:-false}" == "true" ]] && [[ -f "docker-compose.monitoring.yml" ]]; then
@@ -1694,24 +1736,15 @@ EOF
             info "Including monitoring stack (Prometheus, Grafana, etc.)"
         fi
         
-        # Set network env and start
-        local env_prefix=""
-        [[ -n "$network" ]] && env_prefix="NETWORK=$network"
+        # Export resolved ports and start
+        export RPC_PORT="$rpc_port" WS_PORT="$ws_port" PORT="$p2p_port" P2P_PORT="$p2p_port" DASHBOARD_PORT="$dash_port"
+        [[ -n "$network" ]] && export NETWORK="$network"
         
-        if [[ -n "$env_prefix" ]]; then
-            if $env_prefix $compose_cmd up -d 2>/dev/null; then
-                stop_spinner true "Node started ($network)"
-            else
-                stop_spinner false "Start failed"
-                die "Failed to start XDC node. Check 'docker compose logs' for details."
-            fi
+        if $compose_cmd up -d 2>/dev/null; then
+            stop_spinner true "Node started"
         else
-            if $compose_cmd up -d 2>/dev/null; then
-                stop_spinner true "Node started"
-            else
-                stop_spinner false "Start failed"
-                die "Failed to start XDC node. Check 'docker compose logs' for details."
-            fi
+            stop_spinner false "Start failed"
+            die "Failed to start XDC node. Check 'docker compose logs' for details."
         fi
         
         log "XDC node started via docker compose"
@@ -1721,6 +1754,21 @@ EOF
         
         # Inject peers
         inject_peers || true
+        
+        # --- Print access links ---
+        echo ""
+        echo -e "$(c GREEN)$(c BOLD)═══════════════════════════════════════════$(c NC)"
+        echo -e "$(c GREEN)$(c BOLD)  XDC Node is running!$(c NC)"
+        echo -e "$(c GREEN)$(c BOLD)═══════════════════════════════════════════$(c NC)"
+        echo ""
+        echo -e "  $(c BOLD)Dashboard:$(c NC)  http://localhost:${dash_port}"
+        echo -e "  $(c BOLD)RPC:$(c NC)        http://127.0.0.1:${rpc_port}"
+        echo -e "  $(c BOLD)WebSocket:$(c NC)  ws://127.0.0.1:${ws_port}"
+        echo -e "  $(c BOLD)P2P:$(c NC)        :${p2p_port}"
+        echo ""
+        echo -e "  $(c DIM)Check status:  xdc status$(c NC)"
+        echo -e "  $(c DIM)View logs:     xdc logs$(c NC)"
+        echo ""
         return 0
     fi
     

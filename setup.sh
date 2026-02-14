@@ -467,6 +467,22 @@ install_dependencies() {
 #==============================================================================
 # Configuration Variables (with defaults)
 #==============================================================================
+find_free_port() {
+    local port="$1"
+    local max_tries=10
+    local i=0
+    while [ $i -lt $max_tries ]; do
+        if ! ss -tlnH "sport = :$port" 2>/dev/null | grep -q ":$port" && \
+           ! docker ps --format '{{.Ports}}' 2>/dev/null | grep -q "0.0.0.0:$port->"; then
+            echo "$port"
+            return 0
+        fi
+        port=$((port + 1))
+        i=$((i + 1))
+    done
+    echo "$1"  # fallback to original
+}
+
 init_config() {
     # Node configuration with environment variable overrides
     NODE_TYPE="${NODE_TYPE:-full}"
@@ -475,6 +491,13 @@ init_config() {
     RPC_PORT="${RPC_PORT:-9545}"
     P2P_PORT="${P2P_PORT:-30303}"
     WS_PORT="${WS_PORT:-8546}"
+    DASHBOARD_PORT="${DASHBOARD_PORT:-8888}"
+
+    # Auto-resolve port conflicts
+    RPC_PORT=$(find_free_port "$RPC_PORT")
+    P2P_PORT=$(find_free_port "$P2P_PORT")
+    WS_PORT=$(find_free_port "$WS_PORT")
+    DASHBOARD_PORT=$(find_free_port "$DASHBOARD_PORT")
     
     # Derive paths from NETWORK and PROJECT_ROOT
     DATA_DIR="${DATA_DIR:-${PROJECT_ROOT}/${NETWORK}/xdcchain}"
@@ -904,6 +927,8 @@ WS_ADDR=0.0.0.0
 WS_PORT=8546
 WS_API=admin,eth,net,web3,XDPoS
 WS_ORIGINS=*
+P2P_PORT=${P2P_PORT:-30303}
+DASHBOARD_PORT=${DASHBOARD_PORT:-8888}
 ENVEOF
 
     # Create password file (remove if Docker created it as a directory)
