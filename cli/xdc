@@ -1532,6 +1532,8 @@ cmd_logs() {
     local client=""
     local rotate=false
     local clean=false
+    local component=""
+    local since=""
     
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -1540,31 +1542,39 @@ cmd_logs() {
             --client) client="$2"; shift 2 ;;
             --rotate) rotate=true; shift ;;
             --clean) clean=true; shift ;;
+            --component) component="$2"; shift 2 ;;
+            --since) since="$2"; shift 2 ;;
             --help|-h)
                 cat << EOF
-$(c BOLD)xdc-node logs$(c NC) — Tail node logs
+$(c BOLD)xdc logs$(c NC) — Tail node logs
 
 $(c BOLD)USAGE:$(c NC)
-    xdc-node logs [options]
+    xdc logs [options]
 
 $(c BOLD)OPTIONS:$(c NC)
-    --lines, -n N    Number of lines to show (default: 50)
-    --follow, -f     Follow log output (like tail -f)
-    --client NAME    Specific client logs (geth, erigon)
-    --rotate         Manually trigger log rotation (move, compress, cleanup)
-    --clean          Remove all old logs from oldlogs/ directory
-    --help           Show this help
+    --lines, -n N       Number of lines to show (default: 50)
+    --follow, -f        Follow log output (like tail -f)
+    --client NAME       Specific client logs (geth, erigon)
+    --component NAME    Show logs for specific component:
+                        heartbeat|lfg|dashboard|node
+    --since TIME        Show logs since time (e.g., '1h', '30m', '2024-01-01')
+    --rotate            Manually trigger log rotation (move, compress, cleanup)
+    --clean             Remove all old logs from oldlogs/ directory
+    --help              Show this help
 
 $(c BOLD)EXAMPLES:$(c NC)
-    xdc-node logs -f -n 100        # Follow logs with 100 lines
-    xdc-node logs --rotate         # Manually rotate logs
-    xdc-node logs --clean          # Remove all old logs
+    xdc logs -f -n 100              # Follow node logs with 100 lines
+    xdc logs --component heartbeat  # Show heartbeat logs
+    xdc logs --component lfg -f     # Follow LFG logs
+    xdc logs --since 1h             # Show logs from last hour
+    xdc logs --rotate               # Manually rotate logs
+    xdc logs --clean                # Remove all old logs
 
 $(c BOLD)LOG ROTATION:$(c NC)
     Logs are automatically rotated daily via cron (2:00 AM).
     - Logs older than 24 hours are moved to oldlogs/ and compressed
-    - Logs older than 90 days are automatically deleted
-    - Docker container logs use json-file driver (max-size: 100m, max-file: 5)
+    - Logs older than 7 days are automatically deleted (configurable via LOG_RETENTION_DAYS)
+    - Docker container logs use json-file driver (max-size: 50m, max-file: 5)
 
 EOF
                 return 0
@@ -1597,14 +1607,15 @@ EOF
     # Handle clean old logs command
     if [[ "$clean" == "true" ]]; then
         local oldlogs_dir="${PROJECT_DIR}/${XDC_NETWORK}/xdcchain/oldlogs"
+        local component_oldlogs_dir="${PROJECT_DIR}/${XDC_NETWORK}/.xdc-node/logs/oldlogs"
         
-        if [[ ! -d "$oldlogs_dir" ]]; then
-            warn "No oldlogs directory found at $oldlogs_dir"
-            return 0
+        local count=0
+        if [[ -d "$oldlogs_dir" ]]; then
+            count=$(find "$oldlogs_dir" -type f 2>/dev/null | wc -l)
         fi
-        
-        local count
-        count=$(find "$oldlogs_dir" -type f 2>/dev/null | wc -l)
+        if [[ -d "$component_oldlogs_dir" ]]; then
+            count=$((count + $(find "$component_oldlogs_dir" -type f 2>/dev/null | wc -l)))
+        fi
         
         if [[ $count -eq 0 ]]; then
             info "No old logs found to clean"
@@ -1612,13 +1623,20 @@ EOF
         fi
         
         echo ""
-        warn "This will permanently delete $count old log file(s) from $oldlogs_dir"
+        warn "This will permanently delete $count old log file(s)"
         read -p "$(echo -e "$(c BOLD)Are you sure? [y/N]$(c NC) ")" -n 1 -r
         echo ""
         
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             info "Removing old logs..."
-            if rm -rf "${oldlogs_dir:?}"/*; then
+            local removed=0
+            if [[ -d "$oldlogs_dir" ]]; then
+                rm -rf "${oldlogs_dir:?}"/* 2>/dev/null && removed=1
+            fi
+            if [[ -d "$component_oldlogs_dir" ]]; then
+                rm -rf "${component_oldlogs_dir:?}"/* 2>/dev/null && removed=1
+            fi
+            if [[ $removed -eq 1 ]]; then
                 log "Successfully removed $count old log file(s)"
             else
                 die "Failed to remove old logs"
@@ -1629,7 +1647,76 @@ EOF
         return 0
     fi
     
-    # Find log files
+    # Handle component logs
+    if [[ -n "$component" ]]; then
+        local component_log="${PROJECT_DIR}/${XDC_NETWORK}/.xdc-node/logs/${component}.log"
+        
+        # Validate component name
+        case "$component" in
+            heartbeat|lfg|dashboard|node)
+                ;;
+            *)
+                die "Invalid component: $component. Valid components: heartbeat, lfg, dashboard, node"
+                ;;
+        esac
+        
+        # For node component, show regular node logs
+        if [[ "$component" == "node" ]]; then
+            # Fall through to regular node log handling
+            :
+        else
+            # Show component-specific logs
+            if [[ ! -f "$component_log" ]]; then
+                die "Component log not found: $component_log"
+            fi
+            
+            # Handle --since filtering
+            if [[ -n "$since" ]]; then
+                # Convert since to date filter
+                local since_date=""
+                if [[ "$since" =~ ^[0-9]+[hHmMdD]$ ]]; then
+                    # Relative time like 1h, 30m
+                    local amount=${since%[hHmMdD]}
+                    local unit=${since: -1}
+                    case "$unit" in
+                        h|H) since_date=$(date -d "${amount} hours ago" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date -v-${amount}H '+%Y-%m-%d %H:%M:%S') ;;
+                        m|M) since_date=$(date -d "${amount} minutes ago" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date -v-${amount}M '+%Y-%m-%d %H:%M:%S') ;;
+                        d|D) since_date=$(date -d "${amount} days ago" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date -v-${amount}d '+%Y-%m-%d %H:%M:%S') ;;
+                    esac
+                elif [[ "$since" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
+                    # Absolute date
+                    since_date="$since"
+                fi
+                
+                if [[ -n "$since_date" ]]; then
+                    # Filter by date (assuming ISO format timestamps in logs)
+                    if [[ "$follow" == "true" ]]; then
+                        tail -n "$lines" -f "$component_log" | while read line; do
+                            if [[ "$line" \> "$since_date" ]] || [[ "$line" =~ ^\[?$since_date ]]; then
+                                echo "$line"
+                            fi
+                        done
+                    else
+                        cat "$component_log" | while read line; do
+                            if [[ "$line" \> "$since_date" ]] || [[ "$line" =~ ^\[?$since_date ]]; then
+                                echo "$line"
+                            fi
+                        done | tail -n "$lines"
+                    fi
+                    return 0
+                fi
+            fi
+            
+            if [[ "$follow" == "true" ]]; then
+                tail -n "$lines" -f "$component_log"
+            else
+                tail -n "$lines" "$component_log"
+            fi
+            return 0
+        fi
+    fi
+    
+    # Handle regular node logs (Docker or systemd)
     local log_file=""
     local possible_logs=(
         "/var/log/xdc-node.log"
@@ -1651,7 +1738,33 @@ EOF
     local service
     service=$(detect_service)
     
-    if [[ -n "$service" ]]; then
+    if [[ -n "$since" ]]; then
+        # Convert since to journalctl format
+        local journal_since=""
+        if [[ "$since" =~ ^[0-9]+[hHmMdD]$ ]]; then
+            journal_since="--since=${since} ago"
+        elif [[ "$since" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
+            journal_since="--since=${since}"
+        fi
+        
+        if [[ -n "$service" ]]; then
+            if [[ "$follow" == "true" ]]; then
+                journalctl -u "$service" $journal_since -n "$lines" -f
+            else
+                journalctl -u "$service" $journal_since -n "$lines" --no-pager
+            fi
+        elif [[ -n "$log_file" ]]; then
+            # For file-based logs with since, we'd need more complex parsing
+            # For now, just tail the file
+            if [[ "$follow" == "true" ]]; then
+                tail -n "$lines" -f "$log_file"
+            else
+                tail -n "$lines" "$log_file"
+            fi
+        else
+            die "No log files found. Is the node running?"
+        fi
+    elif [[ -n "$service" ]]; then
         if [[ "$follow" == "true" ]]; then
             journalctl -u "$service" -n "$lines" -f
         else
