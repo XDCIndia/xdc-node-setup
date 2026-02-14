@@ -85,7 +85,6 @@ services:
     environment:
       - RPC_URL=http://xdc-node:8545
       - SKYNET_CONF=/etc/xdc-node/skynet.conf
-      - NODE_ENV=production
       - NEXT_PUBLIC_REFRESH_INTERVAL=10
     networks:
       - xdc-network
