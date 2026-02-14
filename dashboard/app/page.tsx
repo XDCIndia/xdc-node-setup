@@ -11,6 +11,7 @@ import TxPoolPanel from '@/components/TxPoolPanel';
 import ServerStats from '@/components/ServerStats';
 import StoragePanel from '@/components/StoragePanel';
 import PeerMap from '@/components/PeerMap';
+import PeerDistribution from '@/components/PeerDistribution';
 import SkyNetStatus from '@/components/SkyNetStatus';
 import { LFGBadge } from '@/components/LFGBadge';
 import TroubleshootPanel from '@/components/TroubleshootPanel';
@@ -416,8 +417,10 @@ export default function Home() {
         {/* Troubleshoot / Diagnostics Panel */}
         <TroubleshootPanel />
 
-        {/* World Peer Map */}
-        <PeerMap peers={peers} />
+        {/* Global Peer Distribution — pure SVG with list fallback */}
+        <PeerDistribution peers={(peers?.countries ? Object.entries(peers.countries).flatMap(([code, info]: any) => 
+          Array(info.count).fill(null).map((_, i) => ({ country: info.name, countryCode: code, direction: i % 2 === 0 ? 'inbound' : 'outbound', ip: `${code}-${i}` }))
+        ) : []) as any} />
 
         {/* Footer */}
         <div className="border-t border-[var(--border-subtle)] pt-6 mt-8">
