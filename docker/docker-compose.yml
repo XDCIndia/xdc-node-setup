@@ -373,7 +373,7 @@ networks:
   # Isolated network for monitoring stack
   xdc-monitoring:
     driver: bridge
-    internal: true
+    internal: false
     ipam:
       config:
         - subnet: 172.21.0.0/16
