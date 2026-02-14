@@ -20,24 +20,38 @@ load_config() {
             echo "Loaded bash config from $config_file"
             ;;
         toml)
-            # Simple TOML parser - extracts key = "value" lines
+            # Section-aware TOML parser - prefixes keys with section name
+            local section=""
             while IFS= read -r line; do
                 # Skip comments and empty lines
                 [[ "$line" =~ ^[[:space:]]*# ]] && continue
                 [[ -z "${line// /}" ]] && continue
                 
-                # Parse key = "value" or key = number
+                # Track section headers like [Node.HTTP]
+                if [[ "$line" =~ ^[[:space:]]*\[([^]]+)\] ]]; then
+                    section="${BASH_REMATCH[1]}"
+                    # Normalize: Node.HTTP → HTTP, Node.WS → WS, Node.P2P → P2P
+                    section="${section##*.}"
+                    continue
+                fi
+                
+                # Parse key = "value" or key = number (skip arrays)
                 if [[ "$line" =~ ^[[:space:]]*([a-zA-Z_][a-zA-Z0-9_]*)[[:space:]]*=[[:space:]]*(.+)$ ]]; then
                     local key="${BASH_REMATCH[1]}"
                     local value="${BASH_REMATCH[2]}"
+                    # Skip array values
+                    [[ "$value" == "["* ]] && continue
                     # Remove quotes if present
                     value="${value%\"}"
                     value="${value#\"}"
                     # Remove trailing comments
                     value="${value%%#*}"
                     value="${value% }"
-                    # Export as env var (uppercase)
-                    export "${key^^}=$value"
+                    # Export both section-prefixed and plain key
+                    local ukey="${key^^}"
+                    local usection="${section^^}"
+                    [[ -n "$section" ]] && export "${usection}_${ukey}=$value"
+                    export "${ukey}=$value"
                 fi
             done < "$config_file"
             echo "Loaded TOML config from $config_file"
@@ -128,7 +142,8 @@ else
     export INSTANCE_NAME="${INSTANCE_NAME:-XDC_Node}"
     export ENABLE_RPC="${ENABLED:-true}"
     export RPC_ADDR="${ADDR:-0.0.0.0}"
-    export RPC_PORT="${PORT:-8545}"
+    # Use section-prefixed HTTP_PORT from [Node.HTTP], not [Metrics] Port
+    export RPC_PORT="${HTTP_PORT:-${RPC_PORT:-8545}}"
     export RPC_API="${API:-admin,eth,net,web3,XDPoS}"
     export RPC_CORS_DOMAIN="${CORS_DOMAIN:-*}"
     export RPC_VHOSTS="${VHOSTS:-*}"
