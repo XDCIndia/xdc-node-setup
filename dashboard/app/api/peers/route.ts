@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
+import { geolocateBatch } from '@/lib/geo';
 
 function getRpcUrl() { return process.env.RPC_URL || 'http://xdc-node:8545'; }
-const GEO_CACHE_TTL = parseInt(process.env.GEO_CACHE_TTL || '300000'); // 5 minutes
 
 interface PeerNetwork {
   localAddress: string;
@@ -18,23 +18,6 @@ interface PeerInfo {
   network: PeerNetwork;
   protocols: Record<string, unknown>;
 }
-
-interface GeoLocation {
-  status: string;
-  country: string;
-  countryCode: string;
-  region: string;
-  regionName: string;
-  city: string;
-  lat: number;
-  lon: number;
-  isp: string;
-  query: string;
-}
-
-// In-memory cache for geo-location data
-const geoCache = new Map<string, GeoLocation>();
-const cacheTimestamps = new Map<string, number>();
 
 function extractIP(remoteAddress: string): string | null {
   // Handle formats like "54.219.236.246:30303" or "[::]:30303"
@@ -60,91 +43,6 @@ function isPrivateIP(ip: string): boolean {
     /^fe80:/i,
   ];
   return privateRanges.some(range => range.test(ip));
-}
-
-async function getGeoLocation(ip: string): Promise<GeoLocation | null> {
-  // Check cache first
-  const now = Date.now();
-  const cachedTime = cacheTimestamps.get(ip);
-  if (cachedTime && (now - cachedTime) < GEO_CACHE_TTL) {
-    const cached = geoCache.get(ip);
-    if (cached) return cached;
-  }
-
-  try {
-    const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,region,regionName,city,lat,lon,isp,query`, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const data: GeoLocation = await response.json();
-    
-    if (data.status === 'success') {
-      geoCache.set(ip, data);
-      cacheTimestamps.set(ip, now);
-      return data;
-    }
-    return null;
-  } catch (error) {
-    console.error(`Geo-location error for ${ip}:`, error);
-    return null;
-  }
-}
-
-async function batchGeoLocate(ips: string[]): Promise<Map<string, GeoLocation>> {
-  const results = new Map<string, GeoLocation>();
-  const now = Date.now();
-  
-  // Filter out cached and private IPs
-  const ipsToQuery = ips.filter(ip => {
-    if (isPrivateIP(ip)) return false;
-    const cachedTime = cacheTimestamps.get(ip);
-    if (cachedTime && (now - cachedTime) < GEO_CACHE_TTL) {
-      const cached = geoCache.get(ip);
-      if (cached) results.set(ip, cached);
-      return false;
-    }
-    return true;
-  });
-
-  if (ipsToQuery.length === 0) return results;
-
-  try {
-    // Batch request to ip-api (max 100 IPs per request)
-    const batch = ipsToQuery.slice(0, 100).map(ip => ({ query: ip }));
-    
-    const response = await fetch('http://ip-api.com/batch?fields=status,country,countryCode,region,regionName,city,lat,lon,isp,query', {
-      method: 'POST',
-      headers: { 
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(batch),
-    });
-
-    if (!response.ok) {
-      console.error('Batch geo-location failed:', response.statusText);
-      return results;
-    }
-
-    const data: GeoLocation[] = await response.json();
-    
-    for (const loc of data) {
-      if (loc.status === 'success') {
-        geoCache.set(loc.query, loc);
-        cacheTimestamps.set(loc.query, now);
-        results.set(loc.query, loc);
-      }
-    }
-  } catch (error) {
-    console.error('Batch geo-location error:', error);
-  }
-
-  return results;
 }
 
 export const dynamic = 'force-dynamic';
@@ -207,8 +105,8 @@ export async function GET() {
       }
     }
 
-    // Geo-locate IPs
-    const geoData = await batchGeoLocate(uniqueIPs);
+    // Geo-locate IPs using the geo module
+    const geoData = await geolocateBatch(uniqueIPs);
 
     // Build peer list with geo data
     const enrichedPeers = [];

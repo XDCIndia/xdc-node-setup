@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
+import PeerMap from '@/components/PeerMap';
 import { 
   Globe, 
   ArrowDownLeft, 
@@ -35,8 +36,8 @@ interface PeersData {
 export default function PeersPage() {
   const [peersData, setPeersData] = useState<PeersData>({ peers: [], countries: {}, totalPeers: 0 });
   const [loading, setLoading] = useState(true);
-  const [sortField, setSortField] = useState<keyof Peer>('name');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [sortField, setSortField] = useState<keyof Peer>('country');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const fetchPeers = useCallback(async () => {
     try {
@@ -143,134 +144,106 @@ export default function PeersPage() {
           </div>
         </div>
 
+        {/* Peer Map */}
+        <PeerMap peers={peersData} />
+
+        {/* Secondary Stats */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="card-xdc lg:col-span-2">
+          <div className="card-xdc">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-[rgba(16,185,129,0.1)] flex items-center justify-center text-[var(--success)]">
+                <MapPin className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">Geo Diversity</h2>
+                <p className="text-xs text-[var(--text-tertiary)]">Network decentralization</p>
+              </div>
+            </div>
+            
+            <div className="text-center mb-4">
+              <div className="text-4xl font-bold font-mono-nums" style={{ 
+                color: geoStats.score >= 80 ? 'var(--success)' : geoStats.score >= 50 ? 'var(--warning)' : 'var(--critical)' 
+              }}>
+                {geoStats.score}
+              </div>
+              <div className="text-xs text-[var(--text-tertiary)]">Diversity Score</div>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-[var(--text-tertiary)]">Countries</span>
+                <span>{geoStats.uniqueCountries}</span>
+              </div>
+            </div>
+            
+            <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
+              <div className="text-xs font-medium mb-2">Distribution</div>
+              {Object.entries(geoStats.byContinent).map(([continent, count]) => (
+                <div key={continent} className="flex items-center justify-between text-sm mb-1">
+                  <span className="text-[var(--text-tertiary)]">{continent}</span>
+                  <span>{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card-xdc">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-[rgba(139,92,246,0.1)] flex items-center justify-center text-[var(--purple)]">
+                <Activity className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">Connection Status</h2>
+                <p className="text-xs text-[var(--text-tertiary)]">Peer network health</p>
+              </div>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-[var(--text-tertiary)]">Inbound</span>
+                <span className="text-[var(--success)]">{peersData.peers.filter(p => p.inbound).length}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[var(--text-tertiary)]">Outbound</span>
+                <span className="text-[var(--accent-blue)]">{peersData.peers.filter(p => !p.inbound).length}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[var(--text-tertiary)]">Total</span>
+                <span>{peersData.totalPeers}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="card-xdc">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-[rgba(30,144,255,0.1)] flex items-center justify-center text-[var(--accent-blue)]">
                 <Network className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-[var(--text-primary)]">Connected Peers</h2>
-                <p className="text-xs text-[var(--text-tertiary)]">{peersData.totalPeers} active connections</p>
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">Top Locations</h2>
+                <p className="text-xs text-[var(--text-tertiary)]">Peer concentration</p>
               </div>
             </div>
             
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[700px]">
-                <thead>
-                  <tr className="border-b border-[var(--border-subtle)]">
-                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-tertiary)]">Name</th>
-                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-tertiary)]">IP Address</th>
-                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-tertiary)]">Direction</th>
-                    <th className="text-left py-3 px-3 text-xs font-medium text-[var(--text-tertiary)]">Location</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border-subtle)]">
-                  {loading ? (
-                    <tr>
-                      <td colSpan={4} className="py-8 text-center text-[var(--text-tertiary)]">Loading...</td>
-                    </tr>
-                  ) : sortedPeers.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="py-8 text-center text-[var(--text-tertiary)]">No peers connected</td>
-                    </tr>
-                  ) : (
-                    sortedPeers.map((peer) => (
-                      <tr key={peer.id} className="hover:bg-[var(--bg-hover)]">
-                        <td className="py-3 px-3">
-                          <div className="text-sm font-medium">{peer.name?.slice(0, 30) || 'Unknown'}</div>
-                          <div className="text-xs text-[var(--text-tertiary)] font-mono">{peer.id?.slice(0, 16)}...</div>
-                        </td>
-                        <td className="py-3 px-3 text-xs font-mono text-[var(--accent-blue)]">{peer.ip}</td>
-                        <td className="py-3 px-3">
-                          {peer.inbound ? (
-                            <span className="flex items-center gap-1 text-xs text-[var(--success)]">
-                              <ArrowDownLeft className="w-3 h-3" /> In
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1 text-xs text-[var(--accent-blue)]">
-                              <ArrowUpRight className="w-3 h-3" /> Out
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-3 text-xs">
-                          <div className="flex items-center gap-1">
-                            <MapPin className="w-3 h-3 text-[var(--text-tertiary)]" />
-                            {peer.city || 'Unknown'}, {peer.country || 'XX'}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="card-xdc">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-[rgba(16,185,129,0.1)] flex items-center justify-center text-[var(--success)]">
-                  <MapPin className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-[var(--text-primary)]">Geo Diversity</h2>
-                  <p className="text-xs text-[var(--text-tertiary)]">Network decentralization</p>
-                </div>
-              </div>
-              
-              <div className="text-center mb-4">
-                <div className="text-4xl font-bold font-mono-nums" style={{ 
-                  color: geoStats.score >= 80 ? 'var(--success)' : geoStats.score >= 50 ? 'var(--warning)' : 'var(--critical)' 
-                }}>
-                  {geoStats.score}
-                </div>
-                <div className="text-xs text-[var(--text-tertiary)]">Diversity Score</div>
-              </div>
-              
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-[var(--text-tertiary)]">Countries</span>
-                  <span>{geoStats.uniqueCountries}</span>
-                </div>
-              </div>
-              
-              <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
-                <div className="text-xs font-medium mb-2">Distribution</div>
-                {Object.entries(geoStats.byContinent).map(([continent, count]) => (
-                  <div key={continent} className="flex items-center justify-between text-sm mb-1">
-                    <span className="text-[var(--text-tertiary)]">{continent}</span>
-                    <span>{count}</span>
+            <div className="space-y-2">
+              {Object.entries(peersData.countries)
+                .sort((a, b) => b[1].count - a[1].count)
+                .slice(0, 5)
+                .map(([code, info], idx) => (
+                  <div key={code} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-[var(--text-tertiary)] w-4">{idx + 1}.</span>
+                      <span className="w-5 h-5 rounded-full bg-[#1E90FF]/20 flex items-center justify-center text-[9px] font-bold text-[#1E90FF]">
+                        {code.toUpperCase()}
+                      </span>
+                      <span className="text-sm text-[var(--text-primary)]">{info.name}</span>
+                    </div>
+                    <span className="text-sm font-mono-nums">{info.count}</span>
                   </div>
                 ))}
-              </div>
-            </div>
-
-            <div className="card-xdc">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-[rgba(139,92,246,0.1)] flex items-center justify-center text-[var(--purple)]">
-                  <Activity className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-[var(--text-primary)]">Connection Status</h2>
-                  <p className="text-xs text-[var(--text-tertiary)]">Peer network health</p>
-                </div>
-              </div>
-              
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-[var(--text-tertiary)]">Inbound</span>
-                  <span className="text-[var(--success)]">{peersData.peers.filter(p => p.inbound).length}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-[var(--text-tertiary)]">Outbound</span>
-                  <span className="text-[var(--accent-blue)]">{peersData.peers.filter(p => !p.inbound).length}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-[var(--text-tertiary)]">Total</span>
-                  <span>{peersData.totalPeers}</span>
-                </div>
-              </div>
+              {Object.keys(peersData.countries).length === 0 && (
+                <div className="text-sm text-[var(--text-tertiary)] text-center py-4">No location data</div>
+              )}
             </div>
           </div>
         </div>
