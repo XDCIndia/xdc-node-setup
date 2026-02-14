@@ -3,7 +3,86 @@
 @tailwind utilities;
 
 :root {
-  /* XDC Obsidian Design System */
+  /* XDC Obsidian Design System - Dark Theme (Default) */
+  --bg-body: #0A0E1A;
+  --bg-card: #111827;
+  --bg-card-hover: #1a2332;
+  --bg-sidebar: #0D1117;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(30, 144, 255, 0.1);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-blue-glow: rgba(30, 144, 255, 0.3);
+  
+  --accent-blue: #1E90FF;
+  --accent-blue-glow: rgba(30, 144, 255, 0.15);
+  --success: #10B981;
+  --warning: #F59E0B;
+  --critical: #EF4444;
+  --purple: #8B5CF6;
+  --pink: #EC4899;
+  
+  --text-primary: #F9FAFB;
+  --text-secondary: #9CA3AF;
+  --text-tertiary: #6B7280;
+  --text-muted: #4B5563;
+}
+
+/* Light Theme - Auto-activates via system preference or .light class */
+@media (prefers-color-scheme: light) {
+  :root:not(.dark) {
+    /* XDC Light Design System */
+    --bg-body: #FFFFFF;
+    --bg-card: #F9FAFB;
+    --bg-card-hover: #F3F4F6;
+    --bg-sidebar: #F9FAFB;
+    --bg-hover: rgba(0, 0, 0, 0.04);
+    --bg-active: rgba(30, 144, 255, 0.08);
+    --border-subtle: rgba(0, 0, 0, 0.08);
+    --border-blue-glow: rgba(30, 144, 255, 0.4);
+    
+    --accent-blue: #1E90FF;
+    --accent-blue-glow: rgba(30, 144, 255, 0.12);
+    --success: #10B981;
+    --warning: #F59E0B;
+    --critical: #EF4444;
+    --purple: #8B5CF6;
+    --pink: #EC4899;
+    
+    --text-primary: #111827;
+    --text-secondary: #4B5563;
+    --text-tertiary: #6B7280;
+    --text-muted: #9CA3AF;
+  }
+}
+
+/* Explicit light class override */
+.light {
+  /* XDC Light Design System */
+  --bg-body: #FFFFFF;
+  --bg-card: #F9FAFB;
+  --bg-card-hover: #F3F4F6;
+  --bg-sidebar: #F9FAFB;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(30, 144, 255, 0.08);
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-blue-glow: rgba(30, 144, 255, 0.4);
+  
+  --accent-blue: #1E90FF;
+  --accent-blue-glow: rgba(30, 144, 255, 0.12);
+  --success: #10B981;
+  --warning: #F59E0B;
+  --critical: #EF4444;
+  --purple: #8B5CF6;
+  --pink: #EC4899;
+  
+  --text-primary: #111827;
+  --text-secondary: #4B5563;
+  --text-tertiary: #6B7280;
+  --text-muted: #9CA3AF;
+}
+
+/* Dark theme explicit override */
+.dark {
   --bg-body: #0A0E1A;
   --bg-card: #111827;
   --bg-card-hover: #1a2332;
@@ -81,15 +160,45 @@ body {
   transition: all 0.2s ease;
   position: relative;
   overflow: hidden;
+}
+
+.dark .card-xdc {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.light .card-xdc {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not(.dark) .card-xdc {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
 }
 
 .card-xdc:hover {
   border-color: var(--border-blue-glow);
   transform: translateY(-1px);
+}
+
+.dark .card-xdc:hover {
   box-shadow: 
     0 4px 20px rgba(0, 0, 0, 0.4),
     0 0 40px -10px var(--accent-blue-glow);
+}
+
+.light .card-xdc:hover {
+  box-shadow: 
+    0 4px 16px rgba(0, 0, 0, 0.12),
+    0 0 40px -10px var(--accent-blue-glow);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not(.dark) .card-xdc:hover {
+    box-shadow: 
+      0 4px 16px rgba(0, 0, 0, 0.12),
+      0 0 40px -10px var(--accent-blue-glow);
+  }
 }
 
 /* Gradient top border for hero */
@@ -100,7 +209,20 @@ body {
   padding: 24px;
   position: relative;
   overflow: hidden;
+}
+
+.dark .card-hero {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.light .card-hero {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not(.dark) .card-hero {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
 }
 
 .card-hero::before {
@@ -205,15 +327,38 @@ body {
 }
 
 .skeleton {
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+.dark .skeleton {
   background: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0.03) 25%,
     rgba(255, 255, 255, 0.08) 50%,
     rgba(255, 255, 255, 0.03) 75%
   );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: 8px;
+}
+
+.light .skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.04) 25%,
+    rgba(0, 0, 0, 0.08) 50%,
+    rgba(0, 0, 0, 0.04) 75%
+  );
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not(.dark) .skeleton {
+    background: linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.04) 25%,
+      rgba(0, 0, 0, 0.08) 50%,
+      rgba(0, 0, 0, 0.04) 75%
+    );
+  }
 }
 
 /* Stat value styling */
