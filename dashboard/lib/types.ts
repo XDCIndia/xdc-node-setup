@@ -1,3 +1,9 @@
+export interface NodeConfig {
+  clientType: 'geth' | 'erigon' | 'geth-pr5' | 'unknown';
+  nodeType: 'full' | 'fast' | 'snap' | 'archive';
+  syncMode: string;
+}
+
 export interface BlockchainData {
   blockHeight: number;
   highestBlock: number;
@@ -11,6 +17,7 @@ export interface BlockchainData {
   coinbase: string;
   ethstatsName: string;
   clientVersion: string;
+  clientType?: 'geth' | 'erigon' | 'geth-pr5' | 'unknown';
 }
 
 export interface ConsensusData {
@@ -52,6 +59,7 @@ export interface ServerData {
 
 export interface StorageData {
   chainDataSize: number;
+  databaseSize: number;
   diskReadRate: number;
   diskWriteRate: number;
   compactTime: number;
@@ -83,6 +91,7 @@ export interface MetricsData {
   rpcUrl?: string;
   rpcError?: string | null;
   diagnostics?: DiagnosticsData;
+  nodeConfig?: NodeConfig;
   blockchain: BlockchainData;
   consensus: ConsensusData;
   sync: SyncData;

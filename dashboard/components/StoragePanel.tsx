@@ -82,8 +82,9 @@ function DistributionBar({ label, value, color, max }: { label: string; value: n
 export default function StoragePanel({ data }: StoragePanelProps) {
   const displayCacheMiss = useAnimatedNumber(data.trieCacheMiss, 1000);
   
-  // Estimate total DB size (chain data + metadata)
-  const estimatedTotalSize = data.chainDataSize * 1.1;
+  // Use actual database size if available, otherwise estimate
+  const totalSize = data.databaseSize > 0 ? data.databaseSize : data.chainDataSize * 1.1;
+  const metadataSize = totalSize - data.chainDataSize;
   
   return (
     <div id="storage" className="card-xdc">
@@ -107,33 +108,36 @@ export default function StoragePanel({ data }: StoragePanelProps) {
               <div>
                 <div className="section-header">Chain Data Size</div>
                 <div className="text-2xl font-bold font-mono-nums text-[#F9FAFB]">
-                  {formatBytes(data.chainDataSize)}
+                  {data.chainDataSize > 0 ? formatBytes(data.chainDataSize) : <span className="text-[#6B7280]">Calculating...</span>}
                 </div>
               </div>
-            </div>            
-            <div className="flex items-center gap-2 text-sm">
-              <TrendingUp className="w-4 h-4 text-[#10B981]" />
-              <span className="text-[#10B981]">~1.2 GB/day growth</span>
             </div>
+            {data.databaseSize > 0 && (
+              <div className="text-sm text-[#9CA3AF]">
+                Total DB: <span className="font-semibold text-[#F9FAFB]">{formatBytes(data.databaseSize)}</span>
+              </div>
+            )}
           </div>
           
           {/* Distribution Bars */}
-          <div className="space-y-3">
-            <div className="section-header">Storage Distribution</div>            
-            <DistributionBar
-              label="Chain Data"
-              value={data.chainDataSize}
-              color="#8B5CF6"
-              max={estimatedTotalSize}
-            />
-            
-            <DistributionBar
-              label="Metadata & Indexes"
-              value={estimatedTotalSize - data.chainDataSize}
-              color="#6B7280"
-              max={estimatedTotalSize}
-            />
-          </div>
+          {data.chainDataSize > 0 && (
+            <div className="space-y-3">
+              <div className="section-header">Storage Distribution</div>            
+              <DistributionBar
+                label="Chain Data"
+                value={data.chainDataSize}
+                color="#8B5CF6"
+                max={totalSize}
+              />
+              
+              <DistributionBar
+                label="Database Total"
+                value={totalSize}
+                color="#1E90FF"
+                max={totalSize}
+              />
+            </div>
+          )}
           
           {/* I/O Stats */}
           <div className="grid grid-cols-2 gap-4">

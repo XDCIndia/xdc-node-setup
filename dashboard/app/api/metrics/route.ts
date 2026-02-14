@@ -48,6 +48,45 @@ function hexToNumber(hex: string | null | undefined): number {
   return parseInt(hex as string, 16) || 0;
 }
 
+function parseClientType(clientName: string): 'geth' | 'erigon' | 'geth-pr5' | 'unknown' {
+  const lower = clientName.toLowerCase();
+  if (lower.includes('erigon')) return 'erigon';
+  if (lower.includes('pr5') || lower.includes('pr-5')) return 'geth-pr5';
+  if (lower.includes('xdc') || lower.includes('geth')) return 'geth';
+  return 'unknown';
+}
+
+function getStorageMetrics(): { chainDataSize: number; databaseSize: number } {
+  let chainDataSize = 0;
+  let databaseSize = 0;
+  
+  try {
+    // Try different paths for chaindata
+    const paths = ['/work/xdcchain/XDC/chaindata', '/work/xdcchain/chaindata', '/work/xdcchain'];
+    for (const p of paths) {
+      try {
+        const size = execSync(`du -sb ${p} 2>/dev/null | cut -f1`, { timeout: 10000 }).toString().trim();
+        if (size && parseInt(size) > 0) {
+          if (p.includes('chaindata')) {
+            chainDataSize = parseInt(size);
+            break;
+          }
+        }
+      } catch {}
+    }
+    
+    // Get total DB directory size
+    try {
+      const dbSizeStr = execSync(`du -sb /work/xdcchain 2>/dev/null | cut -f1`, { timeout: 10000 }).toString().trim();
+      if (dbSizeStr && parseInt(dbSizeStr) > 0) {
+        databaseSize = parseInt(dbSizeStr);
+      }
+    } catch {}
+  } catch {}
+  
+  return { chainDataSize, databaseSize };
+}
+
 function getServerStats() {
   const fs = require('fs');
   const procPath = fs.existsSync('/host/proc/stat') ? '/host/proc' : '/proc';
@@ -214,6 +253,19 @@ export async function GET() {
     if (diagnostics.errors.length > 0) {
       nodeStatus = 'error';
     }
+    
+    // Parse client type from nodeInfo
+    const clientType = parseClientType((nodeInfo.name as string) || '');
+    
+    // Get storage metrics (may be slow, runs in background)
+    const storageMetrics = getStorageMetrics();
+    
+    // Node config from environment
+    const nodeConfig = {
+      clientType,
+      nodeType: (process.env.NODE_TYPE || 'full') as 'full' | 'fast' | 'snap' | 'archive',
+      syncMode: process.env.SYNC_MODE || 'full',
+    };
 
     const response = {
       // Node status overview
@@ -231,6 +283,9 @@ export async function GET() {
         lastKnownBlock: diagnostics.lastBlock || (blockHeight > 0 ? String(blockHeight) : '0'),
       },
       
+      // Node configuration
+      nodeConfig,
+      
       blockchain: {
         blockHeight,
         highestBlock,
@@ -244,6 +299,7 @@ export async function GET() {
         coinbase: coinbase ? coinbase.replace('0x', 'xdc') : '',
         ethstatsName: process.env.NODE_NAME || '',
         clientVersion: (nodeInfo.name as string) || '',
+        clientType,
       },
       consensus: {
         epoch,
@@ -261,7 +317,15 @@ export async function GET() {
         diskUsed: server.diskUsed, diskTotal: server.diskTotal,
         goroutines: 0, sysLoad: 0, procLoad: 0,
       },
-      storage: { chainDataSize: 0, diskReadRate: 0, diskWriteRate: 0, compactTime: 0, trieCacheHitRate: 0, trieCacheMiss: 0 },
+      storage: { 
+        chainDataSize: storageMetrics.chainDataSize,
+        databaseSize: storageMetrics.databaseSize,
+        diskReadRate: 0, 
+        diskWriteRate: 0, 
+        compactTime: 0, 
+        trieCacheHitRate: 0, 
+        trieCacheMiss: 0 
+      },
       network: {
         totalPeers: peers, inboundTraffic: 0, outboundTraffic: 0,
         dialSuccess: 0, dialTotal: 0, eth100Traffic: 0, eth63Traffic: 0, connectionErrors: 0,
@@ -301,12 +365,12 @@ export async function GET() {
         errors: diagnostics.errors,
         lastKnownBlock: diagnostics.lastBlock || '0',
       },
-      blockchain: { blockHeight: 0, highestBlock: 0, syncPercent: 0, isSyncing: false, peers: 0, peersInbound: 0, peersOutbound: 0, uptime: 0, chainId: '50', coinbase: '', ethstatsName: '', clientVersion: '' },
+      blockchain: { blockHeight: 0, highestBlock: 0, syncPercent: 0, isSyncing: false, peers: 0, peersInbound: 0, peersOutbound: 0, uptime: 0, chainId: '50', coinbase: '', ethstatsName: '', clientVersion: '', clientType: 'unknown' },
       consensus: { epoch: 0, epochProgress: 0, masternodeStatus: 'Inactive', signingRate: 0, stakeAmount: 0, walletBalance: 0, totalRewards: 0, penalties: 0 },
       sync: { syncRate: 0, reorgsAdd: 0, reorgsDrop: 0 },
       txpool: { pending: 0, queued: 0, slots: 0, valid: 0, invalid: 0, underpriced: 0 },
       server: { cpuUsage: server.cpuUsage, memoryUsed: server.memUsed, memoryTotal: server.memTotal, diskUsed: server.diskUsed, diskTotal: server.diskTotal, goroutines: 0, sysLoad: 0, procLoad: 0 },
-      storage: { chainDataSize: 0, diskReadRate: 0, diskWriteRate: 0, compactTime: 0, trieCacheHitRate: 0, trieCacheMiss: 0 },
+      storage: { chainDataSize: 0, databaseSize: 0, diskReadRate: 0, diskWriteRate: 0, compactTime: 0, trieCacheHitRate: 0, trieCacheMiss: 0 },
       network: { totalPeers: 0, inboundTraffic: 0, outboundTraffic: 0, dialSuccess: 0, dialTotal: 0, eth100Traffic: 0, eth63Traffic: 0, connectionErrors: 0 },
       timestamp: new Date().toISOString(),
     });

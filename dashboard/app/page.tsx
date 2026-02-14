@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import HeroSection from '@/components/HeroSection';
 import StatsGrid from '@/components/StatsGrid';
@@ -76,6 +76,7 @@ const defaultMetrics: MetricsData = {
   },
   storage: {
     chainDataSize: 0,
+    databaseSize: 0,
     diskReadRate: 0,
     diskWriteRate: 0,
     compactTime: 0,
@@ -205,6 +206,12 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
+  
+  // Track block height changes
+  const prevBlockHeightRef = useRef<number>(0);
+  const lastUpdateTimeRef = useRef<number>(Date.now());
+  const [blockIncrease, setBlockIncrease] = useState<number>(0);
+  const [blocksPerMinute, setBlocksPerMinute] = useState<number>(0);
 
   const fetchData = useCallback(async () => {
     try {
@@ -233,6 +240,25 @@ export default function Home() {
       } else if (metricsData.rpcError) {
         setError(metricsData.rpcError);
       }
+      
+      // Calculate block increase
+      const currentBlock = metricsData.blockchain.blockHeight;
+      const prevBlock = prevBlockHeightRef.current;
+      const now = Date.now();
+      const timeDelta = (now - lastUpdateTimeRef.current) / 1000; // seconds
+      
+      if (prevBlock > 0 && currentBlock > prevBlock && timeDelta > 0) {
+        const increase = currentBlock - prevBlock;
+        setBlockIncrease(increase);
+        
+        // Calculate blocks per minute
+        const bpm = (increase / timeDelta) * 60;
+        setBlocksPerMinute(Math.round(bpm * 10) / 10);
+      }
+      
+      // Update refs
+      prevBlockHeightRef.current = currentBlock;
+      lastUpdateTimeRef.current = now;
 
       if (peersRes.ok) {
         const peersData = await peersRes.json();
@@ -337,8 +363,11 @@ export default function Home() {
         )}
         {/* Hero - Blockchain Status */}
         <HeroSection 
-          data={metrics.blockchain} 
+          data={metrics.blockchain}
+          nodeConfig={metrics.nodeConfig}
           blockHeightHistory={history.blockHeight}
+          blockIncrease={blockIncrease}
+          blocksPerMinute={blocksPerMinute}
         />
 
         {/* Stats Grid */}
