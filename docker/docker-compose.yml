@@ -77,7 +77,7 @@ services:
     container_name: xdc-agent
     restart: unless-stopped
     ports:
-      - "0.0.0.0:${DASHBOARD_PORT:-8888}:3000"
+      - "0.0.0.0:${DASHBOARD_PORT:-7070}:3000"
     volumes:
       - ./skynet-agent.sh:/agent.sh:ro
       - ../${NETWORK:-mainnet}/.xdc-node/skynet.conf:/etc/xdc-node/skynet.conf:ro
