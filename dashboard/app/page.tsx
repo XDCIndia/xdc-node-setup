@@ -12,6 +12,7 @@ import ServerStats from '@/components/ServerStats';
 import StoragePanel from '@/components/StoragePanel';
 import PeerMap from '@/components/PeerMap';
 import SkyNetStatus from '@/components/SkyNetStatus';
+import { LFGBadge } from '@/components/LFGBadge';
 import type { MetricsData, PeersData } from '@/lib/types';
 
 interface MetricsHistory {
@@ -301,6 +302,9 @@ export default function Home() {
     <DashboardLayout>
       {/* Issue Banner - Shows active detected issues */}
       <IssueBanner />
+      
+      {/* LFG Badge - Shows when Live Fleet Gateway is active */}
+      <LFGBadge />
       
       <div className="space-y-6">
         {/* Error Banner with Diagnostics - Show when node is unhealthy */}

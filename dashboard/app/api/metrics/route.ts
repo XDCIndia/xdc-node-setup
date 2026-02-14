@@ -5,6 +5,7 @@ import { addSnapshot, getRawHistory } from '@/lib/metrics-history';
 import { detectIssues } from '@/lib/issue-detector';
 import { reportIssues } from '@/lib/issue-reporter';
 import { updateActiveIssues } from '@/app/api/issues/route';
+import { lfgCheck } from '@/lib/lfg';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -385,7 +386,24 @@ export async function GET() {
     // Push to SkyNet (fire and forget — don't await, don't block response)
     pushToSkyNet(responseWithIssues).catch(() => {});
 
-    return NextResponse.json(responseWithIssues);
+    // === LFG (Live Fleet Gateway) Auto-Peer Injection ===
+    // Check if peer count is below threshold and fetch healthy peers from SkyNet
+    let lfgResult = null;
+    if (rpcConnected && peers < 10) {
+      try {
+        lfgResult = await lfgCheck(getRpcUrl(), peers);
+      } catch (e) {
+        // LFG is best-effort, don't fail the whole request
+        console.error('[LFG] Error during peer injection:', e);
+      }
+    }
+
+    // Add LFG result to response if triggered
+    const finalResponse = lfgResult?.triggered 
+      ? { ...responseWithIssues, lfg: lfgResult }
+      : responseWithIssues;
+
+    return NextResponse.json(finalResponse);
   } catch (error) {
     // Even on total failure, return diagnostics
     const diagnostics = await getNodeDiagnostics();
