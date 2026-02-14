@@ -1,0 +1,4 @@
+# Chaindata is generated — only keep .gitkeep
+*
+!.gitkeep
+!.gitignore

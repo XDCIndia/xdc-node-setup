@@ -1,0 +1,3 @@
+# Keep skynet.conf template but ignore secrets
+# Users should NOT commit their API keys
+*.bak

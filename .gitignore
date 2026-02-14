@@ -12,8 +12,13 @@ erigon/
 
 # Node data directories
 /data/
-.xdc-node/
-!docker/*/.xdc-node/.gitkeep
+# Ignore runtime secrets but keep default configs
+*/.xdc-node/*.bak
+*/.xdc-node/client.conf
+!*/.xdc-node/skynet.conf
+!*/.xdc-node/.env
+!*/.xdc-node/node.env
+!*/.xdc-node/.gitignore
 *.db
 *.ldb
 
