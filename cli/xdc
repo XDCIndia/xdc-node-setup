@@ -177,6 +177,8 @@ $(c BOLD)EXAMPLES:$(c NC)
     xdc init                    # Start interactive setup wizard
     xdc status                  # Show node status with setup progress
     xdc status --watch          # Monitor status in real-time
+    xdc start --multi-client    # Run geth AND erigon simultaneously
+    xdc start --client erigon   # Start erigon (standalone if geth running)
     xdc health --full --notify  # Full health check with notifications
     xdc security                # Run security audit (advisory only)
     xdc security --fix          # Apply security fixes (with confirmation)
@@ -670,6 +672,170 @@ EOF
         local rpc_url="${XDC_RPC_URL:-http://localhost:8545}"
         local mainnet_rpc="${MAINNET_RPC_URL:-https://erpc.xinfin.network}"
         
+        # Check if multi-client mode is active (both geth and erigon running)
+        local geth_running=false
+        local erigon_running=false
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^xdc-node$"; then
+            geth_running=true
+        fi
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^xdc-node-erigon$"; then
+            erigon_running=true
+        fi
+        
+        # Helper function to get client status
+        get_client_status() {
+            local client_rpc="$1"
+            local _response _hex_height _block_height=0 _sync_pct=100 _sync_status="synced" _peers=0
+            local _client_version="unknown" _node_name="unknown" _network_id="unknown" _network="unknown"
+            local _container_status="not running"
+            
+            # Get block height
+            _response=$(rpc_call "$client_rpc" "eth_blockNumber")
+            _hex_height=$(echo "$_response" | jq -r '.result // "0x0"')
+            if [[ "$_hex_height" != "0x0" && -n "$_hex_height" && "$_hex_height" != "null" ]]; then
+                _block_height=$((16#${_hex_height#0x}))
+            fi
+            
+            # Get sync status
+            _response=$(rpc_call "$client_rpc" "eth_syncing")
+            local _syncing=$(echo "$_response" | jq -r '.result')
+            if [[ "$_syncing" != "false" && "$_syncing" != "null" ]]; then
+                local _current_block=$(echo "$_syncing" | jq -r '.currentBlock // "0x0"')
+                local _highest_block=$(echo "$_syncing" | jq -r '.highestBlock // "0x0"')
+                if [[ "$_current_block" != "0x0" && "$_highest_block" != "0x0" ]]; then
+                    local _current=$((16#${_current_block#0x}))
+                    local _highest=$((16#${_highest_block#0x}))
+                    if [[ $_highest -gt 0 ]]; then
+                        _sync_pct=$((_current * 100 / _highest))
+                        _sync_status="syncing"
+                    fi
+                fi
+            else
+                # Check against mainnet
+                _response=$(rpc_call "$mainnet_rpc" "eth_blockNumber")
+                _hex_height=$(echo "$_response" | jq -r '.result // "0x0"')
+                local _mainnet_height=0
+                if [[ "$_hex_height" != "0x0" && -n "$_hex_height" && "$_hex_height" != "null" ]]; then
+                    _mainnet_height=$((16#${_hex_height#0x}))
+                fi
+                if [[ $_mainnet_height -gt 0 && $_block_height -gt 0 ]]; then
+                    _sync_pct=$((_block_height * 100 / _mainnet_height))
+                    [[ $_sync_pct -gt 100 ]] && _sync_pct=100
+                    [[ $_sync_pct -lt 99 ]] && _sync_status="syncing"
+                fi
+            fi
+            
+            # Get peer count
+            _response=$(rpc_call "$client_rpc" "net_peerCount")
+            local _hex_peers=$(echo "$_response" | jq -r '.result // "0x0"')
+            if [[ "$_hex_peers" != "0x0" && -n "$_hex_peers" && "$_hex_peers" != "null" ]]; then
+                _peers=$((16#${_hex_peers#0x}))
+            fi
+            
+            # Get node info
+            _response=$(rpc_call "$client_rpc" "admin_nodeInfo")
+            _client_version=$(echo "$_response" | jq -r '.result.name // "unknown"')
+            _node_name=$(echo "$_response" | jq -r '.result.id // "unknown"' | cut -d'@' -f1)
+            _network_id=$(echo "$_response" | jq -r '.result.protocols.eth.network // .result.protocols.XDPoS.network // "unknown"')
+            
+            # Map network ID
+            case "$_network_id" in
+                50|"50") _network="mainnet" ;;
+                51|"51") _network="testnet/apothem" ;;
+                89|"89") _network="devnet" ;;
+                *) _network="network-$_network_id" ;;
+            esac
+            
+            # Return values
+            echo "${_block_height}|${_sync_pct}|${_sync_status}|${_peers}|${_client_version}|${_node_name}|${_network}|${_network_id}"
+        }
+        
+        # Get system stats
+        local cpu_usage
+        cpu_usage=$(awk '/^cpu /{u=$2+$4; t=$2+$3+$4+$5+$6+$7+$8; printf "%.0f", u/t*100}' /proc/stat 2>/dev/null || echo "0")
+        local ram_usage
+        ram_usage=$(awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{printf "%.0f", (t-a)/t*100}' /proc/meminfo 2>/dev/null || echo "0")
+        local disk_usage
+        mkdir -p "${XDC_DATA}" 2>/dev/null || true
+        disk_usage=$(df -h "${XDC_DATA}" 2>/dev/null | awk 'NR==2 {gsub(/%/,"",$5); print $5}' || echo "0")
+        
+        # Multi-client status display
+        if [[ "$geth_running" == "true" && "$erigon_running" == "true" ]]; then
+            # Both clients running - show multi-client status
+            local geth_env_file="../${XDC_NETWORK:-mainnet}/.xdc-node/.env"
+            local erigon_rpc_port=$(grep -E '^ERIGON_RPC_PORT=' "$geth_env_file" 2>/dev/null | cut -d= -f2 || echo 8547)
+            : "${erigon_rpc_port:=8547}"
+            
+            # Get geth status (default RPC port)
+            local geth_status geth_block geth_sync geth_peers geth_ver geth_node geth_net geth_netid
+            IFS='|' read -r geth_block geth_sync_pct geth_sync geth_peers geth_ver geth_node geth_net geth_netid <<< "$(get_client_status "http://localhost:8545")"
+            
+            # Get erigon status
+            local erigon_status erigon_block erigon_sync erigon_peers erigon_ver erigon_node erigon_net erigon_netid
+            IFS='|' read -r erigon_block erigon_sync_pct erigon_sync erigon_peers erigon_ver erigon_node erigon_net erigon_netid <<< "$(get_client_status "http://localhost:${erigon_rpc_port}")"
+            
+            # Determine status indicators
+            local geth_status_ind="$(c GREEN)●$(c NC) Online"
+            [[ $geth_block -eq 0 ]] && geth_status_ind="$(c RED)●$(c NC) Offline"
+            [[ "$geth_sync" == "syncing" ]] && geth_status_ind="$(c YELLOW)●$(c NC) Syncing"
+            
+            local erigon_status_ind="$(c GREEN)●$(c NC) Online"
+            [[ $erigon_block -eq 0 ]] && erigon_status_ind="$(c RED)●$(c NC) Offline"
+            [[ "$erigon_sync" == "syncing" ]] && erigon_status_ind="$(c YELLOW)●$(c NC) Syncing"
+            
+            if json_output ""; then
+                cat << EOF
+{
+  "multiClient": true,
+  "geth": {
+    "clientVersion": "$geth_ver",
+    "blockHeight": $geth_block,
+    "syncPercent": $geth_sync_pct,
+    "syncStatus": "$geth_sync",
+    "peers": $geth_peers
+  },
+  "erigon": {
+    "clientVersion": "$erigon_ver",
+    "blockHeight": $erigon_block,
+    "syncPercent": $erigon_sync_pct,
+    "syncStatus": "$erigon_sync",
+    "peers": $erigon_peers
+  },
+  "cpu": $cpu_usage,
+  "ram": $ram_usage,
+  "disk": $disk_usage,
+  "timestamp": "$(date -Iseconds)"
+}
+EOF
+                return 0
+            fi
+            
+            # Print multi-client table
+            echo ""
+            echo -e "$(c BOLD)┌─────────────────────────────────────────────────────────────────────────────────┐$(c NC)"
+            echo -e "$(c BOLD)│$(c NC)                 $(c CYAN)XDC Multi-Client Status$(c NC) (Geth + Erigon)                 $(c BOLD)│$(c NC)"
+            echo -e "$(c BOLD)├──────────────┬───────────┬───────┬───────┬─────────┬────────────────────────────┤$(c NC)"
+            echo -e "$(c BOLD)│$(c NC) $(c WHITE)Client$(c NC)       $(c BOLD)│$(c NC) $(c WHITE)Block$(c NC)     $(c BOLD)│$(c NC) $(c WHITE)Peers$(c NC) $(c BOLD)│$(c NC) $(c WHITE)Sync%$(c NC) $(c BOLD)│$(c NC) $(c WHITE)Status$(c NC)  $(c BOLD)│$(c NC) $(c WHITE)Version$(c NC)                  $(c BOLD)│$(c NC)"
+            echo -e "$(c BOLD)├──────────────┼───────────┼───────┼───────┼─────────┼────────────────────────────┤$(c NC)"
+            printf "$(c BOLD)│$(c NC) $(c CYAN)%-12s$(c NC) $(c BOLD)│$(c NC) %-9s $(c BOLD)│$(c NC) %-5s $(c BOLD)│$(c NC) %-5s $(c BOLD)│$(c NC) %-7s $(c BOLD)│$(c NC) %-26s $(c BOLD)│$(c NC)\n" \
+                "Geth" "$geth_block" "$geth_peers" "${geth_sync_pct}%" "$geth_status_ind" "${geth_ver:0:26}"
+            printf "$(c BOLD)│$(c NC) $(c MAGENTA)%-12s$(c NC) $(c BOLD)│$(c NC) %-9s $(c BOLD)│$(c NC) %-5s $(c BOLD)│$(c NC) %-5s $(c BOLD)│$(c NC) %-7s $(c BOLD)│$(c NC) %-26s $(c BOLD)│$(c NC)\n" \
+                "Erigon" "$erigon_block" "$erigon_peers" "${erigon_sync_pct}%" "$erigon_status_ind" "${erigon_ver:0:26}"
+            echo -e "$(c BOLD)└──────────────┴───────────┴───────┴───────┴─────────┴────────────────────────────┘$(c NC)"
+            echo ""
+            echo -e "$(c BOLD)System Resources:$(c NC)"
+            echo -e "  CPU: ${cpu_usage}% | RAM: ${ram_usage}% | Disk: ${disk_usage}%"
+            echo ""
+            echo -e "$(c BOLD)RPC Endpoints:$(c NC)"
+            echo -e "  Geth:    $(c CYAN)http://localhost:8545$(c NC)"
+            echo -e "  Erigon:  $(c CYAN)http://localhost:${erigon_rpc_port}$(c NC)"
+            echo ""
+            echo -e "$(c DIM)Both clients are running simultaneously and can peer with each other$(c NC)"
+            echo ""
+            return 0
+        fi
+        
+        # Single client mode - existing behavior
         # Get block height
         local response
         response=$(rpc_call "$rpc_url" "eth_blockNumber")
@@ -680,17 +846,15 @@ EOF
             block_height=$((16#${hex_height#0x}))
         fi
         
-        # Get sync status (dynamic, not just percentage)
+        # Get sync status
         response=$(rpc_call "$rpc_url" "eth_syncing")
         local syncing=$(echo "$response" | jq -r '.result')
         local sync_status="synced"
         local sync_pct=100
         
         if [[ "$syncing" != "false" && "$syncing" != "null" ]]; then
-            # Node is syncing - get current and highest block
             local current_block=$(echo "$syncing" | jq -r '.currentBlock // "0x0"')
             local highest_block=$(echo "$syncing" | jq -r '.highestBlock // "0x0"')
-            
             if [[ "$current_block" != "0x0" && "$highest_block" != "0x0" ]]; then
                 local current=$((16#${current_block#0x}))
                 local highest=$((16#${highest_block#0x}))
@@ -700,14 +864,12 @@ EOF
                 fi
             fi
         else
-            # Node reports synced - double-check against mainnet
             response=$(rpc_call "$mainnet_rpc" "eth_blockNumber")
             hex_height=$(echo "$response" | jq -r '.result // "0x0"')
             local mainnet_height=0
             if [[ "$hex_height" != "0x0" && -n "$hex_height" && "$hex_height" != "null" ]]; then
                 mainnet_height=$((16#${hex_height#0x}))
             fi
-            
             if [[ $mainnet_height -gt 0 ]]; then
                 sync_pct=$((block_height * 100 / mainnet_height))
                 [[ $sync_pct -gt 100 ]] && sync_pct=100
@@ -724,13 +886,12 @@ EOF
             peers=$((16#${hex_peers#0x}))
         fi
         
-        # Get node info (client version, node name, network)
+        # Get node info
         response=$(rpc_call "$rpc_url" "admin_nodeInfo")
         local client_version=$(echo "$response" | jq -r '.result.name // "unknown"')
         local node_name=$(echo "$response" | jq -r '.result.id // "unknown"' | cut -d'@' -f1)
         local network_id=$(echo "$response" | jq -r '.result.protocols.eth.network // .result.protocols.XDPoS.network // "unknown"')
         
-        # Map network ID to name
         local network="unknown"
         case "$network_id" in
             50|"50") network="mainnet" ;;
@@ -753,16 +914,6 @@ EOF
             esac
         fi
         
-        # Get system stats
-        local cpu_usage
-        cpu_usage=$(awk '/^cpu /{u=$2+$4; t=$2+$3+$4+$5+$6+$7+$8; printf "%.0f", u/t*100}' /proc/stat 2>/dev/null || echo "0")
-        local ram_usage
-        ram_usage=$(awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{printf "%.0f", (t-a)/t*100}' /proc/meminfo 2>/dev/null || echo "0")
-        local disk_usage
-        # Ensure data directory exists before checking disk usage
-        mkdir -p "${XDC_DATA}" 2>/dev/null || true
-        disk_usage=$(df -h "${XDC_DATA}" 2>/dev/null | awk 'NR==2 {gsub(/%/,"",$5); print $5}' || echo "0")
-        
         # Determine status
         local status="$(c GREEN)●$(c NC) Online"
         local status_json="online"
@@ -778,7 +929,7 @@ EOF
             status_json="low_peers"
         fi
         
-        # Extract and detect client name from version string
+        # Extract and detect client name
         local client="Unknown"
         local client_display="Unknown"
         
@@ -786,7 +937,6 @@ EOF
             client="erigon"
             client_display="Erigon-XDC"
         elif [[ "$client_version" == *"XDC"* ]]; then
-            # Check if it's geth-pr5 or stable based on version string
             if [[ "$client_version" == *"feature/xdpos"* ]] || [[ "$client_version" == *"pr5"* ]]; then
                 client="geth-pr5"
                 client_display="XDC Geth PR5"
@@ -823,7 +973,7 @@ EOF
             return 0
         fi
         
-        # Print table
+        # Print single client table
         echo ""
         echo -e "$(c BOLD)┌─────────────────────────────────────────────────────────────────────────────┐$(c NC)"
         echo -e "$(c BOLD)│$(c NC)                       $(c CYAN)XDC Node Status$(c NC)                                      $(c BOLD)│$(c NC)"
@@ -1970,6 +2120,7 @@ cmd_start() {
     local network=""
     local client_override=""
     local install_args=""
+    local multi_client=false
     
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -1982,18 +2133,22 @@ $(c BOLD)USAGE:$(c NC)
 
 $(c BOLD)DESCRIPTION:$(c NC)
     Starts the XDC node. If no configuration is found, runs install.sh first.
+    Supports running both geth and erigon clients simultaneously.
 
 $(c BOLD)OPTIONS:$(c NC)
-    --network NETWORK   Network: mainnet, testnet, devnet, apothem (default: mainnet)
-    --client CLIENT     Client: stable, geth-pr5, erigon (default: auto-detect from config)
-    --monitoring        Start with full monitoring stack (Prometheus, Grafana, etc.)
-    --help              Show this help
+    --network NETWORK    Network: mainnet, testnet, devnet, apothem (default: mainnet)
+    --client CLIENT      Client: stable, geth-pr5, erigon (default: auto-detect from config)
+    --multi-client, --all Start both geth AND erigon clients simultaneously
+    --monitoring         Start with full monitoring stack (Prometheus, Grafana, etc.)
+    --help               Show this help
 
 $(c BOLD)EXAMPLES:$(c NC)
-    xdc-node start                          # Start mainnet with configured client
-    xdc-node start --monitoring             # Start with monitoring stack
-    xdc-node start --network testnet        # Start testnet
-    xdc-node start --client erigon          # Override client to use Erigon
+    xdc-node start                           # Start mainnet with configured client (geth)
+    xdc-node start --monitoring              # Start with monitoring stack
+    xdc-node start --network testnet         # Start testnet
+    xdc-node start --client erigon           # Start erigon (standalone if geth running)
+    xdc-node start --multi-client            # Start both geth AND erigon
+    xdc-node start --all                     # Alias for --multi-client
 
 EOF
                 return 0
@@ -2006,6 +2161,10 @@ EOF
             --client)
                 client_override="$2"
                 shift 2
+                ;;
+            --multi-client|--all)
+                multi_client=true
+                shift
                 ;;
             --monitoring)
                 local monitoring=true
@@ -2052,9 +2211,9 @@ EOF
         fi
     fi
     
-    # Try Docker first
+    # Try Docker first (single container start - existing behavior)
     local container
-    if container=$(find_container) && [[ -n "$container" ]]; then
+    if container=$(find_container) && [[ -n "$container" ]] && [[ "$multi_client" != "true" ]] && [[ "$client_override" != "erigon" ]]; then
         info "Found Docker container: $container"
         start_spinner "Starting Docker container"
         
@@ -2076,9 +2235,6 @@ EOF
     
     # Try to start via docker compose
     if [[ -f "$docker_compose" ]]; then
-        info "Starting with docker compose..."
-        start_spinner "Starting XDC node"
-        
         cd "$(dirname "$docker_compose")" || die "Failed to change to docker directory"
         
         # --- Port conflict auto-resolution ---
@@ -2102,13 +2258,160 @@ EOF
         
         # Read current ports from env or defaults
         local rpc_port=8545 ws_port=8546 p2p_port=30303 dash_port=8888
+        local erigon_rpc_port=8547 erigon_p2p_port=30304 erigon_p2p_68=30311 erigon_dash_port=7071
         if [[ -n "$env_file" ]]; then
             rpc_port=$(grep -E '^RPC_PORT=' "$env_file" 2>/dev/null | cut -d= -f2 || echo 8545)
             ws_port=$(grep -E '^WS_PORT=' "$env_file" 2>/dev/null | cut -d= -f2 || echo 8546)
             p2p_port=$(grep -E '^P2P_PORT=' "$env_file" 2>/dev/null | cut -d= -f2 || echo 30303)
             dash_port=$(grep -E '^DASHBOARD_PORT=' "$env_file" 2>/dev/null | cut -d= -f2 || echo 8888)
+            # Erigon ports
+            erigon_rpc_port=$(grep -E '^ERIGON_RPC_PORT=' "$env_file" 2>/dev/null | cut -d= -f2 || echo 8547)
+            erigon_p2p_port=$(grep -E '^ERIGON_P2P_PORT=' "$env_file" 2>/dev/null | cut -d= -f2 || echo 30304)
+            erigon_p2p_68=$(grep -E '^ERIGON_P2P_PORT_68=' "$env_file" 2>/dev/null | cut -d= -f2 || echo 30311)
+            erigon_dash_port=$(grep -E '^ERIGON_DASHBOARD_PORT=' "$env_file" 2>/dev/null | cut -d= -f2 || echo 7071)
         fi
         : "${rpc_port:=8545}" "${ws_port:=8546}" "${p2p_port:=30303}" "${dash_port:=8888}"
+        : "${erigon_rpc_port:=8547}" "${erigon_p2p_port:=30304}" "${erigon_p2p_68:=30311}" "${erigon_dash_port:=7071}"
+        
+        # Check if geth (xdc-node) is already running
+        local geth_running=false
+        if docker ps --format '{{.Names}}' | grep -q "^xdc-node$"; then
+            geth_running=true
+        fi
+        
+        # Check if erigon is already running
+        local erigon_running=false
+        if docker ps --format '{{.Names}}' | grep -q "^xdc-node-erigon$"; then
+            erigon_running=true
+        fi
+        
+        # Multi-client mode: start both geth and erigon
+        if [[ "$multi_client" == "true" ]]; then
+            info "Starting multi-client mode (both geth and erigon)..."
+            start_spinner "Starting XDC nodes"
+            
+            # Export all ports
+            export RPC_PORT="$rpc_port" WS_PORT="$ws_port" P2P_PORT="$p2p_port" DASHBOARD_PORT="$dash_port"
+            export ERIGON_RPC_PORT="$erigon_rpc_port" ERIGON_P2P_PORT="$erigon_p2p_port" 
+            export ERIGON_P2P_PORT_68="$erigon_p2p_68" ERIGON_DASHBOARD_PORT="$erigon_dash_port"
+            [[ -n "$network" ]] && export NETWORK="$network"
+            
+            # Start geth if not running
+            if [[ "$geth_running" != "true" ]]; then
+                info "Starting geth (xdc-node)..."
+                if ! docker compose -f docker-compose.yml up -d xdc-node xdc-agent 2>/dev/null; then
+                    stop_spinner false "Failed to start geth"
+                    die "Failed to start geth client. Check 'docker compose logs' for details."
+                fi
+                log "Geth client started"
+            else
+                info "Geth already running, skipping..."
+            fi
+            
+            # Start erigon using standalone compose
+            if [[ "$erigon_running" != "true" ]]; then
+                info "Starting erigon (xdc-erigon)..."
+                if [[ -f "docker-compose.erigon-standalone.yml" ]]; then
+                    # Create xdc-network if it doesn't exist
+                    docker network create xdc-network 2>/dev/null || true
+                    
+                    if ! docker compose -f docker-compose.erigon-standalone.yml up -d 2>/dev/null; then
+                        stop_spinner false "Failed to start erigon"
+                        die "Failed to start erigon client. Check 'docker compose logs' for details."
+                    fi
+                    log "Erigon client started"
+                else
+                    stop_spinner false "Erigon standalone compose not found"
+                    die "docker-compose.erigon-standalone.yml not found. Please check your installation."
+                fi
+            else
+                info "Erigon already running, skipping..."
+            fi
+            
+            stop_spinner true "Both clients started"
+            
+            # Print status
+            echo ""
+            echo -e "$(c GREEN)$(c BOLD)═══════════════════════════════════════════$(c NC)"
+            echo -e "$(c GREEN)$(c BOLD)  Multi-Client Mode Active!$(c NC)"
+            echo -e "$(c GREEN)$(c BOLD)═══════════════════════════════════════════$(c NC)"
+            echo ""
+            echo -e "  $(c BOLD)Geth (xdc-node):$(c NC)"
+            echo -e "    Dashboard:  http://localhost:${dash_port}"
+            echo -e "    RPC:        http://127.0.0.1:${rpc_port}"
+            echo -e "    WebSocket:  ws://127.0.0.1:${ws_port}"
+            echo -e "    P2P:        :${p2p_port}"
+            echo ""
+            echo -e "  $(c BOLD)Erigon (xdc-erigon):$(c NC)"
+            echo -e "    Dashboard:  http://localhost:${erigon_dash_port}"
+            echo -e "    RPC:        http://127.0.0.1:${erigon_rpc_port}"
+            echo -e "    P2P:        :${erigon_p2p_port} (eth/63), :${erigon_p2p_68} (eth/68)"
+            echo ""
+            echo -e "  $(c DIM)Check status:  xdc status$(c NC)"
+            echo -e "  $(c DIM)View logs:     xdc logs --client erigon$(c NC)"
+            echo ""
+            return 0
+        fi
+        
+        # Single client mode with --client erigon
+        # If geth is running and user wants erigon, use standalone compose
+        if [[ "$client_override" == "erigon" ]] && [[ "$geth_running" == "true" ]]; then
+            info "Starting erigon alongside existing geth node..."
+            start_spinner "Starting Erigon"
+            
+            # Resolve erigon port conflicts
+            local orig_erigon_rpc=$erigon_rpc_port orig_erigon_p2p=$erigon_p2p_port
+            local orig_erigon_p2p_68=$erigon_p2p_68 orig_erigon_dash=$erigon_dash_port
+            erigon_rpc_port=$(_find_free_port "$erigon_rpc_port")
+            erigon_p2p_port=$(_find_free_port "$erigon_p2p_port")
+            erigon_p2p_68=$(_find_free_port "$erigon_p2p_68")
+            erigon_dash_port=$(_find_free_port "$erigon_dash_port")
+            
+            # Log any changes
+            [[ "$erigon_rpc_port" != "$orig_erigon_rpc" ]] && warn "Erigon RPC port $orig_erigon_rpc in use → using $erigon_rpc_port"
+            [[ "$erigon_p2p_port" != "$orig_erigon_p2p" ]] && warn "Erigon P2P port $orig_erigon_p2p in use → using $erigon_p2p_port"
+            [[ "$erigon_p2p_68" != "$orig_erigon_p2p_68" ]] && warn "Erigon P2P68 port $orig_erigon_p2p_68 in use → using $erigon_p2p_68"
+            [[ "$erigon_dash_port" != "$orig_erigon_dash" ]] && warn "Erigon Dashboard port $orig_erigon_dash in use → using $erigon_dash_port"
+            
+            # Export erigon ports
+            export ERIGON_RPC_PORT="$erigon_rpc_port" ERIGON_P2P_PORT="$erigon_p2p_port"
+            export ERIGON_P2P_PORT_68="$erigon_p2p_68" ERIGON_DASHBOARD_PORT="$erigon_dash_port"
+            [[ -n "$network" ]] && export NETWORK="$network"
+            
+            if [[ -f "docker-compose.erigon-standalone.yml" ]]; then
+                # Create xdc-network if it doesn't exist (geth should have created it)
+                docker network create xdc-network 2>/dev/null || true
+                
+                if docker compose -f docker-compose.erigon-standalone.yml up -d 2>/dev/null; then
+                    stop_spinner true "Erigon started"
+                    log "Erigon client started alongside geth"
+                    
+                    echo ""
+                    echo -e "$(c GREEN)$(c BOLD)═══════════════════════════════════════════$(c NC)"
+                    echo -e "$(c GREEN)$(c BOLD)  Erigon Node Running Alongside Geth!$(c NC)"
+                    echo -e "$(c GREEN)$(c BOLD)═══════════════════════════════════════════$(c NC)"
+                    echo ""
+                    echo -e "  $(c BOLD)Geth (existing):$(c NC)"
+                    echo -e "    RPC:        http://127.0.0.1:${rpc_port}"
+                    echo ""
+                    echo -e "  $(c BOLD)Erigon (new):$(c NC)"
+                    echo -e "    Dashboard:  http://localhost:${erigon_dash_port}"
+                    echo -e "    RPC:        http://127.0.0.1:${erigon_rpc_port}"
+                    echo -e "    P2P:        :${erigon_p2p_port} (eth/63), :${erigon_p2p_68} (eth/68)"
+                    echo ""
+                    return 0
+                else
+                    stop_spinner false "Erigon start failed"
+                    die "Failed to start Erigon. Check 'docker compose logs' for details."
+                fi
+            else
+                stop_spinner false "Erigon compose not found"
+                die "docker-compose.erigon-standalone.yml not found"
+            fi
+        fi
+        
+        # Standard single-client mode
+        start_spinner "Starting XDC node"
         
         # Resolve conflicts
         local orig_rpc=$rpc_port orig_ws=$ws_port orig_p2p=$p2p_port orig_dash=$dash_port
@@ -2142,11 +2445,14 @@ EOF
         # Add client-specific override
         case "$client" in
             erigon)
-                if [[ -f "docker-compose.erigon.yml" ]]; then
-                    compose_cmd="$compose_cmd -f docker-compose.erigon.yml"
-                    info "Using Erigon-XDC client"
-                else
-                    warn "Erigon compose file not found, using stable client"
+                # If geth is NOT running, use override compose (existing behavior)
+                if [[ "$geth_running" != "true" ]]; then
+                    if [[ -f "docker-compose.erigon.yml" ]]; then
+                        compose_cmd="$compose_cmd -f docker-compose.erigon.yml"
+                        info "Using Erigon-XDC client (override mode)"
+                    else
+                        warn "Erigon compose file not found, using stable client"
+                    fi
                 fi
                 ;;
             geth-pr5)

@@ -494,6 +494,13 @@ init_config() {
     WS_PORT="${WS_PORT:-8546}"
     DASHBOARD_PORT="${DASHBOARD_PORT:-8888}"
 
+    # ERIGON-specific ports (for multi-client mode)
+    ERIGON_RPC_PORT="${ERIGON_RPC_PORT:-8547}"
+    ERIGON_AUTHRPC_PORT="${ERIGON_AUTHRPC_PORT:-8561}"
+    ERIGON_P2P_PORT="${ERIGON_P2P_PORT:-30304}"
+    ERIGON_P2P_PORT_68="${ERIGON_P2P_PORT_68:-30311}"
+    ERIGON_DASHBOARD_PORT="${ERIGON_DASHBOARD_PORT:-7071}"
+
     # Auto-resolve port conflicts
     RPC_PORT=$(find_free_port "$RPC_PORT")
     P2P_PORT=$(find_free_port "$P2P_PORT")
@@ -981,6 +988,15 @@ WS_API=admin,eth,net,web3,XDPoS
 WS_ORIGINS=*
 P2P_PORT=${P2P_PORT:-30303}
 DASHBOARD_PORT=${DASHBOARD_PORT:-8888}
+
+# ERIGON-specific ports (for multi-client mode)
+# These ports are used when running erigon alongside geth
+ERIGON_RPC_PORT=8547
+ERIGON_AUTHRPC_PORT=8561
+ERIGON_P2P_PORT=30304
+ERIGON_P2P_PORT_68=30311
+ERIGON_DASHBOARD_PORT=7071
+ERIGON_RPC_URL=http://xdc-erigon:8547
 ENVEOF
 
     # Create password file (remove if Docker created it as a directory)

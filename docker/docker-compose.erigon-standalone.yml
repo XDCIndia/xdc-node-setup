@@ -1,0 +1,119 @@
+#==============================================================================
+# XDC Node Docker Compose — Erigon Standalone (runs alongside geth)
+# Usage: docker compose -f docker-compose.erigon-standalone.yml up -d
+# Or: xdc start --client erigon (when geth is already running)
+# Or: xdc start --multi-client (to start both geth and erigon)
+#==============================================================================
+
+services:
+  #--------------------------------------------------------------------------
+  # XDC Erigon Node - Separate client that runs alongside geth
+  #--------------------------------------------------------------------------
+  xdc-erigon:
+    build:
+      context: ./erigon
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    container_name: xdc-node-erigon
+    restart: always
+    ports:
+      - "${ERIGON_RPC_PORT:-8547}:8547"              # HTTP-RPC (erigon default)
+      - "${ERIGON_AUTHRPC_PORT:-8561}:8561"          # Auth RPC port
+      - "${ERIGON_P2P_PORT:-30304}:30304"            # eth/63 (primary peer port)
+      - "${ERIGON_P2P_PORT:-30304}:30304/udp"
+      - "${ERIGON_P2P_PORT_68:-30311}:30311"         # eth/68 (new protocol)
+      - "${ERIGON_P2P_PORT_68:-30311}:30311/udp"
+    volumes:
+      - ../${NETWORK:-mainnet}/xdcchain-erigon:/data
+      - ./erigon/start-erigon.sh:/start.sh:ro
+      - ../${NETWORK:-mainnet}/.xdc-node/config.toml:/etc/xdc-node/config.toml:ro
+      - ./${NETWORK:-mainnet}/genesis.json:/genesis.json:ro
+      - ./${NETWORK:-mainnet}/bootnodes.list:/bootnodes.list:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - NETWORK=${NETWORK:-mainnet}
+      - SYNC_MODE=${SYNC_MODE:-full}
+      - RPC_PORT=${ERIGON_RPC_PORT:-8547}
+      - AUTHRPC_PORT=${ERIGON_AUTHRPC_PORT:-8561}
+      - INSTANCE_NAME=${INSTANCE_NAME:-Erigon_XDC_Node}
+      - P2P_PORT=${ERIGON_P2P_PORT:-30304}
+      - P2P_PORT_68=${ERIGON_P2P_PORT_68:-30311}
+    entrypoint: ["/bin/sh", "/start.sh"]
+    networks:
+      - xdc-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8547 --post-data='{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' --header='Content-Type: application/json' | grep -q 'result' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 12G
+        reservations:
+          cpus: '2'
+          memory: 6G
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+
+  #--------------------------------------------------------------------------
+  # XDC Agent for Erigon - Monitoring agent pointing to erigon's RPC
+  #--------------------------------------------------------------------------
+  xdc-agent-erigon:
+    build:
+      context: ../dashboard
+      dockerfile: Dockerfile
+    container_name: xdc-agent-erigon
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${ERIGON_DASHBOARD_PORT:-7071}:3000"
+    volumes:
+      - ./skynet-agent.sh:/agent.sh:ro
+      - ../${NETWORK:-mainnet}/.xdc-node/skynet.conf:/etc/xdc-node/skynet.conf:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/host/proc:ro
+      - ../${NETWORK:-mainnet}/.xdc-node/logs:/var/log/xdc
+    environment:
+      # Point to erigon container's RPC port
+      - RPC_URL=${ERIGON_RPC_URL:-http://xdc-erigon:8547}
+      - NODE_RPC_PORT=${ERIGON_RPC_PORT:-8547}
+      - SKYNET_CONF=/etc/xdc-node/skynet.conf
+      - NEXT_PUBLIC_REFRESH_INTERVAL=10
+      - INSTANCE_NAME=${INSTANCE_NAME:-Erigon_XDC_Node}
+    networks:
+      - xdc-network
+    depends_on:
+      xdc-erigon:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health/live || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+#=============================================================================
+# Networks
+#=============================================================================
+networks:
+  xdc-network:
+    driver: bridge
+    # Use external network so geth and erigon can peer with each other
+    external: true
