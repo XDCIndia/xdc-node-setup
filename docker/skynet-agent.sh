@@ -15,6 +15,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Initialize DETECT_* globals (populated by detect_environment)
+DETECT_ENODE=""
+DETECT_IPV4=""
+DETECT_IPV6=""
+
 #==============================================================================
 # Configuration
 #==============================================================================
@@ -32,6 +37,12 @@ HEARTBEAT_INTERVAL=30
 if [[ -f "$CONF_FILE" ]]; then
     # shellcheck source=/dev/null
     source "$CONF_FILE"
+    # Re-evaluate after config load (config may set XDC_RPC_URL, SKYNET_API_URL, etc.)
+    RPC_URL="${XDC_RPC_URL:-$RPC_URL}"
+    SKYNET_API="${SKYNET_API_URL:-$SKYNET_API}"
+    SKYNET_API_KEY="${SKYNET_API_KEY:-}"
+    NODE_NAME="${NODE_NAME:-$(hostname)}"
+    NODE_ROLE="${NODE_ROLE:-fullnode}"
 fi
 
 # State
@@ -41,7 +52,7 @@ API_KEY=""
 #==============================================================================
 # Helpers
 #==============================================================================
-log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"; }
+log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >&2; }
 warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >&2; }
 err()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >&2; }
 
@@ -117,13 +128,13 @@ detect_node_info() {
     DETECT_ENODE=$(echo "$node_info" | jq -r '.result.enode // ""')
     
     # Detect client type from version string
-    DETECT_CLIENT_TYPE="Unknown"
+    DETECT_CLIENT_TYPE="unknown"
     if echo "$DETECT_VERSION" | grep -qi "XDC\|XDPoS"; then
         DETECT_CLIENT_TYPE="XDC"
     elif echo "$DETECT_VERSION" | grep -qi "erigon"; then
-        DETECT_CLIENT_TYPE="Erigon"
+        DETECT_CLIENT_TYPE="erigon"
     elif echo "$DETECT_VERSION" | grep -qi "geth\|go-ethereum"; then
-        DETECT_CLIENT_TYPE="Geth"
+        DETECT_CLIENT_TYPE="geth"
     fi
     
     # Detect OS information
@@ -431,14 +442,19 @@ collect_metrics() {
     local client_version
     client_version=$(echo "$node_info" | jq -r '.result.name // "Unknown"')
     
+    # Update enode if not set (single-run mode)
+    if [[ -z "$DETECT_ENODE" ]]; then
+        DETECT_ENODE=$(echo "$node_info" | jq -r '.result.enode // ""')
+    fi
+    
     # Detect client type from version string
-    local client_type="Unknown"
+    local client_type="unknown"
     if echo "$client_version" | grep -qi "XDC\|XDPoS"; then
         client_type="XDC"
     elif echo "$client_version" | grep -qi "erigon"; then
-        client_type="Erigon"
+        client_type="erigon"
     elif echo "$client_version" | grep -qi "geth\|go-ethereum"; then
-        client_type="Geth"
+        client_type="geth"
     fi
     
     # Get public IPv4 with timeout and fallback
@@ -448,6 +464,11 @@ collect_metrics() {
     # Get public IPv6 with timeout and fallback
     local ipv6=""
     ipv6=$(curl -s -6 --max-time 2 https://ifconfig6.me 2>/dev/null || curl -s -6 --max-time 2 https://api6.ipify.org 2>/dev/null || echo "")
+    
+    # Replace container IP in enode with public IP
+    if [[ -n "$DETECT_ENODE" && -n "$ipv4" ]]; then
+        DETECT_ENODE=$(echo "$DETECT_ENODE" | sed "s/@[^:]*:/@${ipv4}:/")
+    fi
     
     # Get OS information
     local os_type os_release os_arch kernel
@@ -585,7 +606,7 @@ push_heartbeat() {
     local response
     response=$(api_call POST "/nodes/heartbeat" "$payload")
     
-    if echo "$response" | jq -e '.ok' >/dev/null 2>&1; then
+    if echo "$response" | jq -e '.success // .data.ok // .ok' >/dev/null 2>&1; then
         write_heartbeat_status "success" ""
         local commands
         commands=$(echo "$response" | jq -r '.commands[]?' 2>/dev/null)
