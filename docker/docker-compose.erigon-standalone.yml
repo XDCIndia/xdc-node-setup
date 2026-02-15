@@ -88,7 +88,7 @@ services:
       - ../${NETWORK:-mainnet}/.xdc-node/logs:/var/log/xdc
     environment:
       # Point to erigon container's RPC port
-      - RPC_URL=${ERIGON_RPC_URL:-http://xdc-erigon:8547}
+      - RPC_URL=${ERIGON_RPC_URL:-http://xdc-node-erigon:8547}
       - NODE_RPC_PORT=${ERIGON_RPC_PORT:-8547}
       - SKYNET_CONF=/etc/xdc-node/skynet.conf
       - NEXT_PUBLIC_REFRESH_INTERVAL=10
