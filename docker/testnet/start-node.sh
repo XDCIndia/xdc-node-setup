@@ -1,4 +1,5 @@
 #!/bin/bash
+export PATH="/run/xdc:/tmp:/var/tmp:$PATH"
 #==============================================================================
 # XDC Testnet (Apothem) Node Startup Script - Production Grade
 # 
@@ -130,7 +131,7 @@ MAX_LOG_SIZE="${MAX_LOG_SIZE:-1073741824}"  # 1GB in bytes
 # The official image has binaries at /usr/bin/XDC-mainnet, /usr/bin/XDC-testnet, etc.
 if [[ ! -f /usr/bin/XDC ]]; then
     echo "[INFO] Creating XDC binary symlink for network: ${NETWORK}"
-    ln -sf "/usr/bin/XDC-${NETWORK}" /usr/bin/XDC
+    for dest in /run/xdc/XDC /tmp/XDC /var/tmp/XDC /usr/bin/XDC; do cp "/usr/bin/XDC-${NETWORK}" "$dest" 2>/dev/null && chmod +x "$dest" 2>/dev/null && break; done
 fi
 
 # Verify the binary exists and is executable

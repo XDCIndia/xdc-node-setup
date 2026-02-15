@@ -1,4 +1,5 @@
 #!/bin/bash
+export PATH="/run/xdc:/tmp:/var/tmp:$PATH"
 set -e
 
 # XDC Devnet Node Startup Script
@@ -73,8 +74,8 @@ done
 if ! command -v XDC &>/dev/null; then
     for bin in XDC XDC-devnet XDC-testnet XDC-mainnet; do
         if command -v "$bin" &>/dev/null; then
-            ln -sf "$(which "$bin")" /usr/bin/XDC
-            echo "Linked $bin → /usr/bin/XDC"
+            for dest in /run/xdc/XDC /tmp/XDC /var/tmp/XDC /usr/bin/XDC; do cp "$(which "$bin")" "$dest" 2>/dev/null && chmod +x "$dest" 2>/dev/null && break; done
+            echo "Copied $bin → $dest"
             break
         fi
     done
