@@ -1,0 +1,17 @@
+apiVersion: xdc.network/v1alpha1
+kind: XDCMasternode
+metadata:
+  name: masternode-mainnet
+  namespace: xdc-network
+spec:
+  network: mainnet
+  coinbase: "xdc0000000000000000000000000000000000000001"
+  stakingAmount: "10000000"
+  keystoreSecret: masternode-keystore
+  nodeRef: xdcnode-mainnet
+  image: xinfinorg/xdcchain:latest
+  resources:
+    cpuRequest: "2"
+    cpuLimit: "4"
+    memoryRequest: "8Gi"
+    memoryLimit: "16Gi"
