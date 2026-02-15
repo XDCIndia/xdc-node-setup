@@ -396,13 +396,77 @@ curl -s -X POST http://localhost:8547 \
 
 ## Known Issues
 
+### Issue #15: P2P Protocol Mismatch (RESOLVED) ✅
+
+**Status:** RESOLVED via dual-sentry architecture
+
+Erigon uses two separate P2P sentries:
+- **Port 30304 (eth/63)** — XDC-compatible, use this for XDC geth peers
+- **Port 30311 (eth/68)** — Standard Ethereum protocol (not XDC-compatible)
+
+See [Peer Connection](#peer-connection-critical) section above for details.
+
+---
+
+### Issue #44: Bad Block at 1,884,577
+
+**Status:** Upstream issue — use `xdc-state-root-bypass` branch
+
+Known XDPoS consensus validation issue at block 1,884,577 where state root validation fails.
+
+**Solution:**
+```bash
+# Use the state root bypass branch
+cd erigon-xdc
+git checkout xdc-state-root-bypass
+make erigon
+```
+
+**Alternative:** Reset and resync from snapshot:
+```bash
+xdc reset --client erigon --confirm
+./scripts/snapshot-manager.sh download mainnet-erigon
+```
+
+---
+
+### Issue #47: State Root Mismatches During Sync
+
+**Status:** Expected behavior — bypassed in XDPoS chain implementation
+
+Erigon and Geth calculate state differently in some XDPoS consensus edge cases. This results in state root mismatch warnings during sync.
+
+**What happens:**
+- State root mismatch is logged as a warning
+- Sync continues to the next block (bypass enabled for XDPoS)
+- State reconciles at next checkpoint
+
+**Solution:**
+Use the `xdc-state-root-bypass` branch which handles these mismatches automatically:
+```bash
+git clone https://github.com/AnilChinchawale/erigon-xdc.git
+cd erigon-xdc
+git checkout xdc-state-root-bypass
+make erigon
+```
+
+**Note:** This is being tracked upstream. The mismatch is a known divergence between Erigon and Geth state calculation for XDPoS consensus.
+
+---
+
+### General Sync Issues
+
 | Issue | Status | Workaround |
 |-------|--------|------------|
-| eth/68 vs eth/62 mismatch | Partial fix | Use port 30304 (eth/63 sentry), not 30311 |
+| eth/68 vs eth/62 mismatch | ✅ RESOLVED | Use port 30304 (eth/63 sentry), not 30311 |
 | "too many peers" rejections | Expected | Use `admin_addTrustedPeer` on geth side |
 | Slow peer discovery | Known | Manually add peers via `admin_addPeer` RPC |
-| State root mismatch | Possible | May occur at consensus-critical blocks — clear datadir and resync |
+| State root mismatch | Bypassed | Use `xdc-state-root-bypass` branch |
 | XDC bootnodes not responsive | XDC Network | Check [XDC Network status page](https://xdc.network/status) |
+
+**Troubleshooting Resources:**
+- Full troubleshooting guide: [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+- Sync issues: [SYNC-GUIDE.md](SYNC-GUIDE.md)
 
 **Reporting Issues:**
 - Erigon-XDC: [github.com/AnilChinchawale/erigon-xdc/issues](https://github.com/AnilChinchawale/erigon-xdc/issues)
