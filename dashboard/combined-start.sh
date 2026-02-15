@@ -24,22 +24,28 @@ if [ -f "$SKYNET_CONF" ]; then
   source "$SKYNET_CONF"
   set +a
 
+  # Load persisted node ID from /tmp fallback (if conf was read-only)
+  if [ -z "$SKYNET_NODE_ID" ] && [ -f /tmp/skynet-node-id ]; then
+    source /tmp/skynet-node-id
+  fi
+
   # Auto-register with SkyNet if no NODE_ID yet
   if [ -z "$SKYNET_NODE_ID" ] && [ -n "$SKYNET_API_URL" ]; then
     echo "No SKYNET_NODE_ID found, auto-registering..." | tee -a /var/log/xdc/dashboard.log
     NODE_NAME="${SKYNET_NODE_NAME:-$(hostname)-$(curl -s -m 3 https://api.ipify.org | tail -c 8)}"
     PUBLIC_IP=$(curl -s -m 5 https://api.ipify.org || echo "unknown")
-    # Auth header only if API key is set (auth may be disabled)
-    AUTH_HEADER=""
-    [ -n "$SKYNET_API_KEY" ] && AUTH_HEADER="-H \"Authorization: Bearer ${SKYNET_API_KEY}\""
-    REG_RESPONSE=$(curl -s -m 10 -X POST "${SKYNET_API_URL}/nodes/register" \
-      -H "Content-Type: application/json" \
-      ${AUTH_HEADER} \
-      -d "{\"name\":\"${NODE_NAME}\",\"host\":\"${PUBLIC_IP}\",\"role\":\"${SKYNET_ROLE:-fullnode}\"}")
+    # Build curl args — auth header only if API key is set
+    CURL_ARGS=(-s -m 10 -X POST "${SKYNET_API_URL}/nodes/register" -H "Content-Type: application/json")
+    [ -n "$SKYNET_API_KEY" ] && CURL_ARGS+=(-H "Authorization: Bearer ${SKYNET_API_KEY}")
+    CURL_ARGS+=(-d "{\"name\":\"${NODE_NAME}\",\"host\":\"${PUBLIC_IP}\",\"role\":\"${SKYNET_ROLE:-fullnode}\"}")
+    REG_RESPONSE=$(curl "${CURL_ARGS[@]}")
+    echo "Registration response: $REG_RESPONSE" | tee -a /var/log/xdc/dashboard.log
     
-    NEW_ID=$(echo "$REG_RESPONSE" | jq -r '.data.nodeId // empty' 2>/dev/null)
+    NEW_ID=$(echo "$REG_RESPONSE" | jq -r '.data.nodeId // .nodeId // empty' 2>/dev/null)
     if [ -n "$NEW_ID" ]; then
-      echo "SKYNET_NODE_ID=$NEW_ID" >> "$SKYNET_CONF"
+      # Persist node ID — write to conf if writable, else use /tmp
+      echo "SKYNET_NODE_ID=$NEW_ID" >> "$SKYNET_CONF" 2>/dev/null || \
+        echo "SKYNET_NODE_ID=$NEW_ID" > /tmp/skynet-node-id
       export SKYNET_NODE_ID="$NEW_ID"
       echo "✅ Registered with SkyNet as $NODE_NAME (ID: $NEW_ID)" | tee -a /var/log/xdc/dashboard.log
     else

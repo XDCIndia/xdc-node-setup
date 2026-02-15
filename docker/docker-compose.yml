@@ -87,7 +87,7 @@ services:
       - "127.0.0.1:${DASHBOARD_PORT:-7070}:3000"
     volumes:
       - ./skynet-agent.sh:/agent.sh:ro
-      - ../${NETWORK:-mainnet}/.xdc-node/skynet.conf:/etc/xdc-node/skynet.conf:ro
+      - ../${NETWORK:-mainnet}/.xdc-node/skynet.conf:/etc/xdc-node/skynet.conf
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /proc:/host/proc:ro
       - ../${NETWORK:-mainnet}/.xdc-node/logs:/var/log/xdc
