@@ -45,10 +45,17 @@ if [ -f "$SKYNET_CONF" ]; then
     
     NEW_ID=$(echo "$REG_RESPONSE" | jq -r '.data.nodeId // .nodeId // empty' 2>/dev/null)
     if [ -n "$NEW_ID" ]; then
-      # Persist node ID — write to conf if writable, else use /tmp
-      echo "SKYNET_NODE_ID=$NEW_ID" >> "$SKYNET_CONF" 2>/dev/null || \
+      # Persist node ID — update conf file or use /tmp fallback
+      if [ -f "$SKYNET_CONF" ] && sed -i "s/^SKYNET_NODE_ID=.*/SKYNET_NODE_ID=$NEW_ID/" "$SKYNET_CONF" 2>/dev/null; then
+        # Also store node name if it was auto-generated
+        sed -i "s/^SKYNET_NODE_NAME=.*/SKYNET_NODE_NAME=$NODE_NAME/" "$SKYNET_CONF" 2>/dev/null || true
+        echo "✅ Updated $SKYNET_CONF with node ID" | tee -a /var/log/xdc/dashboard.log
+      else
         echo "SKYNET_NODE_ID=$NEW_ID" > /tmp/skynet-node-id
+        echo "⚠️  Could not write to $SKYNET_CONF, using /tmp/skynet-node-id" | tee -a /var/log/xdc/dashboard.log
+      fi
       export SKYNET_NODE_ID="$NEW_ID"
+      export SKYNET_NODE_NAME="$NODE_NAME"
       echo "✅ Registered with SkyNet as $NODE_NAME (ID: $NEW_ID)" | tee -a /var/log/xdc/dashboard.log
     else
       echo "⚠️  SkyNet registration failed: $REG_RESPONSE" | tee -a /var/log/xdc/dashboard.log

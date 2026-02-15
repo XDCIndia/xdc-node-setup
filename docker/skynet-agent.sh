@@ -149,7 +149,9 @@ detect_node_info() {
     
     # Replace internal/container IPs in enode with public IP for peer discovery
     if [[ -n "$DETECT_ENODE" && -n "$DETECT_IPV4" ]]; then
-        DETECT_ENODE=$(echo "$DETECT_ENODE" | sed "s/@[^:]*:/@${DETECT_IPV4}:/")
+        local port="${DETECT_ENODE##*:}"
+        local prefix="${DETECT_ENODE%%@*}"
+        DETECT_ENODE="${prefix}@${DETECT_IPV4}:${port}"
         log "📡 Public enode: ${DETECT_ENODE:0:80}..."
     fi
     
@@ -467,7 +469,9 @@ collect_metrics() {
     
     # Replace container IP in enode with public IP
     if [[ -n "$DETECT_ENODE" && -n "$ipv4" ]]; then
-        DETECT_ENODE=$(echo "$DETECT_ENODE" | sed "s/@[^:]*:/@${ipv4}:/")
+        local enode_port="${DETECT_ENODE##*:}"
+        local enode_prefix="${DETECT_ENODE%%@*}"
+        DETECT_ENODE="${enode_prefix}@${ipv4}:${enode_port}"
     fi
     
     # Get OS information

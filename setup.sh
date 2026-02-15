@@ -1204,6 +1204,23 @@ EOF
         rm -f "$STATE_DIR/skynet.conf.bak" 2>/dev/null
         chmod 600 "$STATE_DIR/skynet.conf"
     fi
+    
+    # Also create skynet-erigon.conf for multi-client setups (erigon agent needs separate config)
+    if [[ -d "$STATE_DIR/skynet-erigon.conf" ]]; then
+        rm -rf "$STATE_DIR/skynet-erigon.conf"
+    fi
+    if [[ ! -f "$STATE_DIR/skynet-erigon.conf" ]]; then
+        cp "$SCRIPT_DIR/configs/skynet.conf.template" "$STATE_DIR/skynet-erigon.conf" 2>/dev/null || \
+            cp "$STATE_DIR/skynet.conf" "$STATE_DIR/skynet-erigon.conf" 2>/dev/null || \
+            cat > "$STATE_DIR/skynet-erigon.conf" << 'ERIGON_CONF_EOF'
+SKYNET_API_URL=https://net.xdc.network/api/v1
+SKYNET_API_KEY=
+SKYNET_NODE_ID=
+SKYNET_NODE_NAME=
+SKYNET_ROLE=fullnode
+ERIGON_CONF_EOF
+        chmod 600 "$STATE_DIR/skynet-erigon.conf"
+    fi
 
     # Close the compose file
     cat >> "$PROJECT_ROOT/docker/docker-compose.yml" << EOF
