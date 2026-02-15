@@ -1,0 +1,228 @@
+---
+# DigitalOcean 1-Click App Configuration
+# For XDC Node Setup Marketplace listing
+
+name: xdc-node
+slug: xdc-node
+status: draft
+
+categories:
+  - blockchain
+  - cryptocurrency
+  - networking
+
+description: |
+  Deploy an XDC Network node in minutes with this 1-Click App. 
+  Includes pre-configured Docker setup, SkyOne monitoring dashboard,
+  and automatic security hardening.
+
+features:
+  - Pre-installed Docker and Docker Compose
+  - XDC Node Setup ready to run
+  - SkyOne monitoring dashboard on port 7070
+  - Automatic firewall configuration
+  - Cloud-optimized for DigitalOcean
+
+distributions:
+  - ubuntu-22-04
+
+logo_url: https://raw.githubusercontent.com/AnilChinchawale/XDC-Node-Setup/main/assets/logo.png
+
+# Image specification
+image:
+  name: xdc-node-snapshot
+  distribution: ubuntu-22-04-x64
+  regions:
+    - nyc1
+    - nyc3
+    - sfo3
+    - ams3
+    - sgp1
+    - lon1
+    - fra1
+    - tor1
+    - blr1
+    - syd1
+  size: s-4vcpu-8gb-intel
+
+# First boot configuration
+user_data: |
+  #!/bin/bash
+  exec > >(tee /var/log/xdc-node/userdata.log)
+  exec 2>&1
+  
+  echo "=== XDC Node Setup - Starting ==="
+  
+  # Wait for cloud-init
+  cloud-init status --wait
+  
+  # Configure based on droplet size
+  MEMORY_GB=$(free -g | awk '/^Mem:/{print $2}')
+  
+  if [ "$MEMORY_GB" -lt 8 ]; then
+    CLIENT="stable"
+  else
+    CLIENT="stable"
+  fi
+  
+  # Get network from user-data if provided
+  XDC_NETWORK="{{.XDC_NETWORK}}"
+  if [ -z "$XDC_NETWORK" ]; then
+    XDC_NETWORK="mainnet"
+  fi
+  
+  # Get node name
+  DROPLET_ID=$(curl -s http://169.254.169.254/metadata/v1/id)
+  NODE_NAME="xdc-node-$DROPLET_ID"
+  
+  # Run setup
+  cd /opt/xdc-node
+  
+  cat > /opt/xdc-node/.env <<EOF
+  NETWORK=$XDC_NETWORK
+  CLIENT=$CLIENT
+  INSTANCE_NAME=$NODE_NAME
+  RPC_ENABLED=true
+  WS_ENABLED=true
+  EOF
+  
+  # Execute setup
+  sudo -u root bash /opt/xdc-node/setup.sh \
+    --network "$XDC_NETWORK" \
+    --client "$CLIENT" \
+    --name "$NODE_NAME"
+  
+  # Create systemd service
+  cat > /etc/systemd/system/xdc-node.service <<'EOF'
+  [Unit]
+  Description=XDC Network Node
+  After=docker.service
+  Requires=docker.service
+  
+  [Service]
+  Type=oneshot
+  RemainAfterExit=yes
+  WorkingDirectory=/opt/xdc-node
+  ExecStart=/usr/bin/docker compose -f docker/docker-compose.yml up -d
+  ExecStop=/usr/bin/docker compose -f docker/docker-compose.yml down
+  TimeoutStartSec=0
+  
+  [Install]
+  WantedBy=multi-user.target
+  EOF
+  
+  systemctl daemon-reload
+  systemctl enable xdc-node.service
+  systemctl start xdc-node.service
+  
+  echo "=== XDC Node Setup - Complete ==="
+
+# Firewall configuration
+firewall:
+  rules:
+    - protocol: tcp
+      port: 22
+      destinations:
+        - 0.0.0.0/0
+        - ::/0
+      description: SSH
+    - protocol: tcp
+      port: 8545
+      destinations:
+        - 0.0.0.0/0
+        - ::/0
+      description: XDC RPC
+    - protocol: tcp
+      port: 8546
+      destinations:
+        - 0.0.0.0/0
+        - ::/0
+      description: XDC WebSocket
+    - protocol: tcp
+      port: 30303
+      destinations:
+        - 0.0.0.0/0
+        - ::/0
+      description: XDC P2P TCP
+    - protocol: udp
+      port: 30303
+      destinations:
+        - 0.0.0.0/0
+        - ::/0
+      description: XDC P2P UDP
+    - protocol: tcp
+      port: 7070
+      destinations:
+        - 0.0.0.0/0
+        - ::/0
+      description: SkyOne Dashboard
+
+# Required ports for the application
+ports:
+  - 22
+  - 8545
+  - 8546
+  - 30303
+  - 7070
+
+# Environment variables that can be set
+tags:
+  - blockchain
+  - xdc
+  - node
+  - cryptocurrency
+  - ethereum-compatible
+
+# Documentation
+getting_started: |
+  # Getting Started with XDC Node
+  
+  Your XDC node is now running! Here's how to access it:
+  
+  ## Access Points
+  
+  - **RPC Endpoint**: `http://<your-droplet-ip>:8545`
+  - **WebSocket**: `ws://<your-droplet-ip>:8546`
+  - **Dashboard**: `http://<your-droplet-ip>:7070`
+  
+  ## Useful Commands
+  
+  Check node status:
+  ```bash
+  xdc status
+  ```
+  
+  View logs:
+  ```bash
+  xdc logs
+  ```
+  
+  Start/Stop node:
+  ```bash
+  xdc start
+  xdc stop
+  ```
+  
+  ## Configuration
+  
+  Configuration files are located in:
+  - `/opt/xdc-node/` - Main installation directory
+  - `/var/lib/docker/volumes/` - Blockchain data
+  
+  ## Support
+  
+  For more information, visit:
+  - GitHub: https://github.com/AnilChinchawale/XDC-Node-Setup
+  - Documentation: https://docs.xdc.community/
+
+# Minimum specs
+minimum_specs:
+  memory: 4096
+  disk: 100
+  cpu_cores: 2
+
+# Recommended specs
+recommended_specs:
+  memory: 8192
+  disk: 500
+  cpu_cores: 4

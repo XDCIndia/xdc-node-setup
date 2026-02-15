@@ -1,0 +1,260 @@
+.TH XDC 1 "February 2026" "XDC CLI 1.0.0" "User Commands"
+.SH NAME
+xdc \- XDC Network Node Management CLI
+.SH SYNOPSIS
+.B xdc
+.RI [ global-options ]\ <command>\ [ options ]\ [ arguments ]
+.SH DESCRIPTION
+.B xdc
+is an enterprise-grade command-line interface for managing XDC Network nodes.
+It provides comprehensive tools for node setup, monitoring, maintenance, and
+participation in the XDC Network consensus.
+.PP
+The XDC Network is a hybrid blockchain platform combining the power of public
+and private blockchains with delegated proof-of-stake (XDPoS) consensus.
+.SH GLOBAL OPTIONS
+.TP
+.B \-\-json
+Output results in JSON format for programmatic consumption.
+.TP
+.B \-\-quiet, \-q
+Suppress non-essential output.
+.TP
+.B \-\-verbose, \-v
+Show detailed output and debug information.
+.TP
+.B \-\-no\-color
+Disable colored output.
+.TP
+.B \-\-rpc\ URL
+Override the default RPC endpoint URL.
+.SH COMMANDS
+.SS XDC-Specific Commands
+.TP
+.B masternode
+Setup and manage masternode operations including stake checking, keystore
+management, and candidate registration.
+.TP
+.B rewards
+Masternode rewards analytics including history tracking, APY calculation,
+and data export capabilities.
+.TP
+.B cluster
+Multi-node cluster management with failover support and health monitoring.
+.TP
+.B stake
+Stake management including delegations, auto-compound configuration, and
+tax reporting.
+.TP
+.B peers
+Optimize peer connections with latency ranking and NAT detection.
+.TP
+.B snapshot
+Manage chain snapshots for faster syncing - download, create, or verify
+snapshots.
+.TP
+.B monitor
+XDC-specific monitoring including epoch tracking, rewards monitoring, and
+fork detection.
+.TP
+.B sync
+Sync optimization with status tracking, ETA calculation, and pruning
+recommendations.
+.TP
+.B rpc\-secure
+RPC security hardening with method filtering and rate limiting.
+.TP
+.B network
+Network intelligence including peer mapping and fork readiness analysis.
+.TP
+.B consensus
+XDPoS v2 consensus monitoring for epochs, rounds, votes, and penalties.
+.TP
+.B network\-stats
+Network-wide statistics and validator rankings.
+.TP
+.B governance
+Governance participation including proposal viewing, voting, and history.
+.SS Client Management
+.TP
+.B client
+Display information about the currently running XDC client.
+.TP
+.B start\ \-\-client\ CLIENT
+Start the node with a specific client (stable, geth-pr5, or erigon).
+.SS General Commands
+.TP
+.B init
+Interactive setup wizard for initial node configuration.
+.TP
+.B status
+Show quick node status overview with setup progress.
+.TP
+.B health
+Run comprehensive health checks on the node.
+.TP
+.B security
+Run security audit (advisory only, use \-\-fix to apply).
+.TP
+.B update
+Update node Docker image and restart services.
+.TP
+.B backup
+Backup chaindata and configuration to archive.
+.TP
+.B restore
+Restore node data from backup archive.
+.TP
+.B logs
+View and tail node logs with filtering options.
+.TP
+.B restart
+Graceful node restart with optional force mode.
+.TP
+.B stop
+Stop all XDC containers and services.
+.TP
+.B start
+Start the XDC node with auto-detection of ports.
+.TP
+.B addpeers
+Add peers from bootnodes.list manually.
+.TP
+.B attach
+Attach to XDC JavaScript console (IPC or RPC).
+.TP
+.B config
+View and edit node configuration.
+.TP
+.B notify
+Test notifications or send custom alerts.
+.TP
+.B dashboard
+Start web-based monitoring dashboard.
+.TP
+.B version
+Show CLI, client, and version information.
+.TP
+.B help\ [command]
+Show help message or detailed help for specific command.
+.SH EXAMPLES
+.PP
+Initialize a new node:
+.RS
+.B xdc init
+.RE
+.PP
+Check node status:
+.RS
+.B xdc status
+.RE
+.PP
+Monitor status in real-time:
+.RS
+.B xdc status \-\-watch
+.RE
+.PP
+Start with specific client:
+.RS
+.B xdc start \-\-client erigon
+.RE
+.PP
+Run multi-client mode:
+.RS
+.B xdc start \-\-multi\-client
+.RE
+.PP
+Full health check with notifications:
+.RS
+.B xdc health \-\-full \-\-notify
+.RE
+.PP
+Security audit:
+.RS
+.B xdc security
+.RE
+.PP
+Apply security fixes:
+.RS
+.B xdc security \-\-fix
+.RE
+.PP
+Create encrypted backup:
+.RS
+.B xdc backup \-\-encrypt
+.RE
+.PP
+View logs continuously:
+.RS
+.B xdc logs \-\-follow
+.RE
+.PP
+Attach to console:
+.RS
+.B xdc attach
+.RE
+.PP
+Check for updates:
+.RS
+.B xdc update \-\-check
+.RE
+.PP
+Get help for specific command:
+.RS
+.B xdc help start
+.RE
+.SH FILES
+.TP
+.I /opt/xdc-node/config.toml
+Main configuration file.
+.TP
+.I /opt/xdc-node/VERSION
+Current installed version.
+.TP
+.I /var/log/xdc-node.log
+Default log file location.
+.TP
+.I /etc/xdc-node/bootnodes.conf
+User-editable bootnodes configuration.
+.SH ENVIRONMENT
+.TP
+.B XDC_HOME
+Base directory for XDC node installation (default: /opt/xdc-node).
+.TP
+.B XDC_DATA
+Data directory for chaindata (default: /opt/xdc-node/mainnet/xdcchain).
+.TP
+.B XDC_NETWORK
+Network to use (mainnet, testnet, devnet).
+.TP
+.B XDC_RPC_URL
+Override RPC endpoint URL.
+.SH EXIT STATUS
+.TP
+.B 0
+Successful execution.
+.TP
+.B 1
+General error or command failure.
+.TP
+.B 2
+Invalid command or arguments.
+.TP
+.B 3
+Service not found or not running.
+.SH SEE ALSO
+.BR xdc-setup (1),
+.BR xdc-status (1),
+.BR xdc-security (1),
+.BR docker (1),
+.BR systemctl (1)
+.SH AUTHOR
+Anil Chinchawale <anil24593@gmail.com>
+.SH REPORTING BUGS
+Report bugs at: https://github.com/AnilChinchawale/xdc-node-setup/issues
+.SH COPYRIGHT
+Copyright 2026 XDC Network Contributors
+.PP
+Licensed under the MIT License.
+.SH WEBSITE
+https://github.com/AnilChinchawale/xdc-node-setup

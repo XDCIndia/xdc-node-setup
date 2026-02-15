@@ -1,0 +1,186 @@
+.TH XDC-SECURITY 1 "February 2026" "XDC CLI 1.0.0" "User Commands"
+.SH NAME
+xdc-security \- XDC Node Security Audit
+.SH SYNOPSIS
+.B xdc security
+.RI [ options ]
+.SH DESCRIPTION
+The security command performs a comprehensive audit of the XDC node security
+configuration. By default, it operates in read-only mode and provides
+recommendations without making any changes. Use the \-\-fix option to
+automatically apply recommended fixes.
+.PP
+Security is critical for XDC nodes, especially masternodes that participate
+in consensus and hold significant stake. This command helps ensure your node
+follows security best practices.
+.SH SECURITY CHECKS
+The audit verifies the following security aspects:
+.SS SSH Configuration
+.TP
+.B Key-Only Authentication
+Verifies PasswordAuthentication is disabled in /etc/ssh/sshd_config.
+.TP
+.B Non-Standard Port
+Checks if SSH is running on a port other than 22.
+.TP
+.B Root Login Restricted
+Verifies PermitRootLogin is set to 'no' or 'prohibit-password'.
+.SS Network Security
+.TP
+.B Firewall Enabled
+Checks if UFW or iptables firewall is active.
+.TP
+.B RPC Not Exposed
+Verifies RPC endpoint (port 8545) is not exposed to 0.0.0.0.
+.TP
+.B WebSocket Not Exposed
+Verifies WebSocket endpoint (port 8546) is not exposed to 0.0.0.0.
+.SS System Security
+.TP
+.B Fail2ban Active
+Checks if fail2ban intrusion prevention is running.
+.TP
+.B Automatic Updates
+Verifies unattended-upgrades is configured for security updates.
+.TP
+.B File Permissions
+Checks sensitive file permissions (keystore, configs).
+.SS Container Security
+.TP
+.B Docker Socket Protection
+Verifies Docker socket is not unnecessarily exposed.
+.TP
+.B Container Privileges
+Checks for privileged container usage.
+.SH OPTIONS
+.TP
+.B \-\-audit\-only
+Check only, don't apply changes (default behavior).
+.TP
+.B \-\-fix
+Apply recommended security fixes. Requires confirmation for each fix.
+.TP
+.B \-\-json
+Output audit results in JSON format.
+.TP
+.B \-\-help, \-h
+Show help message and exit.
+.SH SECURITY SCORE
+The audit provides a security score from 0-100 based on passed checks:
+.TP
+.B 80-100 (Green)
+Good security posture. Minor improvements possible.
+.TP
+.B 60-79 (Yellow)
+Moderate security. Several recommendations should be addressed.
+.TP
+.B 0-59 (Red)
+Poor security. Immediate attention required.
+.SH FIX OPERATIONS
+When using \-\-fix, the following operations may be performed:
+.SS SSH Hardening
+.IP \(bu 4
+Set PasswordAuthentication no
+.IP \(bu 4
+Change default SSH port
+.IP \(bu 4
+Disable root login
+.IP \(bu 4
+Restart sshd service
+.SS Firewall Configuration
+.IP \(bu 4
+Enable UFW firewall
+.IP \(bu 4
+Allow necessary ports (30303/tcp, 30303/udp for P2P)
+.IP \(bu 4
+Block unnecessary ports
+.SS Service Installation
+.IP \(bu 4
+Install and configure fail2ban
+.IP \(bu 4
+Enable unattended-upgrades
+.IP \(bu 4
+Configure automatic security updates
+.SH EXAMPLES
+.TP
+.B xdc security
+Run security audit in read-only mode (default).
+.TP
+.B xdc security \-\-fix
+Run audit and apply recommended fixes interactively.
+.TP
+.B xdc security \-\-json
+Output audit results as JSON for monitoring systems.
+.SH RECOMMENDATIONS
+Common security recommendations:
+.SS For All Nodes
+.IP \(bu 4
+Use SSH key authentication only
+.IP \(bu 4
+Change default SSH port
+.IP \(bu 4
+Enable firewall with minimal open ports
+.IP \(bu 4
+Keep system updated with security patches
+.IP \(bu 4
+Use strong, unique passwords for any local accounts
+.SS For Masternodes
+.IP \(bu 4
+Use hardware security modules (HSM) for key storage when possible
+.IP \(bu 4
+Enable all security checks
+.IP \(bu 4
+Regular security audits (weekly recommended)
+.IP \(bu 4
+Monitor for unusual activity
+.IP \(bu 4
+Use dedicated server/VPS (no shared hosting)
+.SH FILES CHECKED
+.TP
+.I /etc/ssh/sshd_config
+SSH daemon configuration.
+.TP
+.I /etc/ufw/ufw.conf
+UFW firewall configuration.
+.TP
+.I /etc/fail2ban/jail.conf
+Fail2ban configuration.
+.TP
+.I /opt/xdc-node/<network>/keystore/
+Node keystore directory.
+.TP
+.I /opt/xdc-node/docker/docker-compose.yml
+Docker Compose for RPC binding configuration.
+.SH EXIT STATUS
+.TP
+.B 0
+Audit passed with score >= 80 or all fixes applied successfully.
+.TP
+.B 1
+Audit found issues (score < 80) or fix operation failed.
+.TP
+.B 2
+Insufficient permissions (requires root for some checks).
+.SH SEE ALSO
+.BR xdc (1),
+.BR sshd_config (5),
+.BR ufw (8),
+.BR fail2ban (1)
+.SH AUTHOR
+Anil Chinchawale <anil24593@gmail.com>
+.SH REPORTING BUGS
+https://github.com/AnilChinchawale/xdc-node-setup/issues
+.SH SECURITY CONSIDERATIONS
+The \-\-fix option makes system changes. Always:
+.IP 1 4
+Review changes before applying
+.IP 2 4
+Have a backup or snapshot available
+.IP 3 4
+Test SSH access in a new session before closing current session
+.IP 4 4
+Verify node functionality after applying fixes
+.PP
+The security command cannot protect against all threats. Follow the complete
+XDC security guide at:
+https://github.com/AnilChinchawale/xdc-node-setup/blob/main/SECURITY.md

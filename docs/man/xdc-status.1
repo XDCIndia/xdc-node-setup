@@ -1,0 +1,165 @@
+.TH XDC-STATUS 1 "February 2026" "XDC CLI 1.0.0" "User Commands"
+.SH NAME
+xdc-status \- XDC Node Status Overview
+.SH SYNOPSIS
+.B xdc status
+.RI [ options ]
+.br
+.B xdc info
+.RI [ options ]
+.SH DESCRIPTION
+The status command provides a comprehensive overview of the XDC node state,
+including synchronization progress, peer connections, system resources, and
+setup completion status. It serves as the primary monitoring interface for
+node operators.
+.PP
+The command displays:
+.IP \(bu 4
+Client information and version
+.IP \(bu 4
+Current block height and sync percentage
+.IP \(bu 4
+Connected peer count
+.IP \(bu 4
+System resource usage (CPU, RAM, Disk)
+.IP \(bu 4
+Network and chain information
+.IP \(bu 4
+Setup completion checklist
+.SS Multi-Client Mode
+When both Geth and Erigon clients are running simultaneously, the status
+displays information for both clients in a comparative format, showing:
+.IP \(bu 4
+Individual block heights
+.IP \(bu 4
+Sync status for each client
+.IP \(bu 4
+Peer counts per client
+.IP \(bu 4
+RPC endpoints for both clients
+.SH OPTIONS
+.TP
+.B \-\-watch, \-w
+Auto-refresh status display every 5 seconds. Press Ctrl+C to exit.
+.TP
+.B \-\-interval\ N
+Set custom refresh interval in seconds (default: 5, used with \-\-watch).
+.TP
+.B \-\-json
+Output status in JSON format for programmatic processing.
+.TP
+.B \-\-help, \-h
+Show help message and exit.
+.SH OUTPUT COLUMNS
+.TP
+.B Client
+The XDC client type (XDC Stable, XDC Geth PR5, or Erigon-XDC).
+.TP
+.B Block
+Current block height synced by the node.
+.TP
+.B Peers
+Number of connected P2P peers (target: 25+).
+.TP
+.B Sync%
+Synchronization percentage relative to the network head.
+.TP
+.B CPU
+Current CPU usage percentage.
+.TP
+.B RAM
+Current memory usage percentage.
+.TP
+.B Disk
+Blockchain data disk usage percentage.
+.TP
+.B Status
+Node status indicator (Online, Syncing, Low Peers, or Offline).
+.SH SETUP COMPLETION CHECKLIST
+The status display includes a checklist showing:
+.IP \(bu 4
+Node installed
+.IP \(bu 4
+Node running
+.IP \(bu 4
+Node synced (>99%)
+.IP \(bu 4
+Peers connected (4+)
+.IP \(bu 4
+Firewall configured
+.IP \(bu 4
+SkyNet registered
+.IP \(bu 4
+Monitoring enabled
+.PP
+A progress bar shows overall completion percentage.
+.SH EXAMPLES
+.TP
+.B xdc status
+Display current node status once.
+.TP
+.B xdc status \-\-watch
+Continuously monitor status with 5-second refresh.
+.TP
+.B xdc status \-\-watch \-\-interval 10
+Monitor with 10-second refresh interval.
+.TP
+.B xdc status \-\-json
+Output status as JSON for scripts and monitoring tools.
+.SH JSON OUTPUT FORMAT
+When using \-\-json, the output includes:
+.PP
+.RS
+.nf
+{
+  "client": "stable|geth-pr5|erigon",
+  "clientVersion": "XDC/v2.6.8/...",
+  "nodeName": "node-id",
+  "network": "mainnet|testnet|devnet",
+  "networkId": "50|51|89",
+  "blockHeight": 12345678,
+  "syncPercent": 99.8,
+  "syncStatus": "synced|syncing",
+  "peers": 25,
+  "cpu": 15,
+  "ram": 45,
+  "disk": 60,
+  "containerStatus": "running",
+  "rpcUrl": "http://127.0.0.1:8545",
+  "status": "online",
+  "timestamp": "2026-02-15T10:30:00Z"
+}
+.fi
+.RE
+.SH MULTI-CLIENT JSON
+When running both Geth and Erigon:
+.PP
+.RS
+.nf
+{
+  "multiClient": true,
+  "geth": { ... },
+  "erigon": { ... },
+  "cpu": 20,
+  "ram": 50,
+  "disk": 65,
+  "timestamp": "2026-02-15T10:30:00Z"
+}
+.fi
+.RE
+.SH ENVIRONMENT
+.TP
+.B MAINNET_RPC_URL
+URL for mainnet RPC endpoint used to calculate sync percentage.
+Default: https://erpc.xinfin.network
+.TP
+.B XDC_RPC_URL
+Override the local RPC endpoint URL.
+.SH SEE ALSO
+.BR xdc (1),
+.BR xdc-health (1),
+.BR xdc-monitor (1)
+.SH AUTHOR
+Anil Chinchawale <anil24593@gmail.com>
+.SH REPORTING BUGS
+https://github.com/AnilChinchawale/xdc-node-setup/issues

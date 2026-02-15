@@ -139,6 +139,7 @@ $(c BOLD)XDC-SPECIFIC COMMANDS:$(c NC)
     $(c GREEN)consensus$(c NC)      XDPoS v2 consensus monitoring (epoch, rounds, votes, penalties)
     $(c GREEN)network-stats$(c NC)  Network-wide statistics and validator rankings
     $(c GREEN)governance$(c NC)     Governance participation (proposals, voting, history)
+    $(c GREEN)marketplace$(c NC)    Verified hosting provider directory
 
 $(c BOLD)CLIENT MANAGEMENT:$(c NC)
     $(c GREEN)client$(c NC)         Show current client information
@@ -3490,6 +3491,95 @@ EOF
 }
 
 #==============================================================================
+# Command: marketplace
+#==============================================================================
+cmd_marketplace() {
+    local action="open"
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            open|list)
+                action="$1"
+                shift
+                ;;
+            --help|-h)
+                cat << EOF
+$(c BOLD)xdc marketplace$(c NC) — Verified Hosting Provider Directory
+
+$(c BOLD)USAGE:$(c NC)
+    xdc marketplace [action]
+
+$(c BOLD)ACTIONS:$(c NC)
+    open     Open the hosting provider directory in browser (default)
+    list     List verified providers in terminal
+
+$(c BOLD)DESCRIPTION:$(c NC)
+    Opens the curated list of verified hosting providers for XDC nodes.
+    Includes pricing, recommended specs, and quick-start guides for:
+    - Hetzner
+    - OVHcloud
+    - DigitalOcean
+    - AWS
+    - Contabo
+    - Vultr
+
+$(c BOLD)EXAMPLES:$(c NC)
+    xdc marketplace              # Open directory in browser
+    xdc marketplace list         # Show providers in terminal
+
+$(c BOLD)SEE ALSO:$(c NC)
+    docs/HOSTING-PROVIDERS.md in the repository for full details
+
+EOF
+                return 0
+                ;;
+            *) shift ;;
+        esac
+    done
+    
+    local doc_url="https://github.com/AnilChinchawale/XDC-Node-Setup/blob/main/docs/HOSTING-PROVIDERS.md"
+    
+    case "$action" in
+        open)
+            info "Opening hosting provider directory..."
+            info "$doc_url"
+            
+            # Try to open in browser
+            if command -v xdg-open &>/dev/null; then
+                xdg-open "$doc_url"
+            elif command -v open &>/dev/null; then
+                open "$doc_url"
+            elif command -v start &>/dev/null; then
+                start "$doc_url"
+            else
+                echo -e "$(c CYAN)$doc_url$(c NC)"
+                echo "Please open the URL manually in your browser."
+            fi
+            ;;
+        list)
+            echo ""
+            echo -e "$(c BOLD)Verified Hosting Providers for XDC Nodes$(c NC)"
+            echo -e "$(c DIM)For full details, run: xdc marketplace$(c NC)"
+            echo ""
+            
+            echo -e "$(c CYAN)┌─────────────────────┬──────────────────┬──────────────────────────────────────────────┐$(c NC)"
+            echo -e "$(c CYAN)│$(c NC) $(c BOLD)Provider$(c NC)            $(c CYAN)│$(c NC) $(c BOLD)Cheapest Plan$(c NC)    $(c CYAN)│$(c NC) $(c BOLD)Best For$(c NC)                                     $(c CYAN)│$(c NC)"
+            echo -e "$(c CYAN)├─────────────────────┼──────────────────┼──────────────────────────────────────────────┤$(c NC)"
+            echo -e "$(c CYAN)│$(c NC) Hetzner             $(c CYAN)│$(c NC) €4.51/mo         $(c CYAN)│$(c NC) Budget, EU users, excellent price-performance$(c NC)"
+            echo -e "$(c CYAN)│$(c NC) Contabo             $(c CYAN)│$(c NC) €4.99/mo         $(c CYAN)│$(c NC) Best value, large storage allocations        $(c NC)"
+            echo -e "$(c CYAN)│$(c NC) DigitalOcean        $(c CYAN)│$(c NC) \$24/mo           $(c CYAN)│$(c NC) Beginners, simple pricing, great docs        $(c NC)"
+            echo -e "$(c CYAN)│$(c NC) Vultr               $(c CYAN)│$(c NC) \$20/mo           $(c CYAN)│$(c NC) Flexibility, huge global network             $(c NC)"
+            echo -e "$(c CYAN)│$(c NC) OVHcloud            $(c CYAN)│$(c NC) €7/mo            $(c CYAN)│$(c NC) EU compliance, GDPR, anti-DDoS included      $(c NC)"
+            echo -e "$(c CYAN)│$(c NC) AWS                 $(c CYAN)│$(c NC) ~\$85/mo          $(c CYAN)│$(c NC) Enterprise, massive infrastructure           $(c NC)"
+            echo -e "$(c CYAN)└─────────────────────┴──────────────────┴──────────────────────────────────────────────┘$(c NC)"
+            echo ""
+            echo -e "$(c BOLD)Recommended Mainnet Specs:$(c NC) 4+ vCPUs, 8GB+ RAM, 500GB+ SSD"
+            echo -e "$(c BOLD)Quick Start:$(c NC) Run $(c CYAN)xdc marketplace$(c NC) to view full comparison"
+            ;;
+    esac
+}
+
+#==============================================================================
 # Advanced Masternode Commands
 #==============================================================================
 
@@ -3892,6 +3982,338 @@ EOF
 }
 
 #==============================================================================
+# Command: heartbeat
+#==============================================================================
+cmd_heartbeat() {
+    local install=false
+    local uninstall=false
+    local status=false
+    local start=false
+    local stop=false
+    local node_id=""
+    local api_url="https://net.xdc.network/api/v1/nodes"
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --install) install=true; shift ;;
+            --uninstall) uninstall=true; shift ;;
+            --status) status=true; shift ;;
+            --start) start=true; shift ;;
+            --stop) stop=true; shift ;;
+            --node-id) node_id="$2"; shift 2 ;;
+            --api-url) api_url="$2"; shift 2 ;;
+            --help|-h)
+                cat << EOF
+$(c BOLD)xdc heartbeat$(c NC) — Manage SkyNet Heartbeat Agent
+
+$(c BOLD)USAGE:$(c NC)
+    xdc heartbeat [options]
+
+$(c BOLD)OPTIONS:$(c NC)
+    --install        Install heartbeat as a service (auto-detects platform)
+    --uninstall      Remove heartbeat service
+    --status         Check heartbeat service status
+    --start          Start heartbeat service manually
+    --stop           Stop heartbeat service manually
+    --node-id ID     Set custom node ID for heartbeat
+    --api-url URL    Set custom API URL for heartbeat
+    --help           Show this help
+
+$(c BOLD)PLATFORM SUPPORT:$(c NC)
+    Linux    - Installs systemd timer/service
+    macOS    - Installs launchd plist (~/Library/LaunchAgents/)
+
+$(c BOLD)EXAMPLES:$(c NC)
+    xdc heartbeat --install                    # Install heartbeat service
+    xdc heartbeat --uninstall                  # Remove heartbeat service
+    xdc heartbeat --status                     # Check service status
+    xdc heartbeat --install --node-id XXX      # Install with custom node ID
+
+$(c BOLD)DESCRIPTION:$(c NC)
+    The heartbeat agent sends node status updates to SkyNet every 60 seconds.
+    It reports block height, peer count, sync status, and system metrics.
+
+EOF
+                return 0
+                ;;
+            *) shift ;;
+        esac
+    done
+    
+    # Detect platform
+    local platform
+    platform=$(uname -s)
+    
+    # Determine paths based on platform
+    local script_dir="${PROJECT_DIR}/scripts"
+    local plist_template="${PROJECT_DIR}/configs/macos/com.xdc.heartbeat.plist"
+    local user_home="$HOME"
+    local launch_agents="${user_home}/Library/LaunchAgents"
+    local plist_dest="${launch_agents}/com.xdc.heartbeat.plist"
+    local xdc_home="${user_home}/.xdc-node"
+    local heartbeat_script="${xdc_home}/heartbeat.sh"
+    
+    # Handle status check
+    if [[ "$status" == "true" ]]; then
+        info "Checking heartbeat service status..."
+        
+        case "$platform" in
+            Darwin)
+                if [[ -f "$plist_dest" ]]; then
+                    echo -e "$(c GREEN)✓$(c NC) LaunchAgent installed: $plist_dest"
+                    local svc_status
+                    svc_status=$(launchctl list com.xdc.heartbeat 2>&1 || echo "Not loaded")
+                    if [[ "$svc_status" != "Not loaded" ]]; then
+                        echo -e "$(c GREEN)✓$(c NC) Service loaded in launchctl"
+                    else
+                        echo -e "$(c YELLOW)⚠$(c NC) Service not loaded in launchctl"
+                    fi
+                    if [[ -f "${xdc_home}/heartbeat.log" ]]; then
+                        echo -e "$(c CYAN)ℹ$(c NC) Recent log entries:"
+                        tail -5 "${xdc_home}/heartbeat.log" 2>/dev/null || echo "No log entries yet"
+                    fi
+                else
+                    echo -e "$(c YELLOW)⚠$(c NC) LaunchAgent not installed"
+                fi
+                ;;
+            Linux)
+                if systemctl list-units --type=timer 2>/dev/null | grep -q xdc-heartbeat; then
+                    systemctl status xdc-heartbeat.timer --no-pager 2>/dev/null || true
+                else
+                    warn "Systemd timer not found. Heartbeat may not be installed."
+                fi
+                ;;
+        esac
+        return 0
+    fi
+    
+    # Handle start
+    if [[ "$start" == "true" ]]; then
+        case "$platform" in
+            Darwin)
+                if [[ -f "$plist_dest" ]]; then
+                    launchctl load "$plist_dest" 2>/dev/null || true
+                    log "Heartbeat service started"
+                else
+                    die "LaunchAgent not installed. Run: xdc heartbeat --install"
+                fi
+                ;;
+            Linux)
+                if systemctl start xdc-heartbeat.timer 2>/dev/null; then
+                    log "Heartbeat timer started"
+                else
+                    die "Failed to start heartbeat timer"
+                fi
+                ;;
+        esac
+        return 0
+    fi
+    
+    # Handle stop
+    if [[ "$stop" == "true" ]]; then
+        case "$platform" in
+            Darwin)
+                launchctl unload "$plist_dest" 2>/dev/null || true
+                log "Heartbeat service stopped"
+                ;;
+            Linux)
+                systemctl stop xdc-heartbeat.timer 2>/dev/null || true
+                log "Heartbeat timer stopped"
+                ;;
+        esac
+        return 0
+    fi
+    
+    # Handle uninstall
+    if [[ "$uninstall" == "true" ]]; then
+        info "Uninstalling heartbeat service..."
+        
+        case "$platform" in
+            Darwin)
+                launchctl unload "$plist_dest" 2>/dev/null || true
+                [[ -f "$plist_dest" ]] && rm -f "$plist_dest" && log "Removed: $plist_dest"
+                [[ -f "$heartbeat_script" ]] && rm -f "$heartbeat_script" && log "Removed: $heartbeat_script"
+                log "Heartbeat service uninstalled from macOS"
+                ;;
+            Linux)
+                systemctl stop xdc-heartbeat.timer 2>/dev/null || true
+                systemctl disable xdc-heartbeat.timer 2>/dev/null || true
+                rm -f /etc/systemd/system/xdc-heartbeat.timer
+                rm -f /etc/systemd/system/xdc-heartbeat.service
+                systemctl daemon-reload
+                log "Heartbeat service uninstalled from Linux"
+                ;;
+        esac
+        return 0
+    fi
+    
+    # Handle install
+    if [[ "$install" == "true" ]]; then
+        info "Installing heartbeat service on $platform..."
+        
+        case "$platform" in
+            Darwin)
+                mkdir -p "$xdc_home" "$launch_agents"
+                
+                # Generate node ID
+                [[ -z "$node_id" ]] && node_id=$(uuidgen 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4())" 2>/dev/null || echo "$(hostname)-$(date +%s)")
+                
+                # Create simple heartbeat script
+                cat > "$heartbeat_script" << EOF
+#!/bin/bash
+NODE_ID="$node_id"
+API_URL="$api_url"
+RPC_URL="\${XDC_RPC_URL:-http://127.0.0.1:8545}"
+
+BLOCK_HEX=\$(curl -s -m 5 -X POST "\$RPC_URL" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' | python3 -c "import sys,json; print(json.load(sys.stdin).get('result','0x0'))" 2>/dev/null)
+BLOCK=\$((16#\${BLOCK_HEX:-0x0}))
+
+echo "[\$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat: block=\$BLOCK" >> "${xdc_home}/heartbeat.log"
+EOF
+                chmod +x "$heartbeat_script"
+                
+                # Create plist
+                if [[ -f "$plist_template" ]]; then
+                    sed -e "s|{{SCRIPT_PATH}}|${heartbeat_script}|g" \
+                        -e "s|{{LOG_DIR}}|${xdc_home}|g" \
+                        -e "s|{{WORKING_DIR}}|${xdc_home}|g" \
+                        "$plist_template" > "$plist_dest"
+                else
+                    cat > "$plist_dest" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.xdc.heartbeat</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>${heartbeat_script}</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>60</integer>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>${xdc_home}/heartbeat.log</string>
+    <key>StandardErrorPath</key>
+    <string>${xdc_home}/heartbeat-error.log</string>
+</dict>
+</plist>
+EOF
+                fi
+                
+                launchctl unload "$plist_dest" 2>/dev/null || true
+                launchctl load "$plist_dest"
+                
+                log "Heartbeat service installed for macOS"
+                log "LaunchAgent: $plist_dest"
+                ;;
+            Linux)
+                require_root
+                cat > /etc/systemd/system/xdc-heartbeat.service << EOF
+[Unit]
+Description=XDC SkyNet Heartbeat Agent
+After=network.target
+[Service]
+Type=oneshot
+User=${SUDO_USER:-$USER}
+ExecStart=${PROJECT_DIR}/scripts/skynet-agent.sh heartbeat
+EOF
+                cat > /etc/systemd/system/xdc-heartbeat.timer << EOF
+[Unit]
+Description=XDC SkyNet Heartbeat Timer
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=60
+[Install]
+WantedBy=timers.target
+EOF
+                systemctl daemon-reload
+                systemctl enable xdc-heartbeat.timer
+                systemctl start xdc-heartbeat.timer
+                log "Heartbeat service installed for Linux"
+                ;;
+            *)
+                die "Unsupported platform: $platform"
+                ;;
+        esac
+        return 0
+    fi
+    
+    cmd_heartbeat --help
+}
+
+#==============================================================================
+# Command: ssl
+#==============================================================================
+cmd_ssl() {
+    local domain=""
+    local email=""
+    local port="7070"
+    local staging=false
+    local renew=false
+    local revoke=false
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --domain|-d) domain="$2"; shift 2 ;;
+            --email|-e) email="$2"; shift 2 ;;
+            --port|-p) port="$2"; shift 2 ;;
+            --staging|-s) staging=true; shift ;;
+            --renew) renew=true; shift ;;
+            --revoke) revoke=true; shift ;;
+            --help|-h)
+                cat << EOF
+$(c BOLD)xdc ssl$(c NC) — SSL Certificate Management for SkyOne Dashboard
+
+$(c BOLD)USAGE:$(c NC)
+    xdc ssl [options]
+
+$(c BOLD)OPTIONS:$(c NC)
+    --domain, -d DOMAIN      Domain name (required for new setup)
+    --email, -e EMAIL        Email for Let's Encrypt (required)
+    --port, -p PORT          Dashboard port (default: 7070)
+    --staging, -s            Use Let's Encrypt staging environment
+    --renew                  Renew existing certificates
+    --revoke                 Revoke certificate (requires --domain)
+    --help                   Show this help
+
+$(c BOLD)EXAMPLES:$(c NC)
+    xdc ssl --domain dashboard.example.com --email admin@example.com
+    xdc ssl --renew
+    xdc ssl --domain dashboard.example.com --revoke
+
+$(c BOLD)DESCRIPTION:$(c NC)
+    Automates SSL certificate setup using Let's Encrypt and nginx.
+
+EOF
+                return 0
+                ;;
+            *) shift ;;
+        esac
+    done
+    
+    local ssl_script="${PROJECT_DIR}/scripts/setup-ssl.sh"
+    [[ ! -f "$ssl_script" ]] && die "SSL setup script not found: $ssl_script"
+    
+    local args=()
+    [[ -n "$domain" ]] && args+=("--domain" "$domain")
+    [[ -n "$email" ]] && args+=("--email" "$email")
+    [[ "$port" != "7070" ]] && args+=("--port" "$port")
+    [[ "$staging" == "true" ]] && args+=("--staging")
+    [[ "$renew" == "true" ]] && args+=("--renew")
+    [[ "$revoke" == "true" ]] && args+=("--revoke")
+    
+    if [[ $EUID -ne 0 ]]; then
+        sudo bash "$ssl_script" "${args[@]}"
+    else
+        bash "$ssl_script" "${args[@]}"
+    fi
+}
+
+#==============================================================================
 # Main Entry Point
 #==============================================================================
 main() {
@@ -3936,6 +4358,7 @@ main() {
         consensus)    cmd_consensus "$@" ;;
         network-stats) cmd_network_stats "$@" ;;
         governance)   cmd_governance "$@" ;;
+        marketplace)  cmd_marketplace "$@" ;;
         
         # Advanced masternode commands
         rewards)      cmd_rewards "$@" ;;
@@ -3943,6 +4366,10 @@ main() {
         stake)        cmd_stake "$@" ;;
         addpeers|addpeer)     cmd_peers "add" "$@" ;;
         attach)     cmd_attach "$@" ;;
+        
+        # Monitoring & SSL commands
+        heartbeat)  cmd_heartbeat "$@" ;;
+        ssl)        cmd_ssl "$@" ;;
         
         # General commands
         init)       cmd_init "$@" ;;

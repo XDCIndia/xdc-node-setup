@@ -1,0 +1,146 @@
+.TH XDC-SETUP 1 "February 2026" "XDC CLI 1.0.0" "User Commands"
+.SH NAME
+xdc-setup \- XDC Node Setup and Initialization
+.SH SYNOPSIS
+.B xdc init
+.RI [ options ]
+.br
+.B xdc init
+.RI [ \-\-quick ]
+.SH DESCRIPTION
+The setup command provides an interactive wizard for configuring and deploying
+an XDC Network node. It handles system requirement checks, dependency
+installation, network configuration, and initial node setup.
+.PP
+The setup process includes:
+.IP \(bu 4
+System requirement validation (CPU, memory, disk)
+.IP \(bu 4
+Docker and Docker Compose installation
+.IP \(bu 4
+Node configuration (network, client type, ports)
+.IP \(bu 4
+Firewall configuration
+.IP \(bu 4
+Monitoring and alerting setup
+.IP \(bu 4
+Service registration (systemd or Docker)
+.SH OPTIONS
+.TP
+.B \-\-quick
+Run minimal setup with default settings. Skips interactive prompts and uses
+sensible defaults for all configuration options.
+.TP
+.B \-\-help, \-h
+Show help message and exit.
+.SH SETUP PROCESS
+.SS 1. System Requirements Check
+The wizard verifies:
+.IP \(bu 4
+Operating system compatibility (Linux, macOS)
+.IP \(bu 4
+Minimum 4 CPU cores (8+ recommended for masternodes)
+.IP \(bu 4
+Minimum 16GB RAM (32GB+ recommended)
+.IP \(bu 4
+Minimum 500GB free disk space (SSD strongly recommended)
+.IP \(bu 4
+Network connectivity
+.SS 2. Client Selection
+Choose from available XDC clients:
+.IP \(bu 4
+.B stable
+- XDC Stable (v2.6.8) - Official Docker image, most stable
+.IP \(bu 4
+.B geth-pr5
+- XDC Geth PR5 - Latest geth with XDPoS v2 consensus
+.IP \(bu 4
+.B erigon
+- Erigon-XDC - High-performance multi-client implementation
+.SS 3. Network Selection
+.IP \(bu 4
+.B mainnet
+- XDC Main Network (production)
+.IP \(bu 4
+.B testnet/apothem
+- XDC Test Network
+.IP \(bu 4
+.B devnet
+- Development network
+.SS 4. Configuration Files
+The following configuration files are created:
+.IP \(bu 4
+.I /opt/xdc-node/config.toml
+- Main node configuration
+.IP \(bu 4
+.I /opt/xdc-node/<network>/.xdc-node/.env
+- Environment variables
+.IP \(bu 4
+.I /opt/xdc-node/<network>/.xdc-node/client.conf
+- Client-specific settings
+.SS 5. Monitoring Setup
+Optional monitoring components:
+.IP \(bu 4
+Prometheus metrics collection
+.IP \(bu 4
+Grafana dashboards
+.IP \(bu 4
+SkyNet network monitoring
+.IP \(bu 4
+Telegram/email alerting
+.SH EXAMPLES
+.TP
+.B xdc init
+Run full interactive setup wizard.
+.TP
+.B xdc init \-\-quick
+Run quick setup with default settings.
+.SH FILES CREATED
+.TP
+.I /opt/xdc-node/config.toml
+Main configuration file with node settings.
+.TP
+.I /opt/xdc-node/docker/docker-compose.yml
+Docker Compose configuration for container management.
+.TP
+.I /opt/xdc-node/<network>/.xdc-node/
+State directory containing node-specific configuration.
+.TP
+.I /opt/xdc-node/<network>/xdcchain/
+Blockchain data directory.
+.SH POST-SETUP
+After successful setup:
+.IP 1 4
+Start the node with:
+.B xdc start
+.IP 2 4
+Check status with:
+.B xdc status
+.IP 3 4
+View logs with:
+.B xdc logs
+.IP 4 4
+For masternode setup:
+.B xdc masternode setup
+.SH TROUBLESHOOTING
+.TP
+.B Setup fails with "Docker not found"
+The script will attempt to install Docker. If it fails, install Docker manually
+following the official Docker documentation for your OS.
+.TP
+.B Port conflicts detected
+The setup will attempt to find free ports automatically. To use specific ports,
+edit the .env file after setup.
+.TP
+.B Insufficient disk space
+Ensure at least 500GB free space on an SSD. For archive nodes, 1TB+ is
+recommended.
+.SH SEE ALSO
+.BR xdc (1),
+.BR xdc-status (1),
+.BR xdc-start (1),
+.BR docker-compose (1)
+.SH AUTHOR
+Anil Chinchawale <anil24593@gmail.com>
+.SH REPORTING BUGS
+https://github.com/AnilChinchawale/xdc-node-setup/issues

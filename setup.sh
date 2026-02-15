@@ -1464,6 +1464,71 @@ install_cli_tool() {
     fi
     
     log "CLI tool installed. Use: xdc help"
+    
+    # Install man pages
+    install_man_pages || warn "Man page installation failed (non-fatal)"
+}
+
+#==============================================================================
+# Man Pages Installation
+#==============================================================================
+install_man_pages() {
+    log "Installing man pages..."
+    
+    local man_source_dir="${SCRIPT_DIR}/docs/man"
+    local man_install_dir="/usr/local/share/man/man1"
+    
+    # Check if man pages exist
+    if [[ ! -d "$man_source_dir" ]]; then
+        warn "Man pages source directory not found: $man_source_dir"
+        return 0
+    fi
+    
+    # Check if any man pages exist
+    if ! ls "$man_source_dir"/*.1 >/dev/null 2>&1; then
+        warn "No man pages found in: $man_source_dir"
+        return 0
+    fi
+    
+    # Create man directory if needed
+    if [[ ! -d "$man_install_dir" ]]; then
+        if [[ -w /usr/local/share/man ]]; then
+            mkdir -p "$man_install_dir"
+        elif sudo mkdir -p "$man_install_dir" 2>/dev/null; then
+            :
+        else
+            warn "Cannot create man directory: $man_install_dir"
+            return 0
+        fi
+    fi
+    
+    # Install man pages
+    local installed=0
+    for manpage in "$man_source_dir"/*.1; do
+        if [[ -f "$manpage" ]]; then
+            local manpage_name
+            manpage_name=$(basename "$manpage")
+            
+            if [[ -w "$man_install_dir" ]]; then
+                cp "$manpage" "$man_install_dir/"
+                chmod 644 "$man_install_dir/$manpage_name"
+                ((installed++))
+            elif sudo cp "$manpage" "$man_install_dir/" 2>/dev/null; then
+                sudo chmod 644 "$man_install_dir/$manpage_name"
+                ((installed++))
+            else
+                warn "Failed to install man page: $manpage_name"
+            fi
+        fi
+    done
+    
+    # Update man database
+    if [[ $installed -gt 0 ]]; then
+        log "Installed $installed man page(s)"
+        if command -v mandb >/dev/null 2>&1; then
+            mandb -q 2>/dev/null || sudo mandb -q 2>/dev/null || true
+        fi
+    fi
 }
 
 #==============================================================================

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Service Identifier -->
+    <key>Label</key>
+    <string>com.xdc.heartbeat</string>
+    
+    <!-- Command to run -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>{{SCRIPT_PATH}}</string>
+    </array>
+    
+    <!-- Run every 60 seconds -->
+    <key>StartInterval</key>
+    <integer>60</integer>
+    
+    <!-- Run immediately when loaded -->
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <!-- Keep alive if it crashes -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    
+    <!-- Standard output log file -->
+    <key>StandardOutPath</key>
+    <string>{{LOG_DIR}}/heartbeat.log</string>
+    
+    <!-- Standard error log file -->
+    <key>StandardErrorPath</key>
+    <string>{{LOG_DIR}}/heartbeat-error.log</string>
+    
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>{{WORKING_DIR}}</string>
+    
+    <!-- Environment variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>XDC_RPC_URL</key>
+        <string>{{RPC_URL}}</string>
+        <key>NODE_ID</key>
+        <string>{{NODE_ID}}</string>
+        <key>API_URL</key>
+        <string>{{API_URL}}</string>
+        <key>API_KEY</key>
+        <string>{{API_KEY}}</string>
+    </dict>
+    
+    <!-- Throttling - prevent restart storms -->
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+    
+    <!-- Don't start if already running -->
+    <key>LimitLoadToSessionType</key>
+    <array>
+        <string>Background</string>
+        <string>Aqua</string>
+        <string>StandardIO</string>
+    </array>
+</dict>
+</plist>
