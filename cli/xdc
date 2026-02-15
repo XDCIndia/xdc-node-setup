@@ -150,10 +150,13 @@ $(c BOLD)GENERAL COMMANDS:$(c NC)
     $(c GREEN)info$(c NC)           Alias for status (node information)
     $(c GREEN)health$(c NC)         Run health check (wraps node-health-check.sh)
     $(c GREEN)security$(c NC)       Run security audit (advisory only, --fix to apply)
+    $(c GREEN)heartbeat$(c NC)      Manage SkyNet heartbeat agent (--install, --uninstall)
+    $(c GREEN)ssl$(c NC)            Setup SSL/HTTPS for dashboard (--domain, --email)
     $(c GREEN)update$(c NC)         Update node Docker image and restart
     $(c GREEN)snapshot$(c NC)       Download and apply chain snapshot (mainnet/pruned/archive)
     $(c GREEN)backup$(c NC)         Backup chaindata and config to archive
     $(c GREEN)restore$(c NC)        Restore from backup
+    $(c GREEN)reset$(c NC)          Reset node and resync (fixes bad blocks)
     $(c GREEN)logs$(c NC)           Tail node logs
     $(c GREEN)restart$(c NC)        Graceful node restart
     $(c GREEN)stop$(c NC)           Stop all XDC containers
@@ -180,6 +183,8 @@ $(c BOLD)EXAMPLES:$(c NC)
     xdc start --multi-client    # Run geth AND erigon simultaneously
     xdc start --client erigon   # Start erigon (standalone if geth running)
     xdc health --full --notify  # Full health check with notifications
+    xdc heartbeat --install     # Install SkyNet heartbeat agent
+    xdc ssl -d dashboard.example.com -e admin@example.com  # Setup SSL
     xdc security                # Run security audit (advisory only)
     xdc security --fix          # Apply security fixes (with confirmation)
     xdc backup --encrypt        # Create encrypted backup
@@ -1387,24 +1392,64 @@ EOF
 # Command: update
 #==============================================================================
 cmd_update() {
+    local check_only=false
+    local auto_enable=false
+    local auto_disable=false
+    local force=false
+    local target_version=""
+    
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            --check)
+                check_only=true
+                shift
+                ;;
+            --auto)
+                auto_enable=true
+                shift
+                ;;
+            --no-auto)
+                auto_disable=true
+                shift
+                ;;
+            --force)
+                force=true
+                shift
+                ;;
+            --version)
+                target_version="$2"
+                shift 2
+                ;;
             --help|-h)
                 cat << EOF
-$(c BOLD)xdc update$(c NC) — Update node Docker image and restart
+$(c BOLD)xdc update$(c NC) — Update xdc-node-setup and node components
 
 $(c BOLD)USAGE:$(c NC)
-    xdc update
+    xdc update [options]
 
 $(c BOLD)DESCRIPTION:$(c NC)
-    Updates the XDC node Docker image to the latest version:
-    - Backs up current configuration
-    - Pulls the latest Docker image
-    - Restarts the node with the new image
-    - Verifies the node is running and syncing
+    Checks for and applies updates to xdc-node-setup from GitHub releases.
+    Can update the CLI scripts, Docker images, and node configuration.
 
-$(c BOLD)EXAMPLE:$(c NC)
-    xdc update
+$(c BOLD)OPTIONS:$(c NC)
+    --check          Check for available updates without applying
+    --auto           Enable automatic updates via cron
+    --no-auto        Disable automatic updates
+    --force          Apply update without confirmation
+    --version V      Update to specific version (default: latest)
+    --help           Show this help
+
+$(c BOLD)AUTO-UPDATE:$(c NC)
+    When enabled, automatic updates run daily at 3:00 AM.
+    Logs are saved to /var/log/xdc-auto-update.log
+    Backups are created before each update.
+
+$(c BOLD)EXAMPLES:$(c NC)
+    xdc update                    # Check and apply available updates
+    xdc update --check            # Only check for updates
+    xdc update --auto             # Enable auto-updates
+    xdc update --force            # Force update without prompt
+    xdc update --version v1.1.0   # Update to specific version
 
 EOF
                 return 0
@@ -1413,6 +1458,47 @@ EOF
         esac
     done
 
+    # Handle auto-update enable/disable
+    if [[ "$auto_enable" == true ]]; then
+        local auto_update_script="${SCRIPTS_DIR}/auto-update.sh"
+        if [[ -f "$auto_update_script" ]]; then
+            bash "$auto_update_script" setup-cron
+        else
+            error "Auto-update script not found at $auto_update_script"
+            return 1
+        fi
+        return 0
+    fi
+    
+    if [[ "$auto_disable" == true ]]; then
+        local auto_update_script="${SCRIPTS_DIR}/auto-update.sh"
+        if [[ -f "$auto_update_script" ]]; then
+            bash "$auto_update_script" remove-cron
+        else
+            error "Auto-update script not found at $auto_update_script"
+            return 1
+        fi
+        return 0
+    fi
+
+    # Run auto-update check/apply
+    local auto_update_script="${SCRIPTS_DIR}/auto-update.sh"
+    if [[ ! -f "$auto_update_script" ]]; then
+        # Fallback to legacy Docker-based update
+        cmd_update_legacy
+        return $?
+    fi
+    
+    local args=()
+    [[ "$check_only" == true ]] && args+=("--check")
+    [[ "$force" == true ]] && args+=("--force")
+    [[ -n "$target_version" ]] && args+=("--version" "$target_version")
+    
+    bash "$auto_update_script" update "${args[@]}"
+}
+
+# Legacy Docker-based update (fallback)
+cmd_update_legacy() {
     # Determine directories and compose file
     local STATE_DIR="${XDC_STATE_DIR:-${PROJECT_DIR}/${XDC_NETWORK}/.xdc-node}"
     local COMPOSE_FILE="${INSTALL_DIR}/docker/docker-compose.yml"
@@ -1671,6 +1757,185 @@ EOF
     cmd_start
     
     log "Restore completed successfully"
+}
+
+#==============================================================================
+# Command: reset
+#==============================================================================
+cmd_reset() {
+    local client=""
+    local confirm=false
+    local keep_config=true
+    local datadir=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --client)
+                client="$2"
+                shift 2
+                ;;
+            --confirm)
+                confirm=true
+                shift
+                ;;
+            --full)
+                keep_config=false
+                shift
+                ;;
+            --data-dir)
+                datadir="$2"
+                shift 2
+                ;;
+            --help|-h)
+                cat << 'EOF'
+$(c BOLD)xdc reset$(c NC) — Reset node data and resync
+
+$(c BOLD)USAGE:$(c NC)
+    xdc reset [options]
+
+$(c BOLD)OPTIONS:$(c NC)
+    --client NAME    Target client (geth, erigon, or auto-detect)
+    --confirm        Skip confirmation prompt (use with caution!)
+    --full           Remove config as well (complete reset)
+    --data-dir PATH  Custom data directory to reset
+    --help           Show this help
+
+$(c BOLD)DESCRIPTION:$(c NC)
+    Resets the node by removing chaindata and restarting sync from genesis.
+    This is useful for recovering from:
+    - Bad blocks / state root mismatches
+    - Corrupted chaindata
+    - Stalled sync that won't progress
+
+    Configuration is preserved by default. Use --full to remove everything.
+
+$(c BOLD)SAFETY:$(c NC)
+    Always backup important data before resetting:
+    - Keystore files (if running validator)
+    - Custom configuration
+    - Any data you want to preserve
+
+$(c BOLD)EXAMPLES:$(c NC)
+    xdc reset --confirm                    # Reset with confirmation
+    xdc reset --client erigon --confirm    # Reset Erigon node
+    xdc reset --full --confirm             # Complete reset including config
+
+EOF
+                return 0
+                ;;
+            *) shift ;;
+        esac
+    done
+
+    if [[ "$QUIET" != "true" ]]; then
+        print_banner
+        echo -e "$(c BOLD)Reset Node$(c NC)"
+        echo ""
+    fi
+
+    # Detect client if not specified
+    if [[ -z "$client" ]]; then
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "erigon"; then
+            client="erigon"
+        elif docker ps --format '{{.Names}}' 2>/dev/null | grep -q "xdc-node"; then
+            client="geth"
+        else
+            # Check data directories
+            if [[ -d "${PROJECT_DIR}/mainnet/erigon-datadir" ]]; then
+                client="erigon"
+            else
+                client="geth"
+            fi
+        fi
+        info "Auto-detected client: $client"
+    fi
+
+    # Determine data directory
+    if [[ -z "$datadir" ]]; then
+        case "$client" in
+            erigon)
+                datadir="${PROJECT_DIR}/${XDC_NETWORK}/erigon-datadir"
+                ;;
+            geth|*)
+                datadir="${PROJECT_DIR}/${XDC_NETWORK}/xdcchain"
+                ;;
+        esac
+    fi
+
+    # Check if data directory exists
+    if [[ ! -d "$datadir" ]]; then
+        warn "Data directory not found: $datadir"
+        info "Node may already be reset or using different path"
+        return 1
+    fi
+
+    # Calculate size for user information
+    local data_size
+    data_size=$(du -sh "$datadir" 2>/dev/null | cut -f1 || echo "unknown")
+
+    # Show warning
+    echo ""
+    warn "This will DELETE all blockchain data!"
+    echo ""
+    echo -e "  Client:      $(c CYAN)$client$(c NC)"
+    echo -e "  Data dir:    $(c CYAN)$datadir$(c NC)"
+    echo -e "  Size:        $(c CYAN)$data_size$(c NC)"
+    echo -e "  Keep config: $(c CYAN)$keep_config$(c NC)"
+    echo ""
+    echo -e "  $(c YELLOW)This action cannot be undone!$(c NC)"
+    echo ""
+
+    # Confirmation
+    if [[ "$confirm" != "true" ]]; then
+        read -p "$(echo -e "$(c BOLD)Type 'reset' to confirm: $(c NC)")" -r
+        echo ""
+        if [[ $REPLY != "reset" ]]; then
+            info "Reset cancelled"
+            return 0
+        fi
+    fi
+
+    # Stop node
+    info "Stopping $client node..."
+    if [[ "$client" == "erigon" ]]; then
+        docker stop xdc-node-erigon 2>/dev/null || true
+        docker rm xdc-node-erigon 2>/dev/null || true
+    else
+        cmd_stop
+    fi
+
+    # Remove data
+    start_spinner "Removing chaindata ($data_size)"
+
+    if [[ "$keep_config" == "true" ]]; then
+        # Remove only chaindata, keep config
+        case "$client" in
+            erigon)
+                rm -rf "${datadir:?}"/* 2>/dev/null || true
+                ;;
+            geth|*)
+                rm -rf "${datadir:?}/XDC" 2>/dev/null || true
+                rm -rf "${datadir:?}/nodes" 2>/dev/null || true
+                rm -rf "${datadir:?}/ethash" 2>/dev/null || true
+                ;;
+        esac
+    else
+        # Full reset - remove everything
+        rm -rf "${datadir:?}" 2>/dev/null || true
+    fi
+
+    stop_spinner true "Chaindata removed"
+
+    # Start node
+    info "Starting $client node..."
+    if [[ "$client" == "erigon" ]]; then
+        xdc start --client erigon
+    else
+        cmd_start
+    fi
+
+    log "Reset completed. Node will now resync from genesis or snapshot."
+    info "Monitor progress with: $(c CYAN)xdc status --watch$(c NC)"
 }
 
 #==============================================================================
@@ -3953,6 +4218,7 @@ main() {
         update)     cmd_update "$@" ;;
         backup)     cmd_backup "$@" ;;
         restore)    cmd_restore "$@" ;;
+        reset)      cmd_reset "$@" ;;
         logs)       cmd_logs "$@" ;;
         restart)    cmd_restart "$@" ;;
         stop)       cmd_stop "$@" ;;
@@ -3963,7 +4229,44 @@ main() {
         version)    cmd_version "$@" ;;
         client)     cmd_client "$@" ;;
         help|--help|-h)
-            print_help
+            if [[ $# -gt 0 ]]; then
+                # Show help for specific command: xdc help <command>
+                case "$1" in
+                    init)       cmd_init --help ;;
+                    status|info) cmd_status --help ;;
+                    health)     cmd_health --help ;;
+                    security)   cmd_security --help ;;
+                    update)     cmd_update --help ;;
+                    backup)     cmd_backup --help ;;
+                    restore)    cmd_restore --help ;;
+                    logs)       cmd_logs --help ;;
+                    restart)    cmd_restart --help ;;
+                    stop)       cmd_stop --help ;;
+                    start)      cmd_start --help ;;
+                    config)     cmd_config --help ;;
+                    notify)     cmd_notify --help ;;
+                    dashboard)  cmd_dashboard --help ;;
+                    version)    cmd_version --help ;;
+                    client)     cmd_client --help ;;
+                    attach)     cmd_attach --help ;;
+                    masternode) cmd_masternode --help ;;
+                    peers)      cmd_peers --help ;;
+                    snapshot)   cmd_snapshot --help ;;
+                    monitor)    cmd_monitor --help ;;
+                    sync)       cmd_sync --help ;;
+                    rpc-secure) cmd_rpc_secure --help ;;
+                    network)    cmd_network --help ;;
+                    consensus)  cmd_consensus --help ;;
+                    network-stats) cmd_network_stats --help ;;
+                    governance) cmd_governance --help ;;
+                    rewards)    cmd_rewards --help ;;
+                    cluster)    cmd_cluster --help ;;
+                    stake)      cmd_stake --help ;;
+                    *)          echo "No detailed help available for: $1"; echo "Run 'xdc --help' for general usage." ;;
+                esac
+            else
+                print_help
+            fi
             ;;
         *)
             error "Unknown command: $command"
