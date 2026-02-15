@@ -25,13 +25,16 @@ if [ -f "$SKYNET_CONF" ]; then
   set +a
 
   # Auto-register with SkyNet if no NODE_ID yet
-  if [ -z "$SKYNET_NODE_ID" ] && [ -n "$SKYNET_API_KEY" ] && [ -n "$SKYNET_API_URL" ]; then
+  if [ -z "$SKYNET_NODE_ID" ] && [ -n "$SKYNET_API_URL" ]; then
     echo "No SKYNET_NODE_ID found, auto-registering..." | tee -a /var/log/xdc/dashboard.log
     NODE_NAME="${SKYNET_NODE_NAME:-$(hostname)-$(curl -s -m 3 https://api.ipify.org | tail -c 8)}"
     PUBLIC_IP=$(curl -s -m 5 https://api.ipify.org || echo "unknown")
+    # Auth header only if API key is set (auth may be disabled)
+    AUTH_HEADER=""
+    [ -n "$SKYNET_API_KEY" ] && AUTH_HEADER="-H \"Authorization: Bearer ${SKYNET_API_KEY}\""
     REG_RESPONSE=$(curl -s -m 10 -X POST "${SKYNET_API_URL}/nodes/register" \
       -H "Content-Type: application/json" \
-      -H "Authorization: Bearer ${SKYNET_API_KEY}" \
+      ${AUTH_HEADER} \
       -d "{\"name\":\"${NODE_NAME}\",\"host\":\"${PUBLIC_IP}\",\"role\":\"${SKYNET_ROLE:-fullnode}\"}")
     
     NEW_ID=$(echo "$REG_RESPONSE" | jq -r '.data.nodeId // empty' 2>/dev/null)
