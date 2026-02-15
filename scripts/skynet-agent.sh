@@ -74,7 +74,7 @@ api_call() {
     local auth_key="${API_KEY:-$SKYNET_API_KEY}"
     
     local args=(-s -m 15 -X "$method" "${SKYNET_API}${endpoint}" -H "Content-Type: application/json")
-    [[ -n "$auth_key" ]] && args+=(-H "Authorization: Bearer ${auth_key}")
+    # auth disabled for SkyOne
     [[ -n "$data" ]] && args+=(-d "$data")
     
     curl "${args[@]}" 2>/dev/null || echo '{"error":"connection_failed"}'
