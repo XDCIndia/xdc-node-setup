@@ -1,6 +1,6 @@
 FROM golang:1.24-alpine AS builder
 
-RUN apk add --no-cache make gcc musl-dev linux-headers git bash
+RUN apk add --no-cache make gcc g++ musl-dev linux-headers git bash
 
 WORKDIR /build
 
