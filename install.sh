@@ -497,7 +497,7 @@ EOF
     show_banner
     
     # Print security warning (unless --yes was used)
-    if [[ "$SKIP_CONFIRMATION" != "true" ]]; then
+    if [[ "${SKIP_CONFIRMATION:-false}" != "true" ]]; then
         print_security_warning
         echo ""
         read -rp "Do you want to continue? [y/N]: " confirm
