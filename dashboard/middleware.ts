@@ -38,9 +38,8 @@ function validateCredentials(username: string, password: string): boolean {
 
 function isAuthEnabled(): boolean {
   const authEnabled = process.env.DASHBOARD_AUTH_ENABLED;
-  // If not set or set to "true", auth is enabled
-  // Only disable if explicitly set to "false"
-  return authEnabled !== 'false';
+  // Auth is disabled by default — only enable if explicitly set to "true"
+  return authEnabled === 'true';
 }
 
 export function middleware(req: NextRequest) {
