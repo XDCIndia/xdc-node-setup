@@ -104,6 +104,6 @@ LFG_CHECK_INTERVAL=${LFG_CHECK_INTERVAL:-600}
 # Start Dashboard in production mode
 # Use PORT env var if set, otherwise default to 3000
 DASHBOARD_PORT=${PORT:-3000}
-echo "Starting XDC Dashboard on port $DASHBOARD_PORT (production mode)..." | tee -a /var/log/xdc/dashboard.log
+echo "Starting XDC Dashboard on port $DASHBOARD_PORT (dev mode)..." | tee -a /var/log/xdc/dashboard.log
 cd /app
-exec npm start -- -p "$DASHBOARD_PORT" -H 0.0.0.0 2>&1 | tee -a /var/log/xdc/dashboard.log
+exec npx next dev -p "$DASHBOARD_PORT" -H 0.0.0.0 2>&1 | tee -a /var/log/xdc/dashboard.log

@@ -1,47 +1,20 @@
-# Build stage
-FROM node:20-alpine AS builder
-
-WORKDIR /app
-
-# Install build dependencies
-RUN apk add --no-cache python3 make g++
-
-# Install ALL dependencies (including devDeps for build)
-COPY package*.json ./
-RUN npm ci --production=false
-
-# Copy source code
-COPY . .
-
-# Build for production
-ENV NODE_ENV=production
-RUN npm run build
-
-# Production stage
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Install SkyNet Agent dependencies + wget for healthcheck (Issue #52 - macOS compatibility)
-RUN apk add --no-cache bash curl wget jq bc procps
+# Install dependencies for SkyNet agent + healthcheck
+RUN apk add --no-cache bash curl wget jq bc procps python3 make g++
 
-# Install production dependencies only
+# Install all dependencies (including devDeps for dev mode)
 COPY package*.json ./
-RUN npm ci --production=true
+RUN npm ci
 
-# Copy built application from builder stage
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
+# Copy source code
+COPY . .
 
 # Copy startup script
 COPY combined-start.sh /combined-start.sh
 RUN chmod +x /combined-start.sh
-
-# Set production environment
-ENV NODE_ENV=production
-
-# Runtime env vars via server-side API routes (not baked at build time)
-# DO NOT add env: {} to next.config.mjs
 
 EXPOSE 3000
 
