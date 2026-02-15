@@ -4756,6 +4756,9 @@ main() {
         heartbeat)  cmd_heartbeat "$@" ;;
         ssl)        cmd_ssl "$@" ;;
         
+        # Interactive tutorials (Issue #43)
+        demo)       source "${CLI_DIR}/commands/demo.sh"; main "$@" ;;
+        
         # General commands
         init)       cmd_init "$@" ;;
         status)     cmd_status "$@" ;;
@@ -4811,6 +4814,7 @@ main() {
                     stake)      cmd_stake --help ;;
                     heartbeat)  cmd_heartbeat --help ;;
                     ssl)        cmd_ssl --help ;;
+                    demo)       source "${CLI_DIR}/commands/demo.sh"; main --help ;;
                     *)          echo "No detailed help available for: $1"; echo "Run 'xdc --help' for general usage." ;;
                 esac
             else

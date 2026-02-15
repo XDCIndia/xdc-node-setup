@@ -1,0 +1,146 @@
+name: E2E Tests — macOS ARM64
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cli/**'
+      - 'scripts/**'
+      - 'install.sh'
+      - 'setup.sh'
+      - 'tests/**'
+      - '.github/workflows/e2e-macos.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cli/**'
+      - 'scripts/**'
+      - 'install.sh'
+      - 'setup.sh'
+      - 'tests/**'
+      - '.github/workflows/e2e-macos.yml'
+  workflow_dispatch:
+
+env:
+  XDC_HOME: /tmp/xdc-node-test
+  TERM: xterm-256color
+
+jobs:
+  e2e-macos-arm64:
+    name: "E2E · macOS ARM64 · ${{ matrix.test }}"
+    runs-on: macos-14  # Apple Silicon (M1) runner
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - test-install
+          - test-setup
+          - test-start-stop
+          - test-status
+          - test-health
+          - test-reset
+          - test-cli-commands
+          - test-macos-specific
+          - test-multi-client
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: System info
+        run: |
+          echo "Runner: $(uname -a)"
+          echo "Arch: $(uname -m)"
+          echo "macOS: $(sw_vers -productVersion)"
+          echo "Shell: $BASH_VERSION"
+          sysctl -n machdep.cpu.brand_string || true
+
+      - name: Install Docker (Colima)
+        run: |
+          brew install docker colima
+          colima start --cpu 2 --memory 4 --arch aarch64
+          docker version
+
+      - name: Install dependencies
+        run: |
+          brew install bash coreutils jq
+          # Ensure GNU tools are on PATH
+          echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+
+      - name: Install XDC CLI
+        run: |
+          mkdir -p "$XDC_HOME"
+          bash install.sh --prefix "$XDC_HOME" --non-interactive 2>/dev/null || {
+            # Fallback: symlink CLI directly
+            chmod +x cli/xdc
+            sudo ln -sf "$PWD/cli/xdc" /usr/local/bin/xdc
+          }
+
+      - name: Run E2E test — ${{ matrix.test }}
+        run: |
+          chmod +x tests/e2e/${{ matrix.test }}.sh
+          tests/e2e/${{ matrix.test }}.sh --tap
+        env:
+          TAP_MODE: "true"
+          TEST_VERBOSE: "true"
+
+      - name: Run full suite (summary)
+        if: matrix.test == 'test-install'
+        run: |
+          chmod +x tests/e2e/run-all.sh
+          tests/e2e/run-all.sh --tap || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          xdc stop 2>/dev/null || true
+          xdc reset --yes 2>/dev/null || true
+          colima stop 2>/dev/null || true
+
+  e2e-linux:
+    name: "E2E · Linux x64 · ${{ matrix.test }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - test-install
+          - test-setup
+          - test-start-stop
+          - test-status
+          - test-health
+          - test-reset
+          - test-cli-commands
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Install XDC CLI
+        run: |
+          export XDC_HOME=/tmp/xdc-node-test
+          mkdir -p "$XDC_HOME"
+          bash install.sh --prefix "$XDC_HOME" --non-interactive 2>/dev/null || {
+            chmod +x cli/xdc
+            sudo ln -sf "$PWD/cli/xdc" /usr/local/bin/xdc
+          }
+
+      - name: Run E2E test — ${{ matrix.test }}
+        run: |
+          chmod +x tests/e2e/${{ matrix.test }}.sh
+          tests/e2e/${{ matrix.test }}.sh --tap
+        env:
+          XDC_HOME: /tmp/xdc-node-test
+          TAP_MODE: "true"
+          TEST_VERBOSE: "true"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          xdc stop 2>/dev/null || true
+          xdc reset --yes 2>/dev/null || true
