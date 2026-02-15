@@ -519,6 +519,17 @@ collect_metrics() {
     local security_json
     security_json=$(detect_security)
     
+    # Calculate stall duration (hours stuck on same block)
+    load_watchdog_state
+    local stall_hours=0
+    local stalled_at_block=0
+    if [[ "$WD_STALL_START" -gt 0 && "$WD_STALLED_AT_BLOCK" -gt 0 ]]; then
+        local now=$(date +%s)
+        local stall_duration=$((now - WD_STALL_START))
+        stall_hours=$(awk "BEGIN {printf \"%.2f\", $stall_duration / 3600}")
+        stalled_at_block=$WD_STALLED_AT_BLOCK
+    fi
+    
     # Build heartbeat payload
     cat <<EOF
 {
@@ -528,6 +539,8 @@ collect_metrics() {
     $( [[ -n "$sync_progress" ]] && echo "\"syncProgress\": $sync_progress," || true )
     "peerCount": $peer_count,
     "peers": $peers_json,
+    "stallHours": $stall_hours,
+    "stalledAtBlock": $stalled_at_block,
     "txPool": {"pending": $tx_pending, "queued": $tx_queued},
     "gasPrice": "$gas_price",
     "coinbase": "$coinbase",
@@ -592,12 +605,16 @@ load_watchdog_state() {
         WD_RESTART_COUNT=$(jq -r '.restartCount // 0' "$WATCHDOG_STATE_FILE" 2>/dev/null || echo "0")
         WD_LAST_RESTART=$(jq -r '.lastRestartTime // 0' "$WATCHDOG_STATE_FILE" 2>/dev/null || echo "0")
         WD_FIRST_RESTART=$(jq -r '.firstRestartTime // 0' "$WATCHDOG_STATE_FILE" 2>/dev/null || echo "0")
+        WD_STALL_START=$(jq -r '.stallStartTime // 0' "$WATCHDOG_STATE_FILE" 2>/dev/null || echo "0")
+        WD_STALLED_AT_BLOCK=$(jq -r '.stalledAtBlock // 0' "$WATCHDOG_STATE_FILE" 2>/dev/null || echo "0")
     else
         WD_LAST_BLOCK=0
         WD_LAST_CHECK=0
         WD_RESTART_COUNT=0
         WD_LAST_RESTART=0
         WD_FIRST_RESTART=0
+        WD_STALL_START=0
+        WD_STALLED_AT_BLOCK=0
     fi
 }
 
@@ -611,7 +628,9 @@ save_watchdog_state() {
     "lastCheckTime": $now,
     "restartCount": $WD_RESTART_COUNT,
     "lastRestartTime": $WD_LAST_RESTART,
-    "firstRestartTime": $WD_FIRST_RESTART
+    "firstRestartTime": $WD_FIRST_RESTART,
+    "stallStartTime": $WD_STALL_START,
+    "stalledAtBlock": $WD_STALLED_AT_BLOCK
 }
 EOF
 }
@@ -664,23 +683,50 @@ check_node_health() {
         should_restart=true
     fi
     
-    # Check 3: Is sync progressing? (only if not in fast sync mode)
+    # Check 3: Is sync progressing? Track stall duration
     if [[ "$WD_LAST_BLOCK" -gt 0 && "$block_height" -gt 0 ]]; then
         local block_diff=$((block_height - WD_LAST_BLOCK))
         local time_diff=$((now - WD_LAST_CHECK))
         
-        # If no block progress in 10+ minutes and not syncing, that's bad
-        if [[ "$block_diff" -eq 0 && "$time_diff" -gt 600 && "$is_syncing" == "false" ]]; then
-            issues+=("No block progress in $((time_diff / 60)) minutes")
-            should_restart=true
+        # Detect stall: same block as last check
+        if [[ "$block_diff" -eq 0 ]]; then
+            # First time detecting this stall?
+            if [[ "$WD_STALL_START" -eq 0 || "$WD_STALLED_AT_BLOCK" -ne "$block_height" ]]; then
+                WD_STALL_START=$now
+                WD_STALLED_AT_BLOCK=$block_height
+                watchdog_log "⚠️ Sync stall detected at block $block_height"
+            fi
+            
+            local stall_duration=$((now - WD_STALL_START))
+            local stall_minutes=$((stall_duration / 60))
+            
+            # Auto-inject peers after 2 minutes of stall (before restart threshold)
+            if [[ "$stall_minutes" -ge 2 && "$stall_minutes" -lt 5 ]]; then
+                watchdog_log "🔗 Node stalled for ${stall_minutes} min — auto-injecting healthy peers..."
+                inject_peers "$RPC_URL" || watchdog_log "⚠️ Peer injection failed"
+            fi
+            
+            # Restart after 10 minutes of stall (only if not actively syncing)
+            if [[ "$stall_duration" -gt 600 && "$is_syncing" == "false" ]]; then
+                issues+=("No block progress in ${stall_minutes} minutes (stuck at block $block_height)")
+                should_restart=true
+            fi
+        else
+            # Block progressed — reset stall tracker
+            if [[ "$WD_STALL_START" -gt 0 ]]; then
+                local stall_duration=$((now - WD_STALL_START))
+                watchdog_log "✅ Sync resumed after $((stall_duration / 60)) min stall (now at block $block_height)"
+            fi
+            WD_STALL_START=0
+            WD_STALLED_AT_BLOCK=0
         fi
     fi
     
     # Check 4: Do we have peers?
     if [[ "$peer_count" -eq 0 ]]; then
         issues+=("Zero peers connected")
-        # Don't restart immediately on peer loss, just log it
-        watchdog_log "⚠️ Warning: No peers connected"
+        watchdog_log "⚠️ Warning: No peers — auto-injecting..."
+        inject_peers "$RPC_URL" || watchdog_log "⚠️ Peer injection failed"
     fi
     
     # Reset restart counter if it's been >1 hour since first restart
