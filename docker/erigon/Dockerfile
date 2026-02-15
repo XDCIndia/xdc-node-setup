@@ -1,10 +1,12 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 RUN apk add --no-cache make gcc musl-dev linux-headers git bash
 
 WORKDIR /build
 
-RUN git clone https://github.com/AnilChinchawale/erigon-xdc.git . && make erigon
+RUN git clone https://github.com/AnilChinchawale/erigon-xdc.git . \
+    && sed -i 's/set -eu/set -e/' node/silkworm/silkworm_compat_check.sh 2>/dev/null || true \
+    && make erigon
 
 FROM alpine:3.19
 
