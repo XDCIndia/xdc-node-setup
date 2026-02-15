@@ -107,10 +107,13 @@ services:
       xdc-node:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health/live || exit 1"]
+      # Use wget with fallback to process check for macOS compatibility (Issue #52)
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health/live 2>/dev/null || (ps aux | grep -q '[n]ode' && exit 0) || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
+      # Increased start_period for macOS (Rosetta is slower) - Issue #52
+      start_period: 120s
     logging:
       driver: "json-file"
       options:

@@ -4632,7 +4632,7 @@ main() {
         addpeers|addpeer)     cmd_peers "add" "$@" ;;
         attach)     cmd_attach "$@" ;;
         
-        # Monitoring & SSL commands
+        # Monitoring & SSL commands (Issues #50, #51)
         heartbeat)  cmd_heartbeat "$@" ;;
         ssl)        cmd_ssl "$@" ;;
         
@@ -4689,6 +4689,8 @@ main() {
                     rewards)    cmd_rewards --help ;;
                     cluster)    cmd_cluster --help ;;
                     stake)      cmd_stake --help ;;
+                    heartbeat)  cmd_heartbeat --help ;;
+                    ssl)        cmd_ssl --help ;;
                     *)          echo "No detailed help available for: $1"; echo "Run 'xdc --help' for general usage." ;;
                 esac
             else

@@ -22,8 +22,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install SkyNet Agent dependencies
-RUN apk add --no-cache bash curl jq bc procps
+# Install SkyNet Agent dependencies + wget for healthcheck (Issue #52 - macOS compatibility)
+RUN apk add --no-cache bash curl wget jq bc procps
 
 # Install production dependencies only
 COPY package*.json ./
