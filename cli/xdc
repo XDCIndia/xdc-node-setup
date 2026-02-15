@@ -2108,13 +2108,13 @@ EOF
                     # Filter by date (assuming ISO format timestamps in logs)
                     if [[ "$follow" == "true" ]]; then
                         tail -n "$lines" -f "$component_log" | while read line; do
-                            if [[ "$line" \> "$since_date" ]] || [[ "$line" =~ ^\[?$since_date ]]; then
+                            if [[ "$line" > "$since_date" ]] || [[ "$line" =~ ^\[?$since_date ]]; then
                                 echo "$line"
                             fi
                         done
                     else
                         cat "$component_log" | while read line; do
-                            if [[ "$line" \> "$since_date" ]] || [[ "$line" =~ ^\[?$since_date ]]; then
+                            if [[ "$line" > "$since_date" ]] || [[ "$line" =~ ^\[?$since_date ]]; then
                                 echo "$line"
                             fi
                         done | tail -n "$lines"
