@@ -394,6 +394,7 @@ main() {
     # Parse command line arguments
     local verify_checksum_flag=false
     local verify_gpg_flag=false
+    local SETUP_ARGS=()
     
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -414,6 +415,34 @@ main() {
                 verify_gpg_flag=true
                 shift
                 ;;
+            --all)
+                SETUP_ARGS+=("--client" "all")
+                shift
+                ;;
+            --erigon)
+                SETUP_ARGS+=("--client" "erigon")
+                shift
+                ;;
+            --geth)
+                SETUP_ARGS+=("--client" "stable")
+                shift
+                ;;
+            --client)
+                SETUP_ARGS+=("--client" "$2")
+                shift 2
+                ;;
+            --email)
+                SETUP_ARGS+=("--email" "$2")
+                shift 2
+                ;;
+            --tg|--telegram)
+                SETUP_ARGS+=("--tg" "$2")
+                shift 2
+                ;;
+            --network)
+                SETUP_ARGS+=("--network" "$2")
+                shift 2
+                ;;
             --help|-h)
                 cat << EOF
 XDC Node Setup Installer
@@ -425,27 +454,34 @@ Options:
   --dry-run        Show what will be done without executing
   --verify         Verify SHA256 checksum before execution
   --verify-gpg     Verify GPG signature (implies --verify)
+  --all            Install all clients (geth + erigon)
+  --erigon         Install erigon client only
+  --geth           Install geth client only (default)
+  --client CLIENT  Client type: stable, erigon, geth-pr5, all
+  --email EMAIL    Email for SkyNet alerts
+  --tg HANDLE      Telegram handle for SkyNet alerts
+  --network NET    Network: mainnet, testnet, devnet (default: mainnet)
   --help, -h       Show this help message
 
 Environment Variables:
   SKIP_CONFIRMATION=true   Same as --yes flag
 
 Examples:
-  # Standard installation
+  # Standard installation (geth)
   curl -sSL https://.../install.sh | bash
 
+  # Install all clients (geth + erigon)
+  curl -sSL https://.../install.sh | bash -s -- --all
+
+  # Install erigon only with alerts
+  curl -sSL https://.../install.sh | bash -s -- --erigon --email you@example.com --tg @username
+
   # CI/CD (no prompts)
-  curl -sSL https://.../install.sh | bash -s -- --yes
-
-  # Preview changes
-  curl -sSL https://.../install.sh | bash -s -- --dry-run
-
-  # With verification
-  curl -sSL https://.../install.sh | bash -s -- --verify
+  curl -sSL https://.../install.sh | bash -s -- --yes --all
 
 Safer alternative:
   git clone ${REPO_URL}.git
-  cd xdc-node-setup && bash install.sh
+  cd xdc-node-setup && bash install.sh --all
 
 EOF
                 exit 0
@@ -537,7 +573,7 @@ EOF
     install_dependencies
     
     # Run setup
-    run_setup "$@"
+    run_setup "${SETUP_ARGS[@]}"
     
     # Print post-install info
     print_post_install

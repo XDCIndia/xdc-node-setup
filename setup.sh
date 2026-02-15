@@ -1586,7 +1586,24 @@ start_services() {
     
     # Start services (remove orphans from other projects sharing this dir)
     info "Starting containers..."
-    docker compose up -d --remove-orphans
+    if [[ "$CLIENT" == "all" ]]; then
+        # Multi-client: start geth first, then erigon standalone
+        info "Multi-client mode: starting geth + erigon..."
+        docker compose up -d --remove-orphans
+        docker network create xdc-network 2>/dev/null || true
+        if [[ -f "docker-compose.erigon-standalone.yml" ]]; then
+            docker compose -f docker-compose.erigon-standalone.yml up -d
+        fi
+    elif [[ "$CLIENT" == "erigon" ]]; then
+        if [[ -f "docker-compose.erigon-standalone.yml" ]]; then
+            docker network create xdc-network 2>/dev/null || true
+            docker compose -f docker-compose.erigon-standalone.yml up -d
+        else
+            docker compose -f docker-compose.yml -f docker-compose.erigon.yml up -d --remove-orphans
+        fi
+    else
+        docker compose up -d --remove-orphans
+    fi
     
     # Wait for startup
     sleep 5
@@ -2134,6 +2151,7 @@ main() {
     # Map CLI args to config variables (before init_config)
     # --client flag sets NODE_CLIENT; map to CLIENT used by the rest of the script
     case "${NODE_CLIENT:-xdc}" in
+        all)      CLIENT="all" ;;
         erigon)   CLIENT="erigon" ;;
         geth-pr5) CLIENT="geth-pr5" ;;
         stable|xdc|geth) CLIENT="stable" ;;
