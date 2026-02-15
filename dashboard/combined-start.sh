@@ -32,7 +32,9 @@ if [ -f "$SKYNET_CONF" ]; then
   # Auto-register with SkyNet if no NODE_ID yet
   if [ -z "$SKYNET_NODE_ID" ] && [ -n "$SKYNET_API_URL" ]; then
     echo "No SKYNET_NODE_ID found, auto-registering..." | tee -a /var/log/xdc/dashboard.log
-    NODE_NAME="${SKYNET_NODE_NAME:-$(hostname)-$(curl -s -m 3 https://api.ipify.org | tail -c 8)}"
+    # Include INSTANCE_NAME (client type) in auto-generated name
+    CLIENT_TAG="${INSTANCE_NAME:+${INSTANCE_NAME}-}"
+    NODE_NAME="${SKYNET_NODE_NAME:-${CLIENT_TAG}$(hostname)-$(curl -s -m 3 https://api.ipify.org | tail -c 8)}"
     PUBLIC_IP=$(curl -s -m 5 https://api.ipify.org || echo "unknown")
     # Build curl args — auth header only if API key is set
     CURL_ARGS=(-s -m 10 -X POST "${SKYNET_API_URL}/nodes/register" -H "Content-Type: application/json")
