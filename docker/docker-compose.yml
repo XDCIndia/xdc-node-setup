@@ -68,11 +68,11 @@ services:
       - CHOWN
       - SETGID
       - SETUID
-    # Read-only root filesystem with tmpfs for writable directories
-    read_only: true
+    # Note: read_only disabled — causes binary resolution failures on macOS Docker Desktop
+    # where /usr/bin, /tmp, /usr/local/bin are all read-only or noexec
+    # read_only: true
     tmpfs:
       - /tmp:nosuid,size=100m
-      - /run/xdc:size=50m
 
   #--------------------------------------------------------------------------
   # XDC Agent - Next.js Dashboard + SkyNet Monitoring (unified container)
