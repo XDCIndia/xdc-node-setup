@@ -256,6 +256,156 @@ After each heartbeat attempt, the agent writes status to `/tmp/skynet-heartbeat.
 
 ---
 
+## Auto-Restart Watchdog
+
+### Overview
+
+The SkyNet agent includes a **built-in watchdog** that automatically detects and recovers from node failures. It runs health checks on every heartbeat (every 60 seconds) and can auto-restart unhealthy nodes.
+
+**Watchdog Features:**
+- 🔄 **Auto-restart** — Automatically restarts failed/stuck nodes
+- 🛡️ **Rate limiting** — Max 3 restarts per hour with 5-minute cooldown
+- 📊 **Health checks** — Container status, RPC response, sync progress, peer count
+- 📝 **Detailed logging** — All actions logged to `/var/log/xdc-watchdog.log`
+- 🎯 **Smart detection** — Only restarts on critical issues
+
+### Health Checks
+
+The watchdog performs these checks on every heartbeat:
+
+| Check | Description | Action on Failure |
+|-------|-------------|-------------------|
+| **Container Status** | Is the Docker container running? | Auto-restart |
+| **RPC Responsiveness** | Does `eth_blockNumber` respond? | Auto-restart |
+| **Sync Progress** | Is block height increasing? | Auto-restart (if stalled >10 min) |
+| **Peer Count** | Are peers connected? | Warn + auto-inject peers |
+
+### Restart Logic
+
+**When watchdog triggers a restart:**
+1. Detects critical issue (e.g., RPC down, container stopped)
+2. Checks cooldown period (5 minutes since last restart)
+3. Checks restart limit (max 3 per hour)
+4. Logs restart action with reason
+5. Restarts Docker container (or systemd service)
+6. Increments restart counter
+
+**Restart counter resets:**
+- After 1 hour of node stability (no issues detected)
+- On system reboot (watchdog state is in `/tmp`)
+
+**Example watchdog log:**
+```
+[2026-02-15 18:30:15] ⚠️ Warning: No peers connected
+[2026-02-15 18:31:20] 🔄 AUTO-RESTART triggered: Container xdc-node is exited, RPC not responding
+[2026-02-15 18:31:20] Restarting Docker container: xdc-node
+[2026-02-15 18:31:25] ✅ Container restarted successfully
+[2026-02-15 18:31:25] Restart count: 1/3 in current window
+[2026-02-15 18:32:30] ✅ Node healthy (block: 75234801, peers: 28)
+```
+
+### Manual Watchdog Check
+
+You can manually trigger a watchdog health check:
+
+```bash
+# Run watchdog check
+./scripts/skynet-agent.sh --watchdog
+
+# View watchdog logs
+tail -f /var/log/xdc-watchdog.log
+
+# View last 50 lines
+tail -50 /var/log/xdc-watchdog.log
+```
+
+### Watchdog State
+
+Watchdog tracks state in `/tmp/xdc-watchdog-state.json`:
+
+```json
+{
+  "lastBlock": 75234801,
+  "lastCheckTime": 1708022430,
+  "restartCount": 1,
+  "lastRestartTime": 1708022080,
+  "firstRestartTime": 1708022080
+}
+```
+
+**State fields:**
+- `lastBlock` — Last known block height (to detect stalls)
+- `lastCheckTime` — Unix timestamp of last health check
+- `restartCount` — Number of restarts in current 1-hour window
+- `lastRestartTime` — Unix timestamp of last restart
+- `firstRestartTime` — Unix timestamp of first restart in current window
+
+### Disable Watchdog
+
+To disable the watchdog (not recommended):
+
+**Option 1: Skip watchdog in agent code**
+```bash
+# Edit skynet-agent.sh and comment out the watchdog call
+sudo nano /root/xdc-node-setup/scripts/skynet-agent.sh
+
+# Find this line in push_heartbeat():
+if ! check_node_health "$block_height" "$peer_count" "$is_syncing"; then
+# Comment it out:
+# if ! check_node_health "$block_height" "$peer_count" "$is_syncing"; then
+```
+
+**Option 2: Stop the agent entirely**
+```bash
+# Stop systemd service (if installed)
+sudo systemctl stop xdc-skynet-agent
+sudo systemctl disable xdc-skynet-agent
+
+# Remove cron job
+crontab -e
+# Delete the skynet-agent line
+```
+
+⚠️ **Warning:** Disabling the watchdog means you lose auto-restart protection. Your node may stay down for hours if it crashes while you're away.
+
+### Troubleshooting Watchdog
+
+**Problem: Watchdog restarting node too often**
+
+Check logs to see why:
+```bash
+tail -100 /var/log/xdc-watchdog.log
+```
+
+Common causes:
+- **RPC not bound to 127.0.0.1** — Check `RPC_ADDR` in `.env`
+- **Slow disk causing sync stalls** — Upgrade to SSD
+- **Network issues causing peer loss** — Check firewall, open port 30303
+- **Corrupted blockchain data** — May need to resync
+
+**Problem: Watchdog not restarting failed node**
+
+Possible reasons:
+1. **Restart limit reached** (3/hour) — Wait for 1-hour window to reset
+2. **In cooldown period** (5 min) — Check `lastRestartTime` in state file
+3. **Issue not critical enough** — Watchdog only restarts on RPC failure/container stopped/sync stall
+
+Check state:
+```bash
+cat /tmp/xdc-watchdog-state.json
+```
+
+**Problem: Want to reset restart counter manually**
+
+Delete the state file:
+```bash
+sudo rm /tmp/xdc-watchdog-state.json
+```
+
+Counter will reset on next heartbeat.
+
+---
+
 ## Dashboard Integration
 
 ### Heartbeat Indicator
