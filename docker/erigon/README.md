@@ -8,7 +8,7 @@ Production-ready Docker setup for XDC Network on Erigon client.
 - ✅ **Cross-platform** — AMD64 (v1/v2) and ARM64 support
 - ✅ **Multi-stage build** — Optimized image size (~200MB vs ~2GB)
 - ✅ **Non-root user** — Security best practices
-- ✅ **Go 1.22** — Stable LTS version with XDC-compatible dependencies
+- ✅ **Go 1.24** — Production standard (aligned with upstream Erigon)
 - ✅ **Dual P2P sentries** — eth/63 (port 30304) + eth/68 (port 30311)
 - ✅ **Health checks** — Auto-restart on failure
 - ✅ **Logging** — Structured logs with rotation

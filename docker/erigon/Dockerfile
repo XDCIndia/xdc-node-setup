@@ -7,7 +7,7 @@
 ## Build with Silkworm (x86_64 only):
 ##   docker build --build-arg BUILD_SILKWORM=true -t xdc-erigon .
 
-ARG BUILDER_IMAGE="golang:1.22-bookworm"
+ARG BUILDER_IMAGE="golang:1.24-bookworm"
 ARG TARGET_BASE_IMAGE="debian:12-slim"
 ARG UID_ERIGON=1000
 ARG GID_ERIGON=1000
@@ -25,9 +25,6 @@ ARG TARGETPLATFORM
 ARG BUILD_SILKWORM
 
 SHELL ["/bin/bash", "-c"]
-
-## Force Go 1.22 toolchain (prevent auto-upgrade to 1.24+)
-ENV GOTOOLCHAIN=local
 
 WORKDIR /erigon
 
