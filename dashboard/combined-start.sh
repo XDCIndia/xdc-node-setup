@@ -67,7 +67,8 @@ LFG_CHECK_INTERVAL=${LFG_CHECK_INTERVAL:-600}
 (
   sleep 120  # wait 2 minutes for node to initialize
   while true; do
-    PEER_HEX=$(curl -s -m 5 -X POST http://localhost:8545 -H "Content-Type: application/json" \
+    NODE_RPC="${RPC_URL:-http://localhost:8545}"
+    PEER_HEX=$(curl -s -m 5 -X POST "$NODE_RPC" -H "Content-Type: application/json" \
       -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' 2>/dev/null | \
       grep -o '"result":"[^"]*"' | cut -d'"' -f4)
     PEER_COUNT=0
@@ -83,7 +84,7 @@ LFG_CHECK_INTERVAL=${LFG_CHECK_INTERVAL:-600}
         SHUFFLED=$(echo "$ALL_ENODES" | sort -R | head -n "$LFG_MAX_ADD")
         ADDED=0
         for enode in $SHUFFLED; do
-          RES=$(curl -s -m 5 -X POST http://localhost:8545 -H "Content-Type: application/json" \
+          RES=$(curl -s -m 5 -X POST "$NODE_RPC" -H "Content-Type: application/json" \
             -d "{\"jsonrpc\":\"2.0\",\"method\":\"admin_addPeer\",\"params\":[\"$enode\"],\"id\":1}" 2>/dev/null)
           ADDED=$((ADDED+1))
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] LFG: +peer ${enode:0:40}... ($ADDED/$LFG_MAX_ADD)" | tee -a /var/log/xdc/lfg.log
