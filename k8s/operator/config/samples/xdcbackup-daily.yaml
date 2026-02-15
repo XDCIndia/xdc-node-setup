@@ -1,0 +1,30 @@
+apiVersion: xdc.network/v1alpha1
+kind: XDCBackup
+metadata:
+  name: daily-backup
+  namespace: xdc-network
+spec:
+  nodeRef: xdcnode-mainnet
+  schedule: "0 2 * * *"
+  retentionDays: 30
+  compression: true
+  destination:
+    type: s3
+    bucket: xdc-node-backups
+    path: mainnet/daily
+    secretRef: aws-backup-credentials
+---
+apiVersion: xdc.network/v1alpha1
+kind: XDCBackup
+metadata:
+  name: weekly-backup-pvc
+  namespace: xdc-network
+spec:
+  nodeRef: xdcnode-mainnet
+  schedule: "0 3 * * 0"
+  retentionDays: 90
+  compression: true
+  destination:
+    type: pvc
+    pvcName: xdc-backup-volume
+    path: /backups/weekly

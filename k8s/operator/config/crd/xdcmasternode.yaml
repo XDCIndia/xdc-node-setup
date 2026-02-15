@@ -1,0 +1,106 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: xdcmasternodes.xdc.network
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.14.0
+spec:
+  group: xdc.network
+  names:
+    kind: XDCMasternode
+    listKind: XDCMasternodeList
+    plural: xdcmasternodes
+    singular: xdcmasternode
+    shortNames:
+      - xdcmn
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Network
+          type: string
+          jsonPath: .spec.network
+        - name: Coinbase
+          type: string
+          jsonPath: .spec.coinbase
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: XDCMasternode is the Schema for managing XDC masternodes.
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required:
+                - network
+                - coinbase
+                - keystoreSecret
+              properties:
+                network:
+                  type: string
+                  enum: [mainnet, testnet]
+                coinbase:
+                  type: string
+                  description: Masternode coinbase address.
+                stakingAmount:
+                  type: string
+                  default: "10000000"
+                keystoreSecret:
+                  type: string
+                  description: Name of the Kubernetes Secret containing the keystore.
+                nodeRef:
+                  type: string
+                  description: Reference to the associated XDCNode resource.
+                image:
+                  type: string
+                resources:
+                  type: object
+                  properties:
+                    cpuRequest:
+                      type: string
+                    cpuLimit:
+                      type: string
+                    memoryRequest:
+                      type: string
+                    memoryLimit:
+                      type: string
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: [Pending, Registering, Active, Resigned, Failed]
+                epoch:
+                  type: integer
+                  format: int64
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
