@@ -97,6 +97,9 @@ services:
       - RPC_URL=${RPC_URL:-http://xdc-node:8545}
       - NODE_RPC_PORT=${RPC_PORT:-8545}
       - SKYNET_CONF=/etc/xdc-node/skynet.conf
+      - SKYNET_API_KEY=${SKYNET_API_KEY:-}
+      - SKYNET_NODE_ID=${SKYNET_NODE_ID:-}
+      - SKYNET_NODE_NAME=${SKYNET_NODE_NAME:-}
       - NEXT_PUBLIC_REFRESH_INTERVAL=10
       # Dashboard authentication settings (disabled by default for localhost-only access)
       - DASHBOARD_AUTH_ENABLED=${DASHBOARD_AUTH_ENABLED:-false}

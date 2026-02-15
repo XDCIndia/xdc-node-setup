@@ -91,6 +91,9 @@ services:
       - RPC_URL=${ERIGON_RPC_URL:-http://xdc-node-erigon:8547}
       - NODE_RPC_PORT=${ERIGON_RPC_PORT:-8547}
       - SKYNET_CONF=/etc/xdc-node/skynet.conf
+      - SKYNET_API_KEY=${SKYNET_API_KEY:-}
+      - SKYNET_NODE_ID=${SKYNET_NODE_ID:-}
+      - SKYNET_NODE_NAME=${SKYNET_NODE_NAME:-}
       - NEXT_PUBLIC_REFRESH_INTERVAL=10
       - INSTANCE_NAME=${INSTANCE_NAME:-Erigon_XDC_Node}
       # Dashboard authentication (disabled by default for localhost-only access)
