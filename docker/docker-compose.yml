@@ -84,7 +84,7 @@ services:
     container_name: xdc-agent
     restart: unless-stopped
     ports:
-      - "0.0.0.0:${DASHBOARD_PORT:-7070}:3000"
+      - "127.0.0.1:${DASHBOARD_PORT:-7070}:3000"
     volumes:
       - ./skynet-agent.sh:/agent.sh:ro
       - ../${NETWORK:-mainnet}/.xdc-node/skynet.conf:/etc/xdc-node/skynet.conf:ro
@@ -98,7 +98,7 @@ services:
       - NODE_RPC_PORT=${RPC_PORT:-8545}
       - SKYNET_CONF=/etc/xdc-node/skynet.conf
       - NEXT_PUBLIC_REFRESH_INTERVAL=10
-      # Dashboard authentication settings
+      # Dashboard authentication settings (disabled by default for localhost-only access)
       - DASHBOARD_AUTH_ENABLED=${DASHBOARD_AUTH_ENABLED:-false}
       - DASHBOARD_USER=${DASHBOARD_USER:-admin}
       - DASHBOARD_PASS=${DASHBOARD_PASS:-xdc-skyone}

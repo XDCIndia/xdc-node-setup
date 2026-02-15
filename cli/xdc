@@ -2676,6 +2676,30 @@ EOF
             info "Starting multi-client mode (both geth and erigon)..."
             start_spinner "Starting XDC nodes"
             
+            # Resolve port conflicts for multi-client mode
+            local orig_rpc=$rpc_port orig_ws=$ws_port orig_p2p=$p2p_port orig_dash=$dash_port
+            local orig_erigon_rpc=$erigon_rpc_port orig_erigon_p2p=$erigon_p2p_port
+            local orig_erigon_p2p_68=$erigon_p2p_68 orig_erigon_dash=$erigon_dash_port
+            
+            rpc_port=$(_find_free_port "$rpc_port")
+            ws_port=$(_find_free_port "$ws_port")
+            p2p_port=$(_find_free_port "$p2p_port")
+            dash_port=$(_find_free_port "$dash_port")
+            erigon_rpc_port=$(_find_free_port "$erigon_rpc_port")
+            erigon_p2p_port=$(_find_free_port "$erigon_p2p_port")
+            erigon_p2p_68=$(_find_free_port "$erigon_p2p_68")
+            erigon_dash_port=$(_find_free_port "$erigon_dash_port")
+            
+            # Log any port changes
+            [[ "$rpc_port" != "$orig_rpc" ]] && warn "Geth RPC port $orig_rpc in use → using $rpc_port"
+            [[ "$ws_port" != "$orig_ws" ]] && warn "Geth WS port $orig_ws in use → using $ws_port"
+            [[ "$p2p_port" != "$orig_p2p" ]] && warn "Geth P2P port $orig_p2p in use → using $p2p_port"
+            [[ "$dash_port" != "$orig_dash" ]] && warn "Geth Dashboard port $orig_dash in use → using $dash_port"
+            [[ "$erigon_rpc_port" != "$orig_erigon_rpc" ]] && warn "Erigon RPC port $orig_erigon_rpc in use → using $erigon_rpc_port"
+            [[ "$erigon_p2p_port" != "$orig_erigon_p2p" ]] && warn "Erigon P2P port $orig_erigon_p2p in use → using $erigon_p2p_port"
+            [[ "$erigon_p2p_68" != "$orig_erigon_p2p_68" ]] && warn "Erigon P2P68 port $orig_erigon_p2p_68 in use → using $erigon_p2p_68"
+            [[ "$erigon_dash_port" != "$orig_erigon_dash" ]] && warn "Erigon Dashboard port $orig_erigon_dash in use → using $erigon_dash_port"
+            
             # Export all ports
             export RPC_PORT="$rpc_port" WS_PORT="$ws_port" P2P_PORT="$p2p_port" DASHBOARD_PORT="$dash_port"
             export ERIGON_RPC_PORT="$erigon_rpc_port" ERIGON_P2P_PORT="$erigon_p2p_port" 

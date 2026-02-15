@@ -79,7 +79,7 @@ services:
     container_name: xdc-agent-erigon
     restart: unless-stopped
     ports:
-      - "0.0.0.0:${ERIGON_DASHBOARD_PORT:-7071}:3000"
+      - "127.0.0.1:${ERIGON_DASHBOARD_PORT:-7071}:3000"
     volumes:
       - ./skynet-agent.sh:/agent.sh:ro
       - ../${NETWORK:-mainnet}/.xdc-node/skynet.conf:/etc/xdc-node/skynet.conf:ro
@@ -93,7 +93,10 @@ services:
       - SKYNET_CONF=/etc/xdc-node/skynet.conf
       - NEXT_PUBLIC_REFRESH_INTERVAL=10
       - INSTANCE_NAME=${INSTANCE_NAME:-Erigon_XDC_Node}
-      - DASHBOARD_AUTH_ENABLED=false
+      # Dashboard authentication (disabled by default for localhost-only access)
+      - DASHBOARD_AUTH_ENABLED=${DASHBOARD_AUTH_ENABLED:-false}
+      - DASHBOARD_USER=${DASHBOARD_USER:-admin}
+      - DASHBOARD_PASS=${DASHBOARD_PASS:-xdc-skyone}
     networks:
       - xdc-network
     depends_on:

@@ -71,11 +71,15 @@ services:
   xdc-agent:
     container_name: xdc-agent-erigon
     ports:
-      - "0.0.0.0:${ERIGON_DASHBOARD_PORT:-7071}:3000"
+      - "127.0.0.1:${ERIGON_DASHBOARD_PORT:-7071}:3000"
     environment:
       - RPC_URL=${RPC_URL:-http://xdc-node:8547}
       - NODE_RPC_PORT=${RPC_PORT:-8547}
-      - DASHBOARD_AUTH_ENABLED=false
+      - INSTANCE_NAME=${INSTANCE_NAME:-Erigon_XDC_Node}
+      # Dashboard authentication (disabled by default for localhost-only access)
+      - DASHBOARD_AUTH_ENABLED=${DASHBOARD_AUTH_ENABLED:-false}
+      - DASHBOARD_USER=${DASHBOARD_USER:-admin}
+      - DASHBOARD_PASS=${DASHBOARD_PASS:-xdc-skyone}
 
 networks:
   xdc-network:
