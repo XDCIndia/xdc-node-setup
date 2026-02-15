@@ -29,7 +29,7 @@ function geoToSvg(lat: number, lng: number): { x: number; y: number } {
 // Country flag emoji from code
 function getFlag(code: string): string {
   if (!code || code.length !== 2) return '🌐';
-  return String.fromCodePoint(...[...code.toUpperCase()].map(c => c.charCodeAt(0) + 127397));
+  return String.fromCodePoint(...Array.from(code.toUpperCase()).map(c => c.charCodeAt(0) + 127397));
 }
 
 // Simplified continent outlines (SVG paths)
