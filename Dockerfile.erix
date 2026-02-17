@@ -1,0 +1,47 @@
+# XDC Erigon (erix) - Stable Docker Image
+# Based on: https://github.com/AnilChinchawale/erigon-xdc/tree/feature/xdc-network
+
+# Build stage
+FROM golang:1.22-alpine AS builder
+
+RUN apk add --no-cache gcc g++ linux-headers git make cmake
+
+WORKDIR /build
+
+# Clone XDC Erigon
+RUN git clone -b feature/xdc-network --depth 1 https://github.com/AnilChinchawale/erigon-xdc.git .
+
+# Build Erigon
+RUN make erigon
+
+# Runtime stage
+FROM alpine:latest
+
+RUN apk add --no-cache ca-certificates curl
+
+# Create non-root user
+RUN adduser -D -u 1000 erigon
+
+# Copy binaries from builder
+COPY --from=builder /build/build/bin/erigon /usr/local/bin/erigon
+
+# Create data directory
+RUN mkdir -p /data/erigon && chown -R erigon:erigon /data
+
+USER erigon
+
+WORKDIR /data
+
+# Expose ports
+# 8555: HTTP RPC
+# 8556: WebSocket
+# 9090: Private API
+# 6060: Metrics
+# 30304: P2P
+EXPOSE 8555 8556 9090 6060 30304 30304/udp
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+    CMD curl -sf http://localhost:8555 || exit 1
+
+ENTRYPOINT ["erigon"]
