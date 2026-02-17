@@ -160,7 +160,22 @@ echo "Config: sync=$SYNC_MODE gc=$GC_MODE log=$LOG_LEVEL rpc=$ENABLE_RPC"
 
 # ============================================================
 # Init or recover wallet
+# Issue #71: Auto-create account on first boot
 # ============================================================
+DATADIR="/work/xdcchain"
+
+# Issue #71: Check if we need to create a new account (first boot)
+if [ ! -d "$DATADIR/keystore" ] || [ -z "$(ls $DATADIR/keystore/ 2>/dev/null)" ]; then
+  echo "[SkyNet] First boot detected - creating new node account..."
+  # Create account with empty password
+  echo "" | XDC account new --datadir "$DATADIR" --password /dev/stdin 2>/dev/null
+  ACCOUNT=$(XDC account list --datadir "$DATADIR" 2>/dev/null | head -1 | grep -oP '0x[0-9a-fA-F]{40}')
+  if [ -n "$ACCOUNT" ]; then
+    echo "$ACCOUNT" > "$DATADIR/.node-identity"
+    echo "[SkyNet] Created account: $ACCOUNT"
+  fi
+fi
+
 if [ ! -d /work/xdcchain/XDC/chaindata ]; then
     wallet=$(XDC account new --password /work/.pwd --datadir /work/xdcchain 2>/dev/null | awk -F '[{}]' '{print $2}')
     echo "Initializing Genesis Block"
@@ -170,6 +185,13 @@ else
     wallet=$(XDC account list --datadir /work/xdcchain 2>/dev/null | head -n 1 | awk -F '[{}]' '{print $2}')
 fi
 echo "Wallet: $wallet"
+
+# Issue #71: Read coinbase address for etherbase
+ETHERBASE=""
+if [ -f "$DATADIR/.node-identity" ]; then
+  ETHERBASE=$(cat "$DATADIR/.node-identity")
+  echo "[SkyNet] Using coinbase for etherbase: $ETHERBASE"
+fi
 
 # ============================================================
 # Bootnodes
@@ -219,6 +241,11 @@ args+=(--ethstats "$netstats")
 
 # XDCx data dir
 args+=(--XDCx.datadir /work/xdcchain/XDCx)
+
+# Issue #71: Add miner.etherbase if coinbase is set
+if [ -n "$ETHERBASE" ]; then
+    args+=(--miner.etherbase "$ETHERBASE")
+fi
 
 # ============================================================
 # RPC/HTTP flags (style-dependent)

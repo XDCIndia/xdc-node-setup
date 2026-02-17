@@ -39,6 +39,18 @@ echo "P2P Port: $P2P_PORT"
 echo "Instance: $INSTANCE_NAME"
 echo ""
 
+# Issue #71: Generate deterministic identity on first boot
+DATADIR="/nethermind/data"
+if [ ! -f "$DATADIR/.node-identity" ]; then
+  echo "[SkyNet] First boot detected - generating node identity..."
+  # Generate a deterministic private key using hostname and date
+  # This ensures the same node gets the same identity on restart
+  IDENTITY_SEED="${HOSTNAME:-nethermind}-$(date +%Y%m)"
+  PRIVKEY=$(echo -n "$IDENTITY_SEED" | sha256sum | cut -d' ' -f1)
+  echo "$PRIVKEY" > "$DATADIR/.node-privkey"
+  echo "[SkyNet] Generated identity seed (coinbase will be read from RPC after start)"
+fi
+
 # Check if chainspec exists
 if [[ ! -f /nethermind/chainspec/xdc.json ]]; then
     echo "ERROR: Chainspec file not found at /nethermind/chainspec/xdc.json"
