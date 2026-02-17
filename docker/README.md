@@ -2,25 +2,78 @@
 
 Cross-platform Docker images for XDC Network clients.
 
+## Reference Implementations
+
+These Dockerfiles are adapted from official client implementations:
+
+| Client | Official Image | Our Image | Source Repository |
+|--------|----------------|-----------|-------------------|
+| **Geth** | `ethereum/client-go` | `anilchinchawale/gx` | https://github.com/AnilChinchawale/go-ethereum/tree/feature/xdpos-consensus |
+| **Nethermind** | `nethermind/nethermind` | `anilchinchawale/nmx` | https://github.com/AnilChinchawale/nethermind/tree/build/xdc-net9-stable |
+| **Erigon** | `erigontech/erigon` | `anilchinchawale/erix` | https://github.com/AnilChinchawale/erigon-xdc/tree/feature/xdc-network |
+
+## Adaptations from Official Images
+
+### Geth (`Dockerfile.gx`)
+**Based on:** `ethereum/client-go` official Dockerfile
+
+**Key adaptations:**
+- Uses `golang:1.23-alpine` (matching XDC fork requirements)
+- Clones from XDC fork repository instead of upstream
+- Binary name changed from `geth` to `XDC`
+- Added `jq` for better health check parsing
+- Maintains official best practices: static linking, layer caching, minimal runtime
+
+**Official practices kept:**
+- Multi-stage build (builder + runtime)
+- `go mod download` for dependency caching
+- `go run build/ci.go install -static` for building
+- Alpine Linux runtime base
+- Metadata labels (commit, version, buildnum)
+- Non-root user execution
+
+### Nethermind (`Dockerfile.nmx`)
+**Based on:** `nethermind/nethermind` official Dockerfile
+
+**Key adaptations:**
+- Uses .NET 9 SDK (matching XDC fork branch)
+- Alpine-based images for smaller size
+- Clones from XDC fork repository
+- Maintains locked-mode restore
+
+**Official practices kept:**
+- Multi-stage build with SDK + ASP.NET runtime
+- `dotnet restore --locked-mode`
+- `dotnet publish --no-self-contained`
+- Architecture detection (`x64` vs `arm64`)
+- Volume declarations for keystore, logs, nethermind_db
+- Non-root user with specific UID
+- Proper layer caching
+
+### Erigon (`Dockerfile.erix`)
+**Based on:** `erigontech/erigon` official Dockerfile
+
+**Key adaptations:**
+- Uses `golang:1.22-alpine` (matching XDC fork)
+- Clones from XDC fork repository
+- Simplified build without Silkworm support
+- Alpine runtime instead of Debian (smaller image)
+
+**Official practices kept:**
+- Uses `tonistiigi/xx` for cross-compilation
+- `xx-go` for architecture-specific builds
+- `STOPSIGNAL SIGINT` for graceful shutdown
+- Specific UID/GID (1000) for user
+- `VOLUME` declaration for data directory
+- Comprehensive OCI labels
+- Multi-architecture support (AMD64v1, AMD64v2, ARM64)
+- Build flags for optimization
+
 ## Supported Platforms
 
 - **Linux** (amd64, arm64)
 - **macOS** (Intel/AMD64, Apple Silicon/ARM64)
 - **Windows** (WSL2, Docker Desktop)
-
-## Images
-
-| Image | Client | Tag | Description |
-|-------|--------|-----|-------------|
-| `anilchinchawale/gx` | XDC Geth | `stable`, `latest` | Ethereum Go client with XDPoS |
-| `anilchinchawale/nmx` | XDC Nethermind | `stable`, `latest` | .NET client with XDC support |
-| `anilchinchawale/erix` | XDC Erigon | `stable`, `latest` | Fast Ethereum client with XDC |
-
-## Source Repositories
-
-- **Geth**: https://github.com/AnilChinchawale/go-ethereum/tree/feature/xdpos-consensus
-- **Nethermind**: https://github.com/AnilChinchawale/nethermind/tree/build/xdc-net9-stable
-- **Erigon**: https://github.com/AnilChinchawale/erigon-xdc/tree/feature/xdc-network
 
 ## Quick Start
 
@@ -92,11 +145,11 @@ docker run -d \
 
 ## RPC Endpoints
 
-| Client | HTTP RPC | WebSocket | P2P |
-|--------|----------|-----------|-----|
-| Geth (gx) | http://localhost:8545 | ws://localhost:8546 | 30303 |
-| Nethermind (nmx) | http://localhost:8557 | ws://localhost:8558 | 30305 |
-| Erigon (erix) | http://localhost:8555 | ws://localhost:8556 | 30304 |
+| Client | HTTP RPC | WebSocket |
+|--------|----------|-----------|
+| Geth (gx) | http://localhost:8545 | ws://localhost:8546 |
+| Nethermind (nmx) | http://localhost:8557 | ws://localhost:8558 |
+| Erigon (erix) | http://localhost:8555 | ws://localhost:8556 |
 
 ## Networks
 
@@ -118,6 +171,27 @@ All containers include Docker health checks:
 - **Geth**: Checks HTTP RPC endpoint
 - **Nethermind**: Checks health endpoint
 - **Erigon**: Checks HTTP RPC endpoint
+
+## Security Features
+
+All images implement security best practices from official images:
+- Non-root users (UID 1000)
+- Minimal base images (Alpine Linux)
+- Static binary compilation where applicable
+- Proper signal handling (SIGINT for graceful shutdown)
+- Volume declarations for sensitive data
+- No unnecessary packages
+
+## Build Arguments
+
+Each Dockerfile accepts build arguments for flexibility:
+
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `GIT_BRANCH` | Git branch to clone | `feature/xdpos-consensus` (gx), `build/xdc-net9-stable` (nmx), `feature/xdc-network` (erix) |
+| `GIT_REPO` | Git repository URL | XDC fork URLs |
+| `TARGETARCH` | Target architecture | Auto-detected |
+| `UID_ERIGON` / `GID_ERIGON` | User/Group IDs | 1000 |
 
 ## Logs
 
@@ -153,27 +227,13 @@ docker push anilchinchawale/nmx:stable
 docker push anilchinchawale/erix:stable
 ```
 
-## Architecture Support
-
-All images support:
-- `linux/amd64` - x86_64, Intel, AMD
-- `linux/arm64` - ARM64, Apple Silicon, AWS Graviton
-
-Docker Buildx is used automatically when available.
-
-## Security
-
-- All containers run as non-root users
-- Minimal Alpine Linux base images
-- Health checks included
-- Signal handling for graceful shutdown
-
 ## Troubleshooting
 
 ### Build fails on ARM (Apple Silicon)
 ```bash
 # Use buildx for cross-platform builds
-docker buildx create --name xdc-builder --usedocker buildx build --platform linux/arm64 -t anilchinchawale/gx:stable .
+docker buildx create --name xdc-builder --use
+docker buildx build --platform linux/arm64 -t anilchinchawale/gx:stable -f Dockerfile.gx .
 ```
 
 ### Port conflicts
@@ -192,4 +252,13 @@ sudo chown -R $(id -u):$(id -g) /var/lib/docker/volumes/xdc-geth-data/
 
 ## License
 
-See individual repository licenses for each client.
+See individual repository licenses for each client:
+- Geth: GPL-3.0
+- Nethermind: LGPL-3.0
+- Erigon: LGPL-3.0
+
+## References
+
+- Official Geth Docker: https://hub.docker.com/r/ethereum/client-go
+- Official Nethermind Docker: https://hub.docker.com/r/nethermind/nethermind
+- Official Erigon Docker: https://hub.docker.com/r/erigontech/erigon

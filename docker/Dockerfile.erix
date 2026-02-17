@@ -1,65 +1,112 @@
 # XDC Erigon (erix) - OS Agnostic Docker Image
+# Based on official erigontech/erigon Dockerfile
 # Multi-arch support: linux/amd64, linux/arm64
-# Based on: https://github.com/AnilChinchawale/erigon-xdc/tree/feature/xdc-network
+# Source: https://github.com/AnilChinchawale/erigon-xdc/tree/feature/xdc-network
 
-# Build stage
-FROM --platform=$BUILDPLATFORM golang:1.22-alpine AS builder
+ARG BUILDER_IMAGE="golang:1.22-alpine" \
+    TARGET_BASE_IMAGE="alpine:3.19" \
+    BINARIES="erigon" \
+    UID_ERIGON=1000 \
+    GID_ERIGON=1000 \
+    GIT_BRANCH=feature/xdc-network \
+    GIT_REPO=https://github.com/AnilChinchawale/erigon-xdc.git
 
-# Install build dependencies
-RUN apk add --no-cache gcc g++ linux-headers git make cmake
+## Use xx - Dockerfile cross-compilation helpers
+FROM --platform=$BUILDPLATFORM tonistiigi/xx AS xx
 
-WORKDIR /build
+### Erigon Builder section:
+FROM --platform=$BUILDPLATFORM ${BUILDER_IMAGE} AS builder
 
-# Accept build arguments
-ARG TARGETOS
-ARG TARGETARCH
-ARG GIT_BRANCH=feature/xdc-network
-ARG GIT_REPO=https://github.com/AnilChinchawale/erigon-xdc.git
+ARG TARGETARCH \
+    TARGETVARIANT \
+    TARGETPLATFORM \
+    BINARIES \
+    GIT_BRANCH \
+    GIT_REPO
+
+SHELL ["/bin/sh", "-c"]
+
+WORKDIR /erigon
+
+## Copy all content of helpers:
+COPY --from=xx / /
+
+# Install git
+RUN apk add --no-cache git
 
 # Clone XDC Erigon
 RUN git clone -b ${GIT_BRANCH} --depth 1 ${GIT_REPO} .
 
-# Set build environment
-ENV CGO_ENABLED=1
-ENV GOOS=${TARGETOS}
-ENV GOARCH=${TARGETARCH}
+RUN go mod download
 
-# Build Erigon
-RUN make erigon
+COPY . /erigon/
 
-# Runtime stage
-FROM alpine:3.19
+RUN echo "DEBUG: building on ${TARGETARCH}${TARGETVARIANT}" && \
+    if [ "x${TARGETARCH}" == "xamd64" ] && [ "x${TARGETVARIANT}" == "x" ]; then \
+        echo "DEBUG: detected architecture AMD64v1"; \
+        export CPU_FLAGS="GOAMD64_VERSION=v1 GOARCH=amd64"; \
+    elif [ "x${TARGETARCH}" == "xamd64" ] && [ "x${TARGETVARIANT}" == "xv2" ]; then \
+        echo "DEBUG: detected architecture AMD64v2"; \
+        export CPU_FLAGS="GOAMD64_VERSION=v2 GOARCH=amd64"; \
+    elif [ "x${TARGETARCH}" == "xarm64" ]; then \
+        echo "DEBUG: detected architecture ARM64"; \
+        export CPU_FLAGS="GOARCH=arm64"; \
+    fi && \
+    echo "DEBUG: cmd - make ${CPU_FLAGS} ${BINARIES} GOBIN=/build" && \
+    make GO=xx-go CGO_ENABLED=1 GOARCH=${TARGETARCH} ${CPU_FLAGS} ${BINARIES} GOBIN=/build
 
-# Install runtime dependencies
-RUN apk add --no-cache ca-certificates curl jq su-exec
+### End of builder section
 
-# Create non-root user
-RUN adduser -D -u 1000 erigon
+### Erigon Target section:
+FROM ${TARGET_BASE_IMAGE}
+
+ARG USER=erigon \
+    GROUP=erigon \
+    UID_ERIGON \
+    GID_ERIGON \
+    TARGET_BASE_IMAGE
+
+LABEL \
+    "org.opencontainers.image.authors"="https://github.com/AnilChinchawale" \
+    "org.opencontainers.image.base.name"="${TARGET_BASE_IMAGE}" \
+    "org.opencontainers.image.description"="XDC Erigon is an implementation of XDC Network (execution layer with XDPoS consensus)" \
+    "org.opencontainers.image.documentation"="https://github.com/AnilChinchawale/erigon-xdc" \
+    "org.opencontainers.image.source"="https://github.com/AnilChinchawale/erigon-xdc" \
+    "org.opencontainers.image.title"="XDC Erigon"
+
+STOPSIGNAL SIGINT
+
+RUN apk add --no-cache ca-certificates curl jq
+
+RUN addgroup -g ${GID_ERIGON} ${GROUP} && \
+    adduser -D -u ${UID_ERIGON} -G ${GROUP} --home /home/${USER} ${USER}
+
+WORKDIR /home/${USER}
 
 # Copy binaries from builder
-COPY --from=builder /build/build/bin/erigon /usr/local/bin/erigon
+COPY --from=builder /build/erigon /usr/local/bin/erigon
 
 # Create data directory
-RUN mkdir -p /data/erigon && chown -R erigon:erigon /data
+RUN mkdir -p /data/erigon && \
+    chown -R ${USER}:${GROUP} /data /home/${USER}
 
-# Entrypoint script
-COPY --chmod=755 <<'EOF' /entrypoint.sh
-#!/bin/sh
-set -e
+VOLUME [ "/home/${USER}" ]
 
-trap 'echo "Shutting down..."; exit 0' SIGTERM SIGINT
-
-exec su-exec erigon "$@"
-EOF
+USER ${USER}
 
 WORKDIR /data
 
 # Expose ports
+# 8555: HTTP RPC
+# 8556: WebSocket
+# 9090: Private API
+# 6060: Metrics/Prometheus
+# 30304: P2P TCP/UDP
 EXPOSE 8555 8556 9090 6060 30304 30304/udp
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
     CMD curl -sf http://localhost:8555 > /dev/null || exit 1
 
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["erigon"]
+ENTRYPOINT [ "/usr/local/bin/erigon" ]
+### End of Erigon Target section
