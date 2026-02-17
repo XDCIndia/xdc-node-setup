@@ -1,0 +1,71 @@
+# XDC Nethermind (nmx) - OS Agnostic Docker Image
+# Multi-arch support: linux/amd64, linux/arm64
+# Based on: https://github.com/AnilChinchawale/nethermind/tree/build/xdc-net9-stable
+
+# Build stage
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:9.0-alpine AS builder
+
+WORKDIR /build
+
+# Accept build arguments
+ARG TARGETOS
+ARG TARGETARCH
+ARG GIT_BRANCH=build/xdc-net9-stable
+ARG GIT_REPO=https://github.com/AnilChinchawale/nethermind.git
+
+# Install git
+RUN apk add --no-cache git
+
+# Clone XDC Nethermind
+RUN git clone -b ${GIT_BRANCH} --depth 1 ${GIT_REPO} .
+
+# Determine runtime identifier
+RUN case "${TARGETARCH}" in \
+        amd64) echo "linux-x64" > /tmp/rid ;; \
+        arm64) echo "linux-arm64" > /tmp/rid ;; \
+        *) echo "linux-x64" > /tmp/rid ;; \
+    esac
+
+# Build Nethermind
+RUN dotnet publish src/Nethermind/Nethermind.Runner/Nethermind.Runner.csproj \
+    -c Release \
+    -o /build/out \
+    --self-contained \
+    -r $(cat /tmp/rid)
+
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/runtime:9.0-alpine
+
+# Install runtime dependencies
+RUN apk add --no-cache curl jq su-exec
+
+# Create non-root user
+RUN adduser -D -u 1000 nethermind
+
+# Copy binaries
+COPY --from=builder /build/out /nethermind
+
+# Create data directory
+RUN mkdir -p /data/nethermind && chown -R nethermind:nethermind /data
+
+# Entrypoint script
+COPY --chmod=755 <<'EOF' /entrypoint.sh
+#!/bin/sh
+set -e
+
+trap 'echo "Shutting down..."; exit 0' SIGTERM SIGINT
+
+exec su-exec nethermind "$@"
+EOF
+
+WORKDIR /data
+
+# Expose ports
+EXPOSE 8557 8558 30305 30305/udp
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+    CMD curl -sf http://localhost:8557/health > /dev/null || exit 1
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/nethermind/Nethermind.Runner"]

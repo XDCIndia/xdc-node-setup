@@ -1,0 +1,124 @@
+version: '3.8'
+
+# XDC Multi-Client Docker Compose - OS Agnostic
+# Works on: Linux, macOS (Intel/ARM), Windows (WSL/Docker Desktop)
+# Images: anilchinchawale/gx, anilchinchawale/nmx, anilchinchawale/erix
+
+services:
+  # XDC Geth (gx)
+  xdc-geth:
+    image: anilchinchawale/gx:stable
+    container_name: xdc-geth
+    restart: unless-stopped
+    ports:
+      - "8545:8545"    # HTTP RPC
+      - "8546:8546"    # WebSocket
+      - "30303:30303"  # P2P TCP
+      - "30303:30303/udp"  # P2P UDP
+    volumes:
+      - xdc-geth-data:/data/xdcchain
+    environment:
+      - NETWORK=apothem
+    command: >
+      --datadir=/data/xdcchain
+      --networkid=51
+      --port=30303
+      --http
+      --http.addr=0.0.0.0
+      --http.port=8545
+      --http.vhosts="*"
+      --http.corsdomain="*"
+      --http.api=eth,net,web3,txpool,debug
+      --ws
+      --ws.addr=0.0.0.0
+      --ws.port=8546
+      --ws.origins="*"
+    networks:
+      - xdc-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -X POST http://localhost:8545 -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' | grep -q result || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # XDC Nethermind (nmx)
+  xdc-nethermind:
+    image: anilchinchawale/nmx:stable
+    container_name: xdc-nethermind
+    restart: unless-stopped
+    ports:
+      - "8557:8557"    # HTTP RPC
+      - "8558:8558"    # WebSocket
+      - "30305:30305"  # P2P TCP
+      - "30305:30305/udp"  # P2P UDP
+    volumes:
+      - xdc-nethermind-data:/data/nethermind
+    environment:
+      - NETWORK=apothem
+    command: >
+      --datadir=/data/nethermind
+      --config=/app/config.cfg
+      --Network.DiscoveryPort=30305
+      --Network.P2PPort=30305
+      --JsonRpc.Enabled=true
+      --JsonRpc.Host=0.0.0.0
+      --JsonRpc.Port=8557
+      --JsonRpc.WebSocketsPort=8558
+    networks:
+      - xdc-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8557/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # XDC Erigon (erix)
+  xdc-erigon:
+    image: anilchinchawale/erix:stable
+    container_name: xdc-erigon
+    restart: unless-stopped
+    ports:
+      - "8555:8555"    # HTTP RPC
+      - "8556:8556"    # WebSocket
+      - "9090:9090"    # Private API
+      - "6060:6060"    # Metrics
+      - "30304:30304"  # P2P TCP
+      - "30304:30304/udp"  # P2P UDP
+    volumes:
+      - xdc-erigon-data:/data/erigon
+    environment:
+      - NETWORK=apothem
+    command: >
+      --datadir=/data/erigon
+      --chain=xdc-apothem
+      --networkid=51
+      --port=30304
+      --http
+      --http.addr=0.0.0.0
+      --http.port=8555
+      --http.vhosts="*"
+      --http.corsdomain="*"
+      --http.api=eth,net,web3,txpool,debug,erigon
+      --ws
+      --metrics
+      --metrics.addr=0.0.0.0
+      --metrics.port=6060
+    networks:
+      - xdc-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8555 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  xdc-geth-data:
+    driver: local
+  xdc-nethermind-data:
+    driver: local
+  xdc-erigon-data:
+    driver: local
+
+networks:
+  xdc-network:
+    driver: bridge

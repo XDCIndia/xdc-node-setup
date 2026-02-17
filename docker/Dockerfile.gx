@@ -1,0 +1,66 @@
+# XDC Geth (gx) - OS Agnostic Docker Image
+# Multi-arch support: linux/amd64, linux/arm64
+# Based on: https://github.com/AnilChinchawale/go-ethereum/tree/feature/xdpos-consensus
+
+# Build stage - OS agnostic
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache gcc musl-dev linux-headers git make
+
+WORKDIR /build
+
+# Accept build arguments for flexibility
+ARG TARGETOS
+ARG TARGETARCH
+ARG GIT_BRANCH=feature/xdpos-consensus
+ARG GIT_REPO=https://github.com/AnilChinchawale/go-ethereum.git
+
+# Clone XDC Geth
+RUN git clone -b ${GIT_BRANCH} --depth 1 ${GIT_REPO} .
+
+# Build XDC Geth with target platform
+ENV CGO_ENABLED=1
+ENV GOOS=${TARGETOS}
+ENV GOARCH=${TARGETARCH}
+RUN make geth
+
+# Runtime stage - Minimal and OS agnostic
+FROM alpine:3.19
+
+# Install runtime dependencies
+RUN apk add --no-cache ca-certificates curl jq su-exec
+
+# Create non-root user (compatible with all OS)
+RUN adduser -D -u 1000 xdc
+
+# Copy binary from builder
+COPY --from=builder /build/build/bin/geth /usr/local/bin/XDC
+
+# Create data directory with proper permissions
+RUN mkdir -p /data/xdcchain && chown -R xdc:xdc /data
+
+# Set up entrypoint script for OS-agnostic behavior
+COPY --chmod=755 <<'EOF' /entrypoint.sh
+#!/bin/sh
+set -e
+
+# Handle different OS signal handling
+trap 'echo "Shutting down..."; exit 0' SIGTERM SIGINT
+
+# Switch to non-root user
+exec su-exec xdc "$@"
+EOF
+
+WORKDIR /data
+
+# Expose ports
+EXPOSE 8545 8546 30303 30303/udp 8555
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+    CMD curl -sf -X POST http://localhost:8545 -H "Content-Type: application/json" \
+    -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' | jq -e '.result' > /dev/null || exit 1
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["XDC"]
