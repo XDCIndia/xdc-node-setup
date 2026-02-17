@@ -131,6 +131,8 @@ detect_node_info() {
         DETECT_CLIENT_TYPE="XDC"
     elif echo "$DETECT_VERSION" | grep -qi "erigon"; then
         DETECT_CLIENT_TYPE="Erigon"
+    elif echo "$DETECT_VERSION" | grep -qi "nethermind"; then
+        DETECT_CLIENT_TYPE="Nethermind"
     elif echo "$DETECT_VERSION" | grep -qi "geth\|go-ethereum"; then
         DETECT_CLIENT_TYPE="Geth"
     fi
@@ -440,6 +442,8 @@ collect_metrics() {
         client_type="XDC"
     elif echo "$client_version" | grep -qi "erigon"; then
         client_type="Erigon"
+    elif echo "$client_version" | grep -qi "nethermind"; then
+        client_type="Nethermind"
     elif echo "$client_version" | grep -qi "geth\|go-ethereum"; then
         client_type="Geth"
     fi
@@ -641,7 +645,7 @@ watchdog_log() {
 
 detect_container_name() {
     # Try common XDC container names
-    for name in xdc-node xdc-node-erigon xdc-node-geth XDC xdc erigon-xdc; do
+    for name in xdc-node xdc-node-erigon xdc-node-nethermind xdc-node-geth XDC xdc erigon-xdc nethermind-xdc; do
         if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${name}$"; then
             echo "$name"
             return 0

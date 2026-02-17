@@ -453,6 +453,7 @@ compare_clients() {
     # Check for running clients
     local has_geth=false
     local has_erigon=false
+    local has_nethermind=false
     
     if pgrep -x "XDC" >/dev/null || pgrep -f "geth.*xdc" >/dev/null; then
         has_geth=true
@@ -462,7 +463,11 @@ compare_clients() {
         has_erigon=true
     fi
     
-    if [[ "$has_geth" == "false" && "$has_erigon" == "false" ]]; then
+    if pgrep -f "Nethermind.Runner" >/dev/null || pgrep -f "nethermind" >/dev/null; then
+        has_nethermind=true
+    fi
+    
+    if [[ "$has_geth" == "false" && "$has_erigon" == "false" && "$has_nethermind" == "false" ]]; then
         warn "No XDC clients detected as running"
         return 1
     fi
@@ -470,16 +475,19 @@ compare_clients() {
     echo -e "${CYAN}Detected Clients:${NC}"
     [[ "$has_geth" == "true" ]] && echo "  ✓ XDPoSChain (geth-xdc)"
     [[ "$has_erigon" == "true" ]] && echo "  ✓ Erigon-XDC"
+    [[ "$has_nethermind" == "true" ]] && echo "  ✓ Nethermind-XDC"
     echo ""
     
     # Get metrics for each client
     printf "${BOLD}%-20s${NC}" "Metric"
     [[ "$has_geth" == "true" ]] && printf "${BOLD}%-20s${NC}" "XDPoSChain"
     [[ "$has_erigon" == "true" ]] && printf "${BOLD}%-20s${NC}" "Erigon-XDC"
+    [[ "$has_nethermind" == "true" ]] && printf "${BOLD}%-20s${NC}" "Nethermind-XDC"
     echo ""
     printf "%-20s" "--------------------"
     [[ "$has_geth" == "true" ]] && printf "%-20s" "--------------------"
     [[ "$has_erigon" == "true" ]] && printf "%-20s" "--------------------"
+    [[ "$has_nethermind" == "true" ]] && printf "%-20s" "--------------------"
     echo ""
     
     # Block Height
@@ -495,6 +503,12 @@ compare_clients() {
         erigon_height=$(rpc_call "http://localhost:8546" "eth_blockNumber" | jq -r '.result // "0x0"')
         erigon_height=$(hex_to_dec "$erigon_height")
         printf "%-20s" "$erigon_height"
+    fi
+    if [[ "$has_nethermind" == "true" ]]; then
+        local nethermind_height
+        nethermind_height=$(rpc_call "http://localhost:8556" "eth_blockNumber" | jq -r '.result // "0x0"')
+        nethermind_height=$(hex_to_dec "$nethermind_height")
+        printf "%-20s" "$nethermind_height"
     fi
     echo ""
     
@@ -512,6 +526,12 @@ compare_clients() {
         erigon_peers=$(hex_to_dec "$erigon_peers")
         printf "%-20s" "$erigon_peers"
     fi
+    if [[ "$has_nethermind" == "true" ]]; then
+        local nethermind_peers
+        nethermind_peers=$(rpc_call "http://localhost:8556" "net_peerCount" | jq -r '.result // "0x0"')
+        nethermind_peers=$(hex_to_dec "$nethermind_peers")
+        printf "%-20s" "$nethermind_peers"
+    fi
     echo ""
     
     # Disk Usage
@@ -525,6 +545,11 @@ compare_clients() {
         local erigon_size
         erigon_size=$(du -sb "${XDC_DATADIR}-erigon" 2>/dev/null | awk '{print $1}' || echo "0")
         printf "%-20s" "$(format_bytes $erigon_size)"
+    fi
+    if [[ "$has_nethermind" == "true" ]]; then
+        local nethermind_size
+        nethermind_size=$(du -sb "${XDC_DATADIR}-nethermind" 2>/dev/null | awk '{print $1}' || echo "0")
+        printf "%-20s" "$(format_bytes $nethermind_size)"
     fi
     echo ""
     
@@ -541,6 +566,12 @@ compare_clients() {
         erigon_mem=$(ps -o rss= -p "$(pgrep -x erigon)" 2>/dev/null || echo "0")
         erigon_mem=$((erigon_mem * 1024))
         printf "%-20s" "$(format_bytes $erigon_mem)"
+    fi
+    if [[ "$has_nethermind" == "true" ]]; then
+        local nethermind_mem
+        nethermind_mem=$(ps -o rss= -p "$(pgrep -f Nethermind.Runner | head -1)" 2>/dev/null || echo "0")
+        nethermind_mem=$((nethermind_mem * 1024))
+        printf "%-20s" "$(format_bytes $nethermind_mem)"
     fi
     echo ""
     
