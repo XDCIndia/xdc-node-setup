@@ -149,3 +149,4 @@ docker-compose.override.yml
 # User-specific SkyNet configs (contain node IDs, API keys, emails, etc.)
 **/skynet.conf
 **/skynet-erigon.conf
+mainnet/nethermind-db

@@ -1,6 +1,6 @@
 #==============================================================================
 # XDC Nethermind Client Dockerfile
-# Builds Nethermind with XDC chainspec support
+# Builds Nethermind with XDC eth/100 protocol support
 # Based on .NET 9.0 runtime
 #==============================================================================
 
@@ -48,6 +48,10 @@ RUN groupadd -r nethermind && useradd -r -g nethermind nethermind
 
 # Copy built binaries from builder
 COPY --from=builder /nethermind /nethermind
+
+# Copy default XDC chainspec and runner config (can be overridden by volume mounts)
+COPY xdc-chainspec.json /nethermind/chainspec/xdc.json
+COPY xdc-runner.json /nethermind/configs/xdc.json
 
 # Create data directory
 RUN mkdir -p /nethermind/data /nethermind/configs /nethermind/chainspec /nethermind/logs \

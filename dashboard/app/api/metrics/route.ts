@@ -86,12 +86,30 @@ function hexToNumber(hex: string | null | undefined): number {
   return parseInt(hex as string, 16) || 0;
 }
 
-function parseClientType(clientName: string): 'geth' | 'erigon' | 'geth-pr5' | 'unknown' {
+function parseClientType(clientName: string): 'geth' | 'erigon' | 'geth-pr5' | 'nethermind' | 'unknown' {
   const lower = clientName.toLowerCase();
+  if (lower.includes('nethermind')) return 'nethermind';
   if (lower.includes('erigon')) return 'erigon';
   if (lower.includes('pr5') || lower.includes('pr-5')) return 'geth-pr5';
   if (lower.includes('xdc') || lower.includes('geth')) return 'geth';
   return 'unknown';
+}
+
+function parseNetworkName(chainId: string | number): string {
+  const id = typeof chainId === 'string' ? parseInt(chainId) : chainId;
+  if (id === 50) return 'XDC Mainnet';
+  if (id === 51) return 'XDC Apothem Testnet';
+  if (id === 551) return 'XDC Devnet';
+  return `Chain ${id}`;
+}
+
+function parseSyncMode(clientVersion: string, clientType: string): string {
+  // For Nethermind, check config-based sync mode
+  if (clientType === 'nethermind') {
+    return process.env.SYNC_MODE || 'full';
+  }
+  // For geth/erigon, check env or default
+  return process.env.SYNC_MODE || 'full';
 }
 
 interface StorageMetrics {
@@ -493,11 +511,18 @@ export async function GET() {
     // Get watchdog stall state
     const watchdogState = await getWatchdogState();
     
-    // Node config from environment
+    // Node config from environment + detected values
+    const chainIdStr = String(chainIdRes.result || '50');
+    const chainIdNum = parseInt(chainIdStr.startsWith('0x') ? String(parseInt(chainIdStr, 16)) : chainIdStr);
+    const networkName = parseNetworkName(chainIdNum);
+    const syncMode = parseSyncMode((nodeInfo.name as string) || '', clientType);
     const nodeConfig = {
       clientType,
-      nodeType: (process.env.NODE_TYPE || 'full') as 'full' | 'fast' | 'snap' | 'archive',
-      syncMode: process.env.SYNC_MODE || 'full',
+      clientVersion: (nodeInfo.name as string) || '',
+      nodeType: (process.env.NODE_TYPE || syncMode) as 'full' | 'fast' | 'snap' | 'archive',
+      syncMode,
+      networkName,
+      chainId: chainIdNum,
     };
 
     const response = {

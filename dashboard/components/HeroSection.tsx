@@ -59,14 +59,30 @@ function CircularProgress({ percentage, size = 120, strokeWidth = 8 }: { percent
 }
 
 function getClientIcon(clientType?: string): string {
+  if (clientType === 'nethermind') return '🟣';
   if (clientType === 'erigon') return '🔶';
   if (clientType === 'geth-pr5') return '🟢';
   return '🔷';
 }
 
-function getClientName(clientType?: string): string {
-  if (clientType === 'erigon') return 'Erigon';
+function getClientName(clientType?: string, clientVersion?: string): string {
+  if (clientType === 'nethermind') {
+    // Extract version: "Nethermind/v1.36.0-unstable+912e7f8c/linux-x64/dotnet9.0.13"
+    const match = clientVersion?.match(/Nethermind\/v([\d.]+[^\s/]*)/i);
+    return match ? `Nethermind ${match[1]}` : 'Nethermind';
+  }
+  if (clientType === 'erigon') {
+    const match = clientVersion?.match(/erigon\/([\d.]+[^\s/]*)/i);
+    return match ? `Erigon ${match[1]}` : 'Erigon';
+  }
   if (clientType === 'geth-pr5') return 'Geth PR5';
+  // For geth/XDC, show actual version: "XDC/v2.6.8-stable/linux-amd64/go1.23.12"
+  if (clientVersion) {
+    const match = clientVersion.match(/XDC\/(v[\d.]+[^\s/]*)/i);
+    if (match) return `XDC ${match[1]}`;
+    const gethMatch = clientVersion.match(/Geth\/(v[\d.]+[^\s/]*)/i);
+    if (gethMatch) return `Geth ${gethMatch[1]}`;
+  }
   return 'Geth';
 }
 
@@ -115,11 +131,16 @@ export default function HeroSection({ data, nodeConfig, blockHeightHistory = [],
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--accent-blue-glow)] border border-[var(--border-blue-glow)]">
             <span className="text-xl">{getClientIcon(nodeConfig.clientType)}</span>
-            <span className="text-sm font-semibold text-[var(--accent-blue)]">{getClientName(nodeConfig.clientType)}</span>
+            <span className="text-sm font-semibold text-[var(--accent-blue)]">{getClientName(nodeConfig.clientType, nodeConfig.clientVersion)}</span>
           </div>
           <div className="px-4 py-2 rounded-xl bg-[var(--bg-hover)] border border-[var(--border-subtle)]">
             <span className="text-sm font-medium text-[var(--text-secondary)]">{getNodeTypeLabel(nodeConfig.nodeType)}</span>
           </div>
+          {nodeConfig.networkName && (
+          <div className="px-4 py-2 rounded-xl bg-[var(--accent-blue-glow)] border border-[var(--border-blue-glow)]">
+            <span className="text-sm font-medium text-[var(--accent-blue)]">🌐 {nodeConfig.networkName}</span>
+          </div>
+          )}
         </div>
       )}
       

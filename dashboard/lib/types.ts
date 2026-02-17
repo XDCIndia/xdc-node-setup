@@ -1,7 +1,10 @@
 export interface NodeConfig {
-  clientType: 'geth' | 'erigon' | 'geth-pr5' | 'unknown';
+  clientType: 'geth' | 'erigon' | 'geth-pr5' | 'nethermind' | 'unknown';
+  clientVersion?: string;
   nodeType: 'full' | 'fast' | 'snap' | 'archive';
   syncMode: string;
+  networkName?: string;
+  chainId?: number;
 }
 
 export interface BlockchainData {

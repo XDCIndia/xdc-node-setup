@@ -12,15 +12,14 @@ services:
     container_name: xdc-node-nethermind
     restart: always
     ports:
-      - "${NETHERMIND_P2P_PORT:-30306}:30303"              # P2P port
+      - "${NETHERMIND_P2P_PORT:-30306}:30303"
       - "${NETHERMIND_P2P_PORT:-30306}:30303/udp"
-      - "127.0.0.1:${NETHERMIND_RPC_PORT:-8556}:8545"      # HTTP-RPC
+      - "127.0.0.1:${NETHERMIND_RPC_PORT:-8556}:8545"
     volumes:
       - ../${NETWORK:-mainnet}/nethermind-db:/nethermind/data
       - ./nethermind/start-nethermind.sh:/start.sh:ro
       - ../${NETWORK:-mainnet}/.xdc-node/nethermind.json:/nethermind/configs/xdc.json:ro
-      - ./${NETWORK:-mainnet}/genesis.json:/nethermind/chainspec/xdc.json:ro
-      - ./mainnet/bootnodes.list:/nethermind/bootnodes.list:ro
+      - ./${NETWORK:-mainnet}/bootnodes.list:/nethermind/bootnodes.list:ro
       - /etc/localtime:/etc/localtime:ro
     environment:
       - NETWORK=${NETWORK:-mainnet}
@@ -60,19 +59,32 @@ services:
       - SETGID
       - SETUID
 
-  # Update agent to use nethermind's RPC port and dashboard port
+  # SkyOne agent for Nethermind — connects to nethermind's internal RPC
   xdc-agent:
     container_name: xdc-agent-nethermind
     ports:
-      - "127.0.0.1:${NETHERMIND_DASHBOARD_PORT:-7072}:3000"
+      - "0.0.0.0:${NETHERMIND_DASHBOARD_PORT:-7072}:3000"
+    volumes:
+      - ./skynet-agent.sh:/agent.sh:ro
+      - ../${NETWORK:-mainnet}/.xdc-node/skynet-nethermind.conf:/etc/xdc-node/skynet.conf
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/host/proc:ro
+      - ../${NETWORK:-mainnet}/.xdc-node/logs:/var/log/xdc
     environment:
-      - RPC_URL=${RPC_URL:-http://xdc-node:8545}
-      - NODE_RPC_PORT=${NETHERMIND_RPC_PORT:-8556}
+      - RPC_URL=http://xdc-node:8545
+      - NODE_RPC_PORT=8545
       - INSTANCE_NAME=${INSTANCE_NAME:-Nethermind_XDC_Node}
-      # Dashboard authentication (disabled by default for localhost-only access)
+      - SKYNET_CONF=/etc/xdc-node/skynet.conf
+      - SKYNET_API_KEY=${SKYNET_API_KEY:-}
+      - SKYNET_NODE_ID=${SKYNET_NODE_ID:-}
+      - SKYNET_NODE_NAME=${SKYNET_NODE_NAME:-xdc-nethermind-168-mainnet}
+      - NEXT_PUBLIC_REFRESH_INTERVAL=10
       - DASHBOARD_AUTH_ENABLED=${DASHBOARD_AUTH_ENABLED:-false}
       - DASHBOARD_USER=${DASHBOARD_USER:-admin}
       - DASHBOARD_PASS=${DASHBOARD_PASS:-xdc-skyone}
+    depends_on:
+      xdc-node:
+        condition: service_started
 
 networks:
   xdc-network:

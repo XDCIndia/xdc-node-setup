@@ -96,8 +96,16 @@ else
 fi
 
 echo "Starting Nethermind..."
-echo "Command: /nethermind/Nethermind.Runner ${NETHERMIND_ARGS[*]}"
+echo "Command: /nethermind/nethermind ${NETHERMIND_ARGS[*]}"
 echo ""
 
-# Execute Nethermind
-exec /nethermind/Nethermind.Runner "${NETHERMIND_ARGS[@]}" 2>&1 | tee -a /nethermind/logs/nethermind.log
+# Execute Nethermind (binary name is lowercase 'nethermind' in newer builds)
+if [[ -x /nethermind/nethermind ]]; then
+    exec /nethermind/nethermind "${NETHERMIND_ARGS[@]}" 2>&1 | tee -a /nethermind/logs/nethermind.log
+elif [[ -x /nethermind/Nethermind.Runner ]]; then
+    exec /nethermind/Nethermind.Runner "${NETHERMIND_ARGS[@]}" 2>&1 | tee -a /nethermind/logs/nethermind.log
+else
+    echo "ERROR: No Nethermind binary found!"
+    ls -la /nethermind/
+    exit 1
+fi

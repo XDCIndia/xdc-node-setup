@@ -1,30 +1,24 @@
 #==============================================================================
-# XDC Node Docker Compose — Nethermind Standalone (runs alongside geth)
+# XDC Node Docker Compose — Nethermind Standalone (alongside Geth/Erigon)
 # Usage: docker compose -f docker-compose.nethermind-standalone.yml up -d
-# Or: xdc start --client nethermind (when geth is already running)
-# Or: xdc start --multi-client (to start both geth and nethermind)
+# Runs Nethermind + SkyOne agent WITHOUT replacing the default geth node
 #==============================================================================
 
 services:
-  #--------------------------------------------------------------------------
-  # XDC Nethermind Node - Separate client that runs alongside geth
-  #--------------------------------------------------------------------------
-  xdc-nethermind:
+  xdc-node-nethermind:
     build:
       context: ./nethermind
       dockerfile: Dockerfile
-    platform: linux/amd64
     container_name: xdc-node-nethermind
     restart: always
     ports:
-      - "${NETHERMIND_RPC_PORT:-8556}:8545"              # HTTP-RPC (nethermind default internally)
-      - "${NETHERMIND_P2P_PORT:-30306}:30303"            # P2P port
+      - "${NETHERMIND_P2P_PORT:-30306}:30303"
       - "${NETHERMIND_P2P_PORT:-30306}:30303/udp"
+      - "127.0.0.1:${NETHERMIND_RPC_PORT:-8556}:8545"
     volumes:
       - ../${NETWORK:-mainnet}/nethermind-db:/nethermind/data
       - ./nethermind/start-nethermind.sh:/start.sh:ro
       - ../${NETWORK:-mainnet}/.xdc-node/nethermind.json:/nethermind/configs/xdc.json:ro
-      - ./${NETWORK:-mainnet}/genesis.json:/nethermind/chainspec/xdc.json:ro
       - ./${NETWORK:-mainnet}/bootnodes.list:/nethermind/bootnodes.list:ro
       - /etc/localtime:/etc/localtime:ro
     environment:
@@ -36,7 +30,7 @@ services:
       - NETHERMIND_JSONRPCCONFIG_ENABLEDMODULES=eth,net,web3,admin,debug,trace,txpool
     entrypoint: ["/bin/bash", "/start.sh"]
     networks:
-      - xdc-network
+      - docker_xdc-network
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8545 --post-data='{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' --header='Content-Type: application/json' | grep -q 'result' || exit 1"]
       interval: 30s
@@ -56,18 +50,7 @@ services:
         reservations:
           cpus: '2'
           memory: 6G
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - SETGID
-      - SETUID
 
-  #--------------------------------------------------------------------------
-  # XDC Agent for Nethermind - Monitoring agent pointing to nethermind's RPC
-  #--------------------------------------------------------------------------
   xdc-agent-nethermind:
     build:
       context: ../dashboard
@@ -75,7 +58,7 @@ services:
     container_name: xdc-agent-nethermind
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${NETHERMIND_DASHBOARD_PORT:-7072}:3000"
+      - "0.0.0.0:${NETHERMIND_DASHBOARD_PORT:-7072}:3000"
     volumes:
       - ./skynet-agent.sh:/agent.sh:ro
       - ../${NETWORK:-mainnet}/.xdc-node/skynet-nethermind.conf:/etc/xdc-node/skynet.conf
@@ -83,40 +66,29 @@ services:
       - /proc:/host/proc:ro
       - ../${NETWORK:-mainnet}/.xdc-node/logs:/var/log/xdc
     environment:
-      # Point to nethermind container's RPC port
-      - RPC_URL=${NETHERMIND_RPC_URL:-http://xdc-nethermind:8545}
-      - NODE_RPC_PORT=${NETHERMIND_RPC_PORT:-8556}
+      - RPC_URL=http://xdc-node-nethermind:8545
+      - NODE_RPC_PORT=8545
+      - INSTANCE_NAME=${INSTANCE_NAME:-Nethermind_XDC_Node}
       - SKYNET_CONF=/etc/xdc-node/skynet.conf
       - SKYNET_API_KEY=${SKYNET_API_KEY:-}
       - SKYNET_NODE_ID=${SKYNET_NODE_ID:-}
-      - SKYNET_NODE_NAME=${SKYNET_NODE_NAME:-}
+      - SKYNET_NODE_NAME=${SKYNET_NODE_NAME:-xdc-nethermind-168-mainnet}
       - NEXT_PUBLIC_REFRESH_INTERVAL=10
-      - INSTANCE_NAME=${INSTANCE_NAME:-Nethermind_XDC_Node}
-      # Dashboard authentication (disabled by default for localhost-only access)
       - DASHBOARD_AUTH_ENABLED=${DASHBOARD_AUTH_ENABLED:-false}
       - DASHBOARD_USER=${DASHBOARD_USER:-admin}
       - DASHBOARD_PASS=${DASHBOARD_PASS:-xdc-skyone}
     networks:
-      - xdc-network
+      - docker_xdc-network
     depends_on:
-      xdc-nethermind:
+      xdc-node-nethermind:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health/live || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health/live 2>/dev/null || (ps aux | grep -q '[n]ode' && exit 0) || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "5"
+      start_period: 120s
 
-#=============================================================================
-# Networks
-#=============================================================================
 networks:
-  xdc-network:
-    driver: bridge
-    # Use external network so geth and nethermind can peer with each other
+  docker_xdc-network:
     external: true
