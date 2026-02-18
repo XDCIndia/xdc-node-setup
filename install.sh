@@ -447,6 +447,10 @@ main() {
                 SETUP_ARGS+=("--network" "$2")
                 shift 2
                 ;;
+            --type)
+                SETUP_ARGS+=("--type" "$2")
+                shift 2
+                ;;
             --help|-h)
                 cat << EOF
 XDC Node Setup Installer

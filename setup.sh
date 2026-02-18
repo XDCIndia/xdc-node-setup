@@ -545,9 +545,11 @@ init_config() {
     if [[ "$NETWORK" == "apothem" || "$NETWORK" == "testnet" ]]; then
         APOTHEM_FLAG="--apothem"
         NETWORK_ID=51
+        ETHSTATS_FLAG=" "  # No ethstats for apothem (space = skip default)
     else
         APOTHEM_FLAG=""
         NETWORK_ID=${CHAIN_ID:-50}
+        ETHSTATS_FLAG=""  # Empty = use default ethstats
     fi
 }
 
@@ -986,6 +988,7 @@ GC_MODE=full
 NETWORK=${NETWORK}
 NETWORK_ID=${NETWORK_ID:-50}
 APOTHEM_FLAG=${APOTHEM_FLAG:-}
+ETHSTATS_FLAG=${ETHSTATS_FLAG:-}
 PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000000
 LOG_LEVEL=2
 ENABLE_RPC=true
@@ -1627,10 +1630,23 @@ start_services() {
     # Start services (remove orphans from other projects sharing this dir)
     info "Starting containers..."
     if [[ "$CLIENT" == "all" ]]; then
+        log "Network: $NETWORK, Chain ID: $CHAIN_ID, Network ID: $NETWORK_ID"
         # Check if apothem full compose exists for multi-client apothem
-        if [[ ("$NETWORK" == "apothem" || "$NETWORK" == "testnet") && -f "docker-compose.apothem-full.yml" ]]; then
-            info "Multi-client mode (Apothem): starting all 4 clients..."
-            docker compose -f docker-compose.apothem-full.yml up -d
+        if [[ ("$NETWORK" == "apothem" || "$NETWORK" == "testnet") ]]; then
+            if [[ -f "docker-compose.apothem-full.yml" ]]; then
+                info "Multi-client mode (Apothem): starting all 4 clients from docker-compose.apothem-full.yml..."
+                docker compose -f docker-compose.apothem-full.yml up -d
+            else
+                warn "docker-compose.apothem-full.yml not found in $(pwd), falling back to individual clients..."
+                # Fall through to individual client startup below
+                docker network create docker_xdc-network 2>/dev/null || true
+                export NETWORK="$NETWORK" NETWORK_ID="$NETWORK_ID" APOTHEM_FLAG="$APOTHEM_FLAG"
+                # Start geth v2.6.8 with apothem
+                docker compose up -d --remove-orphans
+                for f in docker-compose.geth-pr5-standalone.yml docker-compose.erigon-standalone.yml docker-compose.nethermind-standalone.yml; do
+                    [[ -f "$f" ]] && docker compose -f "$f" up -d || true
+                done
+            fi
         else
             # Multi-client: start geth first, then others standalone
             info "Multi-client mode: starting geth + geth-pr5 + erigon + nethermind..."
