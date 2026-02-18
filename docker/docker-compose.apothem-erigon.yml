@@ -3,9 +3,8 @@
 
 services:
   xdc-node-erigon-apothem:
-    build:
-      context: https://github.com/AnilChinchawale/erigon-xdc.git#devel
-      dockerfile: Dockerfile
+    image: anilchinchawale/erix:latest
+    platform: linux/amd64
     container_name: xdc-node-erigon-apothem
     restart: unless-stopped
     ports:

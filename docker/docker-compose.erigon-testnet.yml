@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   xdc-node-erigon-testnet:
-    image: docker-xdc-erigon:latest
+    image: anilchinchawale/erix:latest
     container_name: xdc-node-erigon-testnet
     restart: unless-stopped
     ports:
@@ -30,9 +30,8 @@ services:
       - xdc-network
 
   xdc-agent-erigon-testnet:
-    build:
-      context: ../dashboard
-      dockerfile: Dockerfile
+    image: anilchinchawale/erix:latest
+    platform: linux/amd64
     container_name: xdc-agent-erigon-testnet
     restart: unless-stopped
     ports:

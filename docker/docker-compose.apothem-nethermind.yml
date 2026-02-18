@@ -5,9 +5,8 @@ version: '3.8'
 
 services:
   xdc-node-nethermind-apothem:
-    build:
-      context: https://github.com/AnilChinchawale/nethermind.git#build/xdc-net9-stable
-      dockerfile: Dockerfile
+    image: anilchinchawale/nmx:latest
+    platform: linux/amd64
     container_name: xdc-node-nethermind-apothem
     restart: unless-stopped
     ports:

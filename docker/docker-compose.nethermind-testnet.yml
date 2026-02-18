@@ -1,8 +1,7 @@
 services:
   xdc-node-nethermind-testnet:
-    build:
-      context: ./nethermind
-      dockerfile: Dockerfile
+    image: anilchinchawale/nmx:latest
+    platform: linux/amd64
     container_name: xdc-node-nethermind-testnet
     restart: unless-stopped
     ports:

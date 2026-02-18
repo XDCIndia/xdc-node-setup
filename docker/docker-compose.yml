@@ -79,9 +79,8 @@ services:
   # XDC Agent - Next.js Dashboard + SkyNet Monitoring (unified container)
   #--------------------------------------------------------------------------
   xdc-agent:
-    build:
-      context: ../dashboard
-      dockerfile: Dockerfile
+    image: anilchinchawale/xdc-agent:latest
+    platform: linux/amd64
     container_name: xdc-agent
     restart: unless-stopped
     ports:

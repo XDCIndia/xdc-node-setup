@@ -6,9 +6,8 @@
 
 services:
   xdc-node:
-    build:
-      context: ./nethermind
-      dockerfile: Dockerfile
+    image: anilchinchawale/nmx:latest
+    platform: linux/amd64
     container_name: xdc-node-nethermind
     restart: always
     ports:
