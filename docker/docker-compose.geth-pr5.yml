@@ -6,9 +6,8 @@
 
 services:
   xdc-node:
-    build:
-      context: ./geth-pr5
-      dockerfile: Dockerfile
+    image: anilchinchawale/gx:latest
+    platform: linux/amd64
     container_name: xdc-node-geth-pr5
     restart: always
     ports:

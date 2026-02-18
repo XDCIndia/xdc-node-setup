@@ -6,9 +6,8 @@
 
 services:
   xdc-node-nethermind:
-    build:
-      context: ./nethermind
-      dockerfile: Dockerfile
+    image: anilchinchawale/nmx:latest
+    platform: linux/amd64
     container_name: xdc-node-nethermind
     restart: always
     ports:
@@ -52,9 +51,8 @@ services:
           memory: 6G
 
   xdc-agent-nethermind:
-    build:
-      context: ../dashboard
-      dockerfile: Dockerfile
+    image: anilchinchawale/xdc-agent:latest
+    platform: linux/amd64
     container_name: xdc-agent-nethermind
     restart: unless-stopped
     ports:

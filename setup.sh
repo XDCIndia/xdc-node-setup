@@ -598,11 +598,12 @@ prompt_client() {
     echo -e "${BOLD}Client Selection${NC}"
     echo "================="
     echo "1) XDC Stable (v2.6.8) - Official Docker image (recommended)"
-    echo "2) XDC Geth PR5 - Latest geth with XDPoS (builds from source, ~10-15 min)"
-    echo "3) Erigon-XDC - Multi-client diversity, experimental (builds from source, ~10-15 min)"
-    echo "4) Nethermind-XDC - .NET-based client, experimental (builds from source, ~10-15 min)"
+    echo "2) XDC Geth PR5 - Latest geth with XDPoS (Docker Hub: anilchinchawale/gx)"
+    echo "3) Erigon-XDC - Multi-client diversity (Docker Hub: anilchinchawale/erix)"
+    echo "4) Nethermind-XDC - .NET-based client (Docker Hub: anilchinchawale/nmx)"
+    echo "5) All Clients - Run all 4 clients simultaneously"
     echo ""
-    echo -e "${YELLOW}Note: Building from source requires Go 1.22+ (.NET 9 for Nethermind) and takes 10-15 minutes${NC}"
+    echo -e "${YELLOW}Note: Clients 2-4 use pre-built Docker Hub images — no compilation needed${NC}"
     echo ""
     
     while true; do
@@ -610,31 +611,11 @@ prompt_client() {
         choice=${choice:-1}
         case $choice in
             1) CLIENT="stable"; break ;;
-            2) 
-                warn "Geth PR5 will be built from source. This may take 10-15 minutes."
-                read -rp "Continue? [y/N]: " confirm
-                if [[ "${confirm:-N}" =~ ^[Yy]$ ]]; then
-                    CLIENT="geth-pr5"
-                    break
-                fi
-                ;;
-            3) 
-                warn "Erigon-XDC is experimental and will be built from source. This may take 10-15 minutes."
-                read -rp "Continue? [y/N]: " confirm
-                if [[ "${confirm:-N}" =~ ^[Yy]$ ]]; then
-                    CLIENT="erigon"
-                    break
-                fi
-                ;;
-            4) 
-                warn "Nethermind-XDC is experimental and will be built from source. This may take 10-15 minutes."
-                read -rp "Continue? [y/N]: " confirm
-                if [[ "${confirm:-N}" =~ ^[Yy]$ ]]; then
-                    CLIENT="nethermind"
-                    break
-                fi
-                ;;
-            *) echo "Invalid selection. Please choose 1-4." ;;
+            2) CLIENT="geth-pr5"; break ;;
+            3) CLIENT="erigon"; break ;;
+            4) CLIENT="nethermind"; break ;;
+            5) CLIENT="all"; break ;;
+            *) echo "Invalid selection. Please choose 1-5." ;;
         esac
     done
     
@@ -1631,6 +1612,29 @@ start_services() {
         docker network create xdc-network 2>/dev/null || true
         if [[ -f "docker-compose.erigon-standalone.yml" ]]; then
             docker compose -f docker-compose.erigon-standalone.yml up -d
+        fi
+        if [[ -f "docker-compose.nethermind-standalone.yml" ]]; then
+            docker compose -f docker-compose.nethermind-standalone.yml up -d
+        fi
+    elif [[ "$CLIENT" == "geth-pr5" ]]; then
+        info "Starting Geth PR5 using Docker Hub image..."
+        docker network create xdc-network 2>/dev/null || true
+        if [[ -f "docker-compose.geth-pr5.yml" ]]; then
+            docker compose -f docker-compose.geth-pr5.yml up -d
+        else
+            # Fallback: run directly from Docker Hub image
+            docker run -d --name xdc-node-gx \
+                --network docker_xdc-network \
+                --restart unless-stopped \
+                -p "127.0.0.1:${GP5_RPC_PORT:-8557}:8557" \
+                -p "${GP5_P2P_PORT:-30307}:30307" \
+                -v "xdc-gx-data:/data/xdc" \
+                anilchinchawale/gx:latest \
+                --datadir=/data/xdc --networkid=${NETWORK_ID:-50} --port=30307 \
+                --http --http.addr=0.0.0.0 --http.port=8557 --http.vhosts="*" \
+                --http.api=eth,net,web3,txpool,debug,admin \
+                --syncmode=full --state.scheme=hash \
+                ${APOTHEM_FLAG:-}
         fi
     elif [[ "$CLIENT" == "erigon" ]]; then
         if [[ -f "docker-compose.erigon-standalone.yml" ]]; then

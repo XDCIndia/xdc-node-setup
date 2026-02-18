@@ -2700,7 +2700,7 @@ EOF
     
     # Try Docker first (single container start - existing behavior)
     local container
-    if container=$(find_container) && [[ -n "$container" ]] && [[ "$multi_client" != "true" ]] && [[ "$client_override" != "erigon" ]]; then
+    if container=$(find_container) && [[ -n "$container" ]] && [[ "$multi_client" != "true" ]] && [[ "$client_override" != "erigon" ]] && [[ "$client_override" != "nethermind" ]] && [[ "$client_override" != "geth-pr5" ]]; then
         info "Found Docker container: $container"
         start_spinner "Starting Docker container"
         
@@ -2911,10 +2911,39 @@ EOF
             return 0
         fi
         
+        # Single client mode with --client geth-pr5
+        if [[ "$client_override" == "geth-pr5" ]]; then
+            info "Starting Geth PR5 from Docker Hub..."
+            start_spinner "Starting Geth PR5"
+            
+            docker network create xdc-network 2>/dev/null || true
+            
+            if [[ -f "docker-compose.geth-pr5.yml" ]]; then
+                export RPC_PORT="${rpc_port}" WS_PORT="${ws_port}" P2P_PORT="${p2p_port}"
+                [[ -n "$network" ]] && export NETWORK="$network"
+                
+                if docker compose -f docker-compose.geth-pr5.yml up -d 2>/dev/null; then
+                    stop_spinner true "Geth PR5 started"
+                    echo ""
+                    echo -e "$(c GREEN)$(c BOLD)  Geth PR5 Node Running!$(c NC)"
+                    echo -e "  RPC:  http://127.0.0.1:${rpc_port}"
+                    echo -e "  P2P:  :${p2p_port}"
+                    echo ""
+                    return 0
+                else
+                    stop_spinner false "Geth PR5 start failed"
+                    die "Failed to start Geth PR5. Check 'docker compose logs' for details."
+                fi
+            else
+                stop_spinner false "Compose file not found"
+                die "docker-compose.geth-pr5.yml not found"
+            fi
+        fi
+        
         # Single client mode with --client erigon
         # If geth is running and user wants erigon, use standalone compose
-        if [[ "$client_override" == "erigon" ]] && [[ "$geth_running" == "true" ]]; then
-            info "Starting erigon alongside existing geth node..."
+        if [[ "$client_override" == "erigon" ]]; then
+            info "Starting erigon..."
             start_spinner "Starting Erigon"
             
             # Resolve erigon port conflicts
@@ -2970,8 +2999,8 @@ EOF
         
         # Single client mode with --client nethermind
         # If geth is running and user wants nethermind, use standalone compose
-        if [[ "$client_override" == "nethermind" ]] && [[ "$geth_running" == "true" ]]; then
-            info "Starting nethermind alongside existing geth node..."
+        if [[ "$client_override" == "nethermind" ]]; then
+            info "Starting nethermind..."
             start_spinner "Starting Nethermind"
             
             # Resolve nethermind port conflicts

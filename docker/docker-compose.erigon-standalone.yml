@@ -10,9 +10,7 @@ services:
   # XDC Erigon Node - Separate client that runs alongside geth
   #--------------------------------------------------------------------------
   xdc-erigon:
-    build:
-      context: ./erigon
-      dockerfile: Dockerfile
+    image: anilchinchawale/erix:latest
     platform: linux/amd64
     container_name: xdc-node-erigon
     restart: always
@@ -73,9 +71,8 @@ services:
   # XDC Agent for Erigon - Monitoring agent pointing to erigon's RPC
   #--------------------------------------------------------------------------
   xdc-agent-erigon:
-    build:
-      context: ../dashboard
-      dockerfile: Dockerfile
+    image: anilchinchawale/xdc-agent:latest
+    platform: linux/amd64
     container_name: xdc-agent-erigon
     restart: unless-stopped
     ports:
