@@ -173,6 +173,72 @@ services:
 
   # ==================== PEER CONNECTOR ====================
   # Automatically adds peers between all clients
+  # ==================== SKYNET AGENTS ====================
+  skynet-agent-geth:
+    image: anilchinchawale/xdc-agent:latest
+    platform: linux/amd64
+    container_name: skynet-agent-geth
+    restart: unless-stopped
+    environment:
+      - RPC_URL=http://xdc-node-apothem:8545
+      - SKYNET_NODE_NAME=local-apothem-geth
+      - SKYNET_API_URL=https://net.xdc.network/api/v1
+      - SKYNET_MASTER_KEY=xdc-netown-key-2026-prod
+    networks:
+      - xdc-network
+    depends_on:
+      xdc-node-apothem:
+        condition: service_healthy
+
+  skynet-agent-gx:
+    image: anilchinchawale/xdc-agent:latest
+    platform: linux/amd64
+    container_name: skynet-agent-gx
+    restart: unless-stopped
+    environment:
+      - RPC_URL=http://xdc-node-gx-apothem:8557
+      - SKYNET_NODE_NAME=local-apothem-gx
+      - SKYNET_API_URL=https://net.xdc.network/api/v1
+      - SKYNET_MASTER_KEY=xdc-netown-key-2026-prod
+    networks:
+      - xdc-network
+    depends_on:
+      xdc-node-gx-apothem:
+        condition: service_healthy
+
+  skynet-agent-erigon:
+    image: anilchinchawale/xdc-agent:latest
+    platform: linux/amd64
+    container_name: skynet-agent-erigon
+    restart: unless-stopped
+    environment:
+      - RPC_URL=http://xdc-node-erigon-apothem:8556
+      - SKYNET_NODE_NAME=local-apothem-erigon
+      - SKYNET_API_URL=https://net.xdc.network/api/v1
+      - SKYNET_MASTER_KEY=xdc-netown-key-2026-prod
+    networks:
+      - xdc-network
+    depends_on:
+      xdc-node-erigon-apothem:
+        condition: service_healthy
+
+  skynet-agent-nethermind:
+    image: anilchinchawale/xdc-agent:latest
+    platform: linux/amd64
+    container_name: skynet-agent-nethermind
+    restart: unless-stopped
+    environment:
+      - RPC_URL=http://xdc-node-nethermind-apothem:8558
+      - SKYNET_NODE_NAME=local-apothem-nethermind
+      - SKYNET_API_URL=https://net.xdc.network/api/v1
+      - SKYNET_MASTER_KEY=xdc-netown-key-2026-prod
+    networks:
+      - xdc-network
+    depends_on:
+      xdc-node-nethermind-apothem:
+        condition: service_healthy
+
+  # ==================== PEER CONNECTOR ====================
   peer-connector:
     image: alpine/curl:latest
     platform: linux/amd64
