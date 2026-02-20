@@ -49,8 +49,6 @@ services:
         reservations:
           cpus: '2'
           memory: 6G
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     cap_add:

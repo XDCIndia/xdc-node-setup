@@ -205,10 +205,6 @@ if [ -f /work/bootnodes.list ]; then
 fi
 
 # ============================================================
-# Ethstats
-# ============================================================
-INSTANCE_IP=$(curl -s https://checkip.amazonaws.com 2>/dev/null || echo "unknown")
-netstats="${INSTANCE_NAME}:xinfin_xdpos_hybrid_network_stats@stats.xinfin.network:3000"
 
 # ============================================================
 # Build args

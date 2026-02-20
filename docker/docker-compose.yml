@@ -140,6 +140,33 @@ services:
       - /root/.npm:nosuid,size=500m
       - /var/cache:nosuid,size=50m
 
+  #--------------------------------------------------------------------------
+  # XDCStats - Network monitoring dashboard
+  #--------------------------------------------------------------------------
+  ethstats:
+    image: anilchinchawale/xdcstats:latest
+    platform: linux/amd64
+    container_name: xdc-ethstats
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${ETHSTATS_PORT:-3000}:3000"
+    environment:
+      - PORT=3000
+      - WS_SECRET=${ETHSTATS_SECRET:-xinfin_xdpos_hybrid_network_stats}
+    networks:
+      - xdc-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
 #==============================================================================
 # Networks
 #==============================================================================
