@@ -619,16 +619,14 @@ generate_smart_node_name() {
   # Extract short client name
   local short_client="unknown"
   case "$client_type" in
-    *[Nn]ethermind*) short_client="NM" ;;
-    *[Ee]rigon*) short_client="Erigon" ;;
-    *XDC*|[Gg]eth*) 
-      # Check for v2.6.8 stable (XDC) vs GP5/geth forks
-      if echo "$client_version" | grep -qi "v2\.6\|v2\.5\|v2\.4"; then
-        short_client="XDC"
-      else
-        short_client="geth"
-      fi
-      ;;
+    *[Nn]ethermind*) short_client="nethermind" ;;
+    *[Ee]rigon*) short_client="erigon" ;;
+    # XDC v2.6.8 stable and similar versions
+    *[Xx][Dd][Cc]*v2\.[6-9]*|*[Xx][Dd][Cc]*v3\.*|*v2\.[6-9]*[Xx][Dd][Cc]*)
+      short_client="xdc" ;;
+    # GP5/geth forks (v1.x versions)
+    *[Gg]eth*|*[Xx][Dd][Cc]*)
+      short_client="geth" ;;
   esac
   
   # Extract version number from client version string
@@ -652,10 +650,12 @@ generate_smart_node_name() {
   fi
   
   # Build name: {client}-{version}-{type}-{ip}-{network}
-  local smart_name="${short_client}-v${version_num}-${node_type}-${clean_ip}-${network}"
+  # Sanitize IP for name (dots only, no IPv6 colons)
+  local name_ip=$(echo "$clean_ip" | tr ':' '-' | tr -cd 'a-zA-Z0-9.-')
+  local smart_name="${short_client}-v${version_num}-${node_type}-${name_ip}-${network}"
   
-  # Sanitize: alphanumeric, dots, dashes only (preserve case for client names)
-  smart_name=$(echo "$smart_name" | tr -c 'a-zA-Z0-9.-' '-' | sed 's/-$//')
+  # Final sanitize: only alphanumeric, dots, dashes
+  smart_name=$(echo "$smart_name" | tr -c 'a-zA-Z0-9.-' '-' | sed 's/-$//' | sed 's/^-//')
   
   echo "$smart_name"
 }
@@ -692,18 +692,30 @@ auto_register_identity() {
   echo "[SkyNet] Fingerprint: $fingerprint (coinbase: ${coinbase:-unknown}, ip: $host_ip)"
   
   # Issue #71: Use /nodes/identify endpoint with fingerprint
-  # Build payload with jq to handle null/empty coinbase properly
+  # Build payload - simplified to avoid jq conditional issues
   local identify_payload
-  identify_payload=$(jq -n \
-    --arg fp "$fingerprint" \
-    --arg ip "$host_ip" \
-    --arg ct "$client_type" \
-    --arg cv "$client_version" \
-    --arg nm "$NODE_NAME" \
-    --arg nw "$network_name" \
-    --arg cb "${coinbase:-}" \
-    '{fingerprint: $fp, ip: $ip, clientType: $ct, clientVersion: $cv, name: $nm, network: $nw, role: "fullnode"} + (if $cb != "" and $cb != "null" then {coinbase: $cb} else {} end)'
-  )
+  if [ -n "$coinbase" ] && [ "$coinbase" != "null" ]; then
+    identify_payload=$(jq -n \
+      --arg fp "$fingerprint" \
+      --arg ip "$host_ip" \
+      --arg ct "$client_type" \
+      --arg cv "$client_version" \
+      --arg nm "$NODE_NAME" \
+      --arg nw "$network_name" \
+      --arg cb "$coinbase" \
+      '{fingerprint: $fp, ip: $ip, clientType: $ct, clientVersion: $cv, name: $nm, network: $nw, role: "fullnode", coinbase: $cb}'
+    )
+  else
+    identify_payload=$(jq -n \
+      --arg fp "$fingerprint" \
+      --arg ip "$host_ip" \
+      --arg ct "$client_type" \
+      --arg cv "$client_version" \
+      --arg nm "$NODE_NAME" \
+      --arg nw "$network_name" \
+      '{fingerprint: $fp, ip: $ip, clientType: $ct, clientVersion: $cv, name: $nm, network: $nw, role: "fullnode"}'
+    )
+  fi
   
   local response
   response=$(curl -s -m 15 -X POST "${api_url}/v1/nodes/identify" \
