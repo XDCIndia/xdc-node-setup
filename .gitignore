@@ -168,3 +168,9 @@ apothem/*-old*/
 *.node
 node_modules/
 .next/
+
+# Environment files with secrets
+.env
+**/.env
+*.env
+!.env.example
