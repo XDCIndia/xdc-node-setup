@@ -674,9 +674,9 @@ auto_register_identity() {
   coinbase=$(curl -s -m 5 -X POST "$rpc_url" -H "Content-Type: application/json" \
     -d '{"jsonrpc":"2.0","method":"eth_coinbase","params":[],"id":1}' 2>/dev/null | jq -r .result 2>/dev/null)
   
-  # Issue #71: Get public IP
+  # Issue #71: Get public IP (prefer IPv4)
   local host_ip
-  host_ip=$(curl -s -m 5 https://ifconfig.me 2>/dev/null || curl -s -m 5 https://api.ipify.org 2>/dev/null || echo "unknown")
+  host_ip=$(curl -4 -s -m 5 https://ifconfig.me 2>/dev/null || curl -4 -s -m 5 https://api.ipify.org 2>/dev/null || echo "unknown")
   
   # Issue #71: Compute fingerprint
   local fingerprint="${coinbase}@${host_ip}"
@@ -745,8 +745,8 @@ auto_register() {
   local client_version="$5"
   local api_url="${SKYNET_API_URL:-https://net.xdc.network/api/v1}"
   
-  # Get host IP
-  HOST_IP=$(curl -s -m 5 https://ifconfig.me 2>/dev/null || curl -s -m 5 https://api.ipify.org 2>/dev/null || echo "unknown")
+  # Get host IP (prefer IPv4)
+  HOST_IP=$(curl -4 -s -m 5 https://ifconfig.me 2>/dev/null || curl -4 -s -m 5 https://api.ipify.org 2>/dev/null || echo "unknown")
   
   # Generate smart node name
   local smart_name
@@ -1165,7 +1165,12 @@ monitor_container_logs() {
     case "$CLIENT_VERSION" in
       *[Nn]ethermind*) CLIENT_TYPE="nethermind" ;;
       *[Ee]rigon*) CLIENT_TYPE="erigon" ;;
-      *XDC*|[Gg]eth*) CLIENT_TYPE="geth" ;;
+      # XDC v2.6.8 stable and similar versions
+      *[Xx][Dd][Cc]*v2\.[6-9]*|*[Xx][Dd][Cc]*v3\.*|*v2\.[6-9]*[Xx][Dd][Cc]*)
+        CLIENT_TYPE="xdc" ;;
+      # GP5/geth forks (v1.x versions)
+      *[Gg]eth*|*[Xx][Dd][Cc]*)
+        CLIENT_TYPE="geth" ;;
     esac
     
     NETWORK_NAME="mainnet"
@@ -1224,9 +1229,9 @@ monitor_container_logs() {
     COINBASE=$(curl -s -m 5 -X POST "$RPC_URL" -H "Content-Type: application/json" \
       -d '{"jsonrpc":"2.0","method":"eth_coinbase","params":[],"id":1}' 2>/dev/null | jq -r .result 2>/dev/null)
     
-    # Issue #71: Get public IP (cached)
+    # Issue #71: Get public IP (cached, prefer IPv4)
     if [ -z "$HOST_IP" ] || [ "$HOST_IP" = "unknown" ]; then
-      HOST_IP=$(curl -s -m 5 https://ifconfig.me 2>/dev/null || curl -s -m 5 https://api.ipify.org 2>/dev/null || echo "unknown")
+      HOST_IP=$(curl -4 -s -m 5 https://ifconfig.me 2>/dev/null || curl -4 -s -m 5 https://api.ipify.org 2>/dev/null || echo "unknown")
     fi
     
     # Issue #71: Compute fingerprint
@@ -1360,7 +1365,12 @@ monitor_container_logs() {
     case "$CLIENT_VERSION" in
       *[Nn]ethermind*) CLIENT_TYPE="nethermind" ;;
       *[Ee]rigon*) CLIENT_TYPE="erigon" ;;
-      *XDC*|[Gg]eth*) CLIENT_TYPE="geth" ;;
+      # XDC v2.6.8 stable and similar versions
+      *[Xx][Dd][Cc]*v2\.[6-9]*|*[Xx][Dd][Cc]*v3\.*|*v2\.[6-9]*[Xx][Dd][Cc]*)
+        CLIENT_TYPE="xdc" ;;
+      # GP5/geth forks (v1.x versions)
+      *[Gg]eth*|*[Xx][Dd][Cc]*)
+        CLIENT_TYPE="geth" ;;
     esac
     
     # === PHASE 2: BLOCK PROGRESS TRACKING ===
