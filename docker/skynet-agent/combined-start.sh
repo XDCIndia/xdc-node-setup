@@ -631,23 +631,21 @@ auto_register_identity() {
   echo "[SkyNet] Fingerprint: $fingerprint (coinbase: ${coinbase:-unknown}, ip: $host_ip)"
   
   # Issue #71: Use /nodes/identify endpoint with fingerprint
+  # Build payload with jq to handle null/empty coinbase properly
   local identify_payload
-  identify_payload=$(cat <<EOF
-{
-  "fingerprint": "$fingerprint",
-  "coinbase": "${coinbase:-}",
-  "ip": "$host_ip",
-  "clientType": "$client_type",
-  "clientVersion": "$client_version",
-  "name": "$NODE_NAME",
-  "network": "$network_name",
-  "role": "fullnode"
-}
-EOF
-)
+  identify_payload=$(jq -n \
+    --arg fp "$fingerprint" \
+    --arg ip "$host_ip" \
+    --arg ct "$client_type" \
+    --arg cv "$client_version" \
+    --arg nm "$NODE_NAME" \
+    --arg nw "$network_name" \
+    --arg cb "${coinbase:-}" \
+    '{fingerprint: $fp, ip: $ip, clientType: $ct, clientVersion: $cv, name: $nm, network: $nw, role: "fullnode"} + (if $cb != "" and $cb != "null" then {coinbase: $cb} else {} end)'
+  )
   
   local response
-  response=$(curl -s -m 15 -X POST "${api_url}/nodes/identify" \
+  response=$(curl -s -m 15 -X POST "${api_url}/v1/nodes/identify" \
     -H "Content-Type: application/json" \
     -d "$identify_payload" 2>/dev/null)
   
@@ -715,7 +713,7 @@ EOF
 )
   
   local response
-  response=$(curl -s -m 15 -X POST "${api_url}/nodes/register" \
+  response=$(curl -s -m 15 -X POST "${api_url}/v1/nodes/register" \
     -H "Content-Type: application/json" \
     -d "$register_payload" 2>/dev/null)
   
@@ -764,7 +762,7 @@ EOF
 )
   
   local response
-  response=$(curl -s -m 15 -X POST "${api_url}/nodes/${node_id}/errors" \
+  response=$(curl -s -m 15 -X POST "${api_url}/v1/nodes/${node_id}/errors" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer ${api_key}" \
     -d "$error_payload" 2>/dev/null)
@@ -1406,7 +1404,7 @@ monitor_container_logs() {
 {"errorType": "sync_stall", "message": "Block stalled at $BLOCK_NUM for 5+ minutes with $PEER_COUNT peers", "severity": "warning", "source": "skyone-agent"}
 EOF
 )
-        curl -s -m 15 -X POST "${SKYNET_API_URL}/nodes/${SKYNET_NODE_ID}/errors" \
+        curl -s -m 15 -X POST "${SKYNET_API_URL}/v1/nodes/${SKYNET_NODE_ID}/errors" \
           -H "Content-Type: application/json" \
           -H "Authorization: Bearer ${SKYNET_API_KEY}" \
           -d "$ERROR_PAYLOAD" 2>/dev/null || echo "[SkyOne] Failed to report stall incident"
@@ -1478,7 +1476,7 @@ EOF
 EOF
 )
       
-      RESPONSE=$(curl -s -m 15 -X POST "${SKYNET_API_URL}/nodes/${SKYNET_NODE_ID}/heartbeat" \
+      RESPONSE=$(curl -s -m 15 -X POST "${SKYNET_API_URL}/v1/nodes/${SKYNET_NODE_ID}/heartbeat" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer ${SKYNET_API_KEY}" \
         -d "$HEARTBEAT_PAYLOAD" 2>&1)
