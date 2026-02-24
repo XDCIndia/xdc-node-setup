@@ -131,8 +131,12 @@ detect_node_info() {
     DETECT_CLIENT_TYPE="unknown"
     if echo "$DETECT_VERSION" | grep -qi "XDC\|XDPoS"; then
         DETECT_CLIENT_TYPE="XDC"
+    elif echo "$DETECT_VERSION" | grep -qi "reth"; then
+        DETECT_CLIENT_TYPE="reth"
     elif echo "$DETECT_VERSION" | grep -qi "erigon"; then
         DETECT_CLIENT_TYPE="erigon"
+    elif echo "$DETECT_VERSION" | grep -qi "nethermind"; then
+        DETECT_CLIENT_TYPE="nethermind"
     elif echo "$DETECT_VERSION" | grep -qi "geth\|go-ethereum"; then
         DETECT_CLIENT_TYPE="geth"
     fi

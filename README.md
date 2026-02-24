@@ -65,7 +65,7 @@ Your node will be running and syncing within 5 minutes. Access the SkyOne dashbo
 | 🚀 **One-Command Deployment** | Get a node running in under 5 minutes | ✅ |
 | 🔒 **Security Hardened** | SSH hardening, firewall, fail2ban, audit logging | ✅ |
 | 📊 **SkyOne Dashboard** | Built-in monitoring dashboard on port 7070 | ✅ |
-| 🔧 **Multi-Client Support** | Geth stable, Geth PR5, Erigon | ✅ |
+| 🔧 **Multi-Client Support** | Geth stable, Geth PR5, Erigon, Nethermind, Reth | ✅ |
 | 🌐 **Multi-Network** | Mainnet, Testnet (Apothem), Devnet | ✅ |
 | 📡 **SkyNet Integration** | Auto-registers with XDC SkyNet for fleet monitoring | ✅ |
 | 💾 **Fast Sync** | Snapshot download with resume support | ✅ |
@@ -97,25 +97,25 @@ Your node will be running and syncing within 5 minutes. Access the SkyOne dashbo
 
 ## 🔧 Multi-Client Support
 
-XDC Node Setup supports **three different clients** for improved network diversity and resilience:
+XDC Node Setup supports **five different clients** for improved network diversity and resilience:
 
 ### Client Comparison
 
-| Feature | XDC Stable | XDC Geth PR5 | Erigon-XDC |
-|---------|------------|--------------|------------|
-| **Version** | v2.6.8 | Latest | Latest |
-| **Type** | Official Docker | Source build | Source build |
-| **Build Time** | Instant | ~10-15 min | ~10-15 min |
-| **RPC Port** | 8545 | 8545 | **8547** |
-| **Auth RPC Port** | N/A | N/A | **8561** |
-| **Private API** | N/A | N/A | **9091** |
-| **P2P Port** | 30303 | 30303 | **30304** + 30311 |
-| **P2P Protocol** | eth/63 | eth/63 | eth/63 + eth/68 |
-| **XDC Peer Compatible** | ✅ Yes | ✅ Yes | ✅ Port 30304 only |
-| **Sync Speed** | Standard | Standard | Fast |
-| **Disk Usage** | ~500GB | ~500GB | ~400GB |
-| **Memory** | 4GB+ | 4GB+ | **8GB+** |
-| **Status** | Production | Testing | **Experimental** |
+| Feature | XDC Stable | XDC Geth PR5 | Erigon-XDC | Nethermind-XDC | Reth-XDC |
+|---------|------------|--------------|------------|----------------|----------|
+| **Version** | v2.6.8 | Latest | Latest | Latest | Latest |
+| **Type** | Official Docker | Source build | Source build | .NET build | Rust build |
+| **Build Time** | Instant | ~10-15 min | ~10-15 min | ~10-15 min | ~20-30 min |
+| **RPC Port** | 8545 | 8545 | **8547** | **8558** | **7073** |
+| **Auth RPC Port** | N/A | N/A | **8561** | N/A | N/A |
+| **Private API** | N/A | N/A | **9091** | N/A | N/A |
+| **P2P Port** | 30303 | 30303 | **30304** + 30311 | **30306** | **40303** |
+| **P2P Protocol** | eth/63 | eth/63 | eth/63 + eth/68 | eth/100 | eth/100 |
+| **XDC Peer Compatible** | ✅ Yes | ✅ Yes | ✅ Port 30304 only | ✅ Yes | ✅ Yes |
+| **Sync Speed** | Standard | Standard | Fast | Very Fast | Very Fast |
+| **Disk Usage** | ~500GB | ~500GB | ~400GB | ~350GB | ~300GB |
+| **Memory** | 4GB+ | 4GB+ | **8GB+** | **12GB+** | **16GB+** |
+| **Status** | Production | Testing | **Experimental** | **Beta** | **Alpha** |
 
 ### Selecting a Client
 
@@ -137,8 +137,10 @@ Client Selection
 1) XDC Stable (v2.6.8) - Official Docker image (recommended)
 2) XDC Geth PR5 - Latest geth with XDPoS (builds from source)
 3) Erigon-XDC - Multi-client diversity, experimental
+4) Nethermind-XDC - .NET-based client with eth/100 protocol (beta)
+5) Reth-XDC - Rust-based execution client, fastest sync (alpha)
 
-Select client [1-3] (default: 1):
+Select client [1-5] (default: 1):
 ```
 
 ### Erigon Client
@@ -152,6 +154,30 @@ The **Erigon-XDC** client provides multi-client diversity with a dual-sentry arc
 > ⚠️ **WARNING - P2P Port Compatibility**
 > 
 > **Port 30304 (eth/63)** is for **XDC peers** — this is the ONLY port compatible with XDC geth nodes.
+
+### Nethermind Client
+
+The **Nethermind-XDC** client is a .NET-based implementation with eth/100 protocol support:
+
+- **eth/100 protocol** — Full compatibility with XDC Network
+- **RPC** on port **8558** — JSON-RPC API endpoint
+- **P2P** on port **30306** — Connects to all XDC peers
+- **Fast sync** — Optimized sync speed and reduced disk usage
+
+### Reth Client
+
+The **Reth-XDC** client is a Rust-based execution client offering cutting-edge performance:
+
+- **Rust implementation** — Memory-safe, high-performance execution engine
+- **RPC** on port **7073** — JSON-RPC API endpoint
+- **P2P** on port **40303** — XDC Network peer connectivity
+- **Discovery** on port **40304** — UDP peer discovery
+- **Fastest sync** — Optimized database design for rapid initial sync
+- **Requires debug.tip** — Manual sync tip hash required (no CL available)
+
+> ⚠️ **ALPHA STATUS**
+> 
+> Reth-XDC is in **early alpha**. Requires more memory (16GB+) and needs `--debug.tip` hash for syncing.
 > 
 > **Port 30311 (eth/68)** is NOT compatible with XDC geth nodes — it uses a newer Ethereum protocol.
 > 
@@ -168,6 +194,8 @@ For complete Erigon setup instructions, see [**docs/ERIGON.md**](docs/ERIGON.md)
 xdc start --client stable
 xdc start --client geth-pr5
 xdc start --client erigon
+xdc start --client nethermind
+xdc start --client reth
 
 # Check current client
 xdc client

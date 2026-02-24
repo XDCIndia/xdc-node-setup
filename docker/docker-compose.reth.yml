@@ -1,0 +1,96 @@
+#==============================================================================
+# XDC Node Docker Compose — Reth Client Override
+# Usage: docker compose -f docker-compose.yml -f docker-compose.reth.yml up -d
+# Or simply: xdc start --client reth
+#==============================================================================
+
+services:
+  xdc-node:
+    image: anilchinchawale/rethx:latest
+    platform: linux/amd64
+    container_name: xdc-node-reth
+    restart: always
+    ports:
+      - "${RETH_P2P_PORT:-40303}:40303"
+      - "${RETH_P2P_PORT:-40303}:40303/udp"
+      - "${RETH_DISCOVERY_PORT:-40304}:40304/udp"
+      - "127.0.0.1:${RETH_RPC_PORT:-7073}:7073"
+    volumes:
+      - ../${NETWORK:-mainnet}/reth-db:/work/xdcchain
+      - ./reth/start-reth.sh:/start.sh:ro
+      - ../${NETWORK:-mainnet}/.xdc-node/reth.toml:/reth/config.toml:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - NETWORK=${NETWORK:-mainnet}
+      - SYNC_MODE=${SYNC_MODE:-full}
+      - RPC_PORT=7073
+      - P2P_PORT=40303
+      - DISCOVERY_PORT=40304
+      - INSTANCE_NAME=${INSTANCE_NAME:-Reth_XDC_Node}
+      - DEBUG_TIP=${DEBUG_TIP:-}
+      - BOOTNODES=${BOOTNODES:-}
+      - METRICS_ENABLED=${METRICS_ENABLED:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    entrypoint: ["/bin/bash", "/start.sh"]
+    networks:
+      - xdc-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:7073 -X POST -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' | grep -q 'result' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 16G
+        reservations:
+          cpus: '2'
+          memory: 8G
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+
+  # SkyOne agent for Reth — connects to reth's internal RPC
+  xdc-agent:
+    image: anilchinchawale/xdc-agent:latest
+    platform: linux/amd64
+    container_name: xdc-agent-reth
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${RETH_DASHBOARD_PORT:-7073}:3000"
+    volumes:
+      - ./skynet-agent.sh:/agent.sh:ro
+      - ../${NETWORK:-mainnet}/.xdc-node/skynet-reth.conf:/etc/xdc-node/skynet.conf
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/host/proc:ro
+      - ../${NETWORK:-mainnet}/.xdc-node/logs:/var/log/xdc
+    environment:
+      - RPC_URL=http://xdc-node:7073
+      - NODE_RPC_PORT=7073
+      - INSTANCE_NAME=${INSTANCE_NAME:-Reth_XDC_Node}
+      - SKYNET_CONF=/etc/xdc-node/skynet.conf
+      - SKYNET_API_KEY=${SKYNET_API_KEY:-}
+      - SKYNET_NODE_ID=${SKYNET_NODE_ID:-}
+      - SKYNET_NODE_NAME=${SKYNET_NODE_NAME:-xdc-reth-mainnet}
+      - XDC_CONTAINER_NAME=xdc-node-reth
+      - NEXT_PUBLIC_REFRESH_INTERVAL=10
+      - DASHBOARD_AUTH_ENABLED=${DASHBOARD_AUTH_ENABLED:-false}
+      - DASHBOARD_USER=${DASHBOARD_USER:-admin}
+      - DASHBOARD_PASS=${DASHBOARD_PASS:-xdc-skyone}
+    depends_on:
+      xdc-node:
+        condition: service_started
+
+networks:
+  xdc-network:
+    driver: bridge

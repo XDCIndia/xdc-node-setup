@@ -441,6 +441,10 @@ detect_client() {
         echo "XDPoSChain"
     elif pgrep -x "erigon" &>/dev/null; then
         echo "erigon-xdc"
+    elif pgrep -f "xdc-reth" &>/dev/null; then
+        echo "reth"
+    elif docker ps --format '{{.Names}}' 2>/dev/null | grep -q "xdc-node-reth"; then
+        echo "reth"
     else
         echo "unknown"
     fi
@@ -745,14 +749,22 @@ EOF
         local rpc_url="${XDC_RPC_URL:-http://localhost:8545}"
         local mainnet_rpc="${MAINNET_RPC_URL:-https://erpc.xinfin.network}"
         
-        # Check if multi-client mode is active (both geth and erigon running)
+        # Check if multi-client mode is active (multiple clients running)
         local geth_running=false
         local erigon_running=false
+        local nethermind_running=false
+        local reth_running=false
         if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^xdc-node$"; then
             geth_running=true
         fi
         if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^xdc-node-erigon$"; then
             erigon_running=true
+        fi
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^xdc-node-nethermind$"; then
+            nethermind_running=true
+        fi
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^xdc-node-reth$"; then
+            reth_running=true
         fi
         
         # Helper function to get client status
@@ -3485,8 +3497,12 @@ HELP
         
         # Detect client type from version string
         local detected_client="unknown"
-        if [[ "$client_version" == *"erigon"* ]]; then
+        if [[ "$client_version" == *"reth"* ]] || [[ "$client_version" == *"Reth"* ]]; then
+            detected_client="Reth-XDC"
+        elif [[ "$client_version" == *"erigon"* ]]; then
             detected_client="Erigon-XDC"
+        elif [[ "$client_version" == *"nethermind"* ]] || [[ "$client_version" == *"Nethermind"* ]]; then
+            detected_client="Nethermind-XDC"
         elif [[ "$client_version" == *"feature/xdpos"* ]] || [[ "$client_version" == *"pr5"* ]]; then
             detected_client="XDC Geth PR5"
         elif [[ "$client_version" == *"XDC"* ]]; then
