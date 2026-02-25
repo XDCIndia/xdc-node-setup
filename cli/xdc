@@ -4680,24 +4680,18 @@ EOF
         verbose "Checking for IPC socket in container: $ipc_path"
         if docker exec "$container" test -S "$ipc_path" 2>/dev/null; then
             info "Attaching via IPC: $ipc_path (inside container $container)"
-            if ! docker exec -it "$container" XDC attach "$ipc_path" 2>/dev/null; then
-                # Try with 'xdc' command instead of 'XDC'
-                docker exec -it "$container" xdc attach "$ipc_path" || {
-                    error "Failed to attach via IPC"
-                    return 1
-                }
+            if ! docker exec -it "$container" /usr/local/bin/XDC attach "$ipc_path" 2>/dev/null; then
+                error "Failed to attach via IPC"
+                return 1
             fi
         else
             # IPC not available - fall back to RPC
             local rpc_url="${target:-http://xdc-node:8545}"
             warn "IPC socket not found in container, falling back to RPC"
             info "Attaching via RPC: $rpc_url"
-            if ! docker exec -it "$container" XDC attach "$rpc_url" 2>/dev/null; then
-                # Try with 'xdc' command
-                docker exec -it "$container" xdc attach "$rpc_url" || {
-                    error "Failed to attach via RPC. Is the node running?"
-                    return 1
-                }
+            if ! docker exec -it "$container" /usr/local/bin/XDC attach "$rpc_url" 2>/dev/null; then
+                error "Failed to attach via RPC. Is the node running?"
+                return 1
             fi
         fi
     else
