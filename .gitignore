@@ -174,3 +174,10 @@ node_modules/
 **/.env
 *.env
 !.env.example
+
+# Security: Never commit credentials
+**/.env
+**/.pwd
+!**/.env.example
+*.key
+*.keystore
