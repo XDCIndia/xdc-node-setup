@@ -1,221 +1,77 @@
 #!/bin/bash
-#===============================================================================
-# Common Utilities Library for XDC Node Docker Scripts
-# Shared functions across mainnet, apothem, testnet, and devnet start scripts
-#===============================================================================
+# Common utility functions shared across XDC Node Setup scripts
+# Avoids duplication of logging, RPC, and helper functions
 
-# Prevent multiple sourcing
-[[ -n "${XDC_COMMON_SOURCED:-}" ]] && return 0
-XDC_COMMON_SOURCED=1
+# Colors
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[0;34m'
+readonly NC='\033[0m'
 
-#===============================================================================
-# Configuration Loading
-# Supports: .conf (bash), .toml (TOML), .json (JSON)
-#===============================================================================
+# Logging functions
+log() { echo -e "${GREEN}✓${NC} $1"; }
+info() { echo -e "${BLUE}ℹ${NC} $1"; }
+warn() { echo -e "${YELLOW}⚠${NC} $1" >&2; }
+error() { echo -e "${RED}✗${NC} $1" >&2; }
+die() { error "$1"; exit 1; }
 
-load_config() {
-    local config_file="$1"
-    local ext="${config_file##*.}"
+# RPC helper
+rpc_call() {
+    local method="$1"
+    local params="${2:-[]}"
+    local rpc_url="${RPC_URL:-http://127.0.0.1:8545}"
     
-    case "$ext" in
-        conf|sh)
-            # shellcheck source=/dev/null
-            source "$config_file"
-            echo "Loaded bash config from $config_file"
-            ;;
-        toml)
-            # Section-aware TOML parser - prefixes keys with section name
-            local section=""
-            while IFS= read -r line; do
-                # Skip comments and empty lines
-                [[ "$line" =~ ^[[:space:]]*# ]] && continue
-                [[ -z "${line// /}" ]] && continue
-                
-                # Track section headers like [Node.HTTP]
-                if [[ "$line" =~ ^[[:space:]]*\[([^]]+)\] ]]; then
-                    section="${BASH_REMATCH[1]}"
-                    # Normalize: Node.HTTP → HTTP, Node.WS → WS, Node.P2P → P2P
-                    section="${section##*.}"
-                    continue
-                fi
-                
-                # Parse key = "value" or key = number (skip arrays)
-                if [[ "$line" =~ ^[[:space:]]*([a-zA-Z_][a-zA-Z0-9_]*)[[:space:]]*=[[:space:]]*(.+)$ ]]; then
-                    local key="${BASH_REMATCH[1]}"
-                    local value="${BASH_REMATCH[2]}"
-                    # Skip array values
-                    [[ "$value" == "["* ]] && continue
-                    # Remove quotes if present
-                    value="${value%\"}"
-                    value="${value#\"}"
-                    # Remove trailing comments
-                    value="${value%%#*}"
-                    # Remove quotes if present
-                    value="${value%\"}"
-                    value="${value#\"}"
-                    # Remove ALL trailing whitespace
-                    value="${value%% }"
-                    while [[ "$value" =~ [[:space:]]$ ]]; do value="${value%?}"; done
-                    # Export both section-prefixed and plain key
-                    local ukey="${key^^}"
-                    local usection="${section^^}"
-                    [[ -n "$section" ]] && export "${usection}_${ukey}=$value"
-                    export "${ukey}=$value"
-                fi
-            done < "$config_file"
-            echo "Loaded TOML config from $config_file"
-            ;;
-        json)
-            # Simple JSON parser using jq if available
-            if command -v jq &>/dev/null; then
-                while IFS='=' read -r key value; do
-                    export "$key=$value"
-                done < <(jq -r 'to_entries | .[] | "\(.key)=\(.value)"' "$config_file")
-                echo "Loaded JSON config from $config_file"
-            else
-                echo "WARN: jq not available, cannot parse JSON config"
-            fi
-            ;;
-    esac
+    curl -sf -m 10 -X POST "$rpc_url" \
+        -H "Content-Type: application/json" \
+        -d "{\"jsonrpc\":\"2.0\",\"method\":\"$method\",\"params\":$params,\"id\":1}"
 }
 
-# Try to load config from standard locations
-# Usage: load_config_standard [custom_config_path]
-load_config_standard() {
-    local custom_config="${1:-}"
-    local config_loaded=false
+# Hex to decimal conversion
+hex_to_dec() {
+    local hex="$1"
+    hex="${hex#0x}"  # Remove 0x prefix if present
+    echo $((16#$hex))
+}
+
+# Format bytes to human readable
+format_bytes() {
+    local bytes=$1
+    if (( bytes < 1024 )); then
+        echo "${bytes}B"
+    elif (( bytes < 1048576 )); then
+        echo "$(( bytes / 1024 ))KB"
+    elif (( bytes < 1073741824 )); then
+        echo "$(( bytes / 1048576 ))MB"
+    else
+        echo "$(( bytes / 1073741824 ))GB"
+    fi
+}
+
+# Wei to XDC conversion
+wei_to_xdc() {
+    local wei=$1
+    awk "BEGIN {printf \"%.2f\", $wei / 1000000000000000000}"
+}
+
+# Check if command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Ensure required commands are available
+check_prerequisites() {
+    local required_cmds=("$@")
+    local missing=()
     
-    for config_file in "$custom_config" "${XDC_CONFIG}" "/etc/xdc-node/config.toml" "/etc/xdc-node/xdc.conf" "/work/config.toml" "/work/xdc.conf"; do
-        if [[ -f "$config_file" ]]; then
-            load_config "$config_file"
-            config_loaded=true
-            break
+    for cmd in "${required_cmds[@]}"; do
+        if ! command_exists "$cmd"; then
+            missing+=("$cmd")
         fi
     done
     
-    [[ "$config_loaded" == "true" ]]
-}
-
-#===============================================================================
-# XDC Binary Detection
-#===============================================================================
-
-ensure_xdc_binary() {
-    # Ensure XDC binary is available (some images use XDC-mainnet instead of XDC)
-    if ! command -v XDC &>/dev/null; then
-        for bin in XDC-mainnet XDC-testnet XDC-devnet XDC-local; do
-            if command -v "$bin" &>/dev/null; then
-                for dest in /run/xdc/XDC /tmp/XDC /var/tmp/XDC /usr/bin/XDC; do 
-                    cp "$(which "$bin")" "$dest" 2>/dev/null && chmod +x "$dest" 2>/dev/null && break
-                done
-                echo "Resolved $bin → XDC"
-                break
-            fi
-        done
-    fi
-    
-    command -v XDC &>/dev/null || { 
-        echo "FATAL: No XDC binary found!" &>2
-        exit 1
-    }
-}
-
-#===============================================================================
-# RPC Style Detection
-# Detects XDC client version to determine flag style
-# Old XDPoS (v2.x): uses --rpc, --rpcaddr, --rpcport
-# New geth-based: uses --http, --http.addr, --http.port
-#===============================================================================
-
-detect_rpc_style() {
-    # v2.6.8 supports --http-addr (dash) but NOT --http.addr (dot)
-    # Newer geth supports --http.addr (dot)
-    # Check for dot-style first (true new geth), then dash-style, then old --rpc
-    if XDC --help 2>&1 | grep -q "\-\-http\.addr"; then
-        echo "new"       # geth-style --http.addr --http.port
-    elif XDC --help 2>&1 | grep -q "\-\-http-addr"; then
-        echo "dash"      # v2.6.8 style --http-addr --http-port
-    else
-        echo "old"       # legacy --rpcaddr --rpcport
+    if [ ${#missing[@]} -gt 0 ]; then
+        die "Missing required commands: ${missing[*]}"
     fi
 }
 
-#===============================================================================
-# Bootnode Loading
-#===============================================================================
-
-load_bootnodes() {
-    local bootnodes_file="${1:-/work/bootnodes.list}"
-    local bootnodes=""
-    
-    if [ -f "$bootnodes_file" ]; then
-        while IFS= read -r line; do
-            [ -z "$line" ] && continue
-            [ -z "$bootnodes" ] && bootnodes="$line" || bootnodes="${bootnodes},$line"
-        done < "$bootnodes_file"
-    fi
-    
-    echo "$bootnodes"
-}
-
-#===============================================================================
-# Logging Helpers
-#===============================================================================
-
-log_info() {
-    echo "[INFO] $1"
-}
-
-log_warn() {
-    echo "[WARN] $1" &>2
-}
-
-log_error() {
-    echo "[ERROR] $1" &>2
-}
-
-#===============================================================================
-# Wallet/Account Management
-#===============================================================================
-
-get_or_create_wallet() {
-    local datadir="${1:-/work/xdcchain}"
-    local password_file="${2:-/work/.pwd}"
-    local wallet=""
-    
-    if [ ! -d "$datadir/keystore" ] || [ -z "$(ls -A "$datadir/keystore/" 2>/dev/null)" ]; then
-        # Create new account
-        wallet=$(XDC account new --password "$password_file" --datadir "$datadir" 2>/dev/null | awk -F '[{}]' '{print $2}')
-        if [ -n "$wallet" ]; then
-            echo "$wallet" > "$datadir/coinbase.txt"
-        fi
-    else
-        # Get existing account
-        wallet=$(XDC account list --datadir "$datadir" 2>/dev/null | head -n 1 | awk -F '[{}]' '{print $2}')
-    fi
-    
-    echo "$wallet"
-}
-
-#===============================================================================
-# Network Detection
-#===============================================================================
-
-get_network_name() {
-    local chain_id="$1"
-    case "$chain_id" in
-        50) echo "mainnet" ;;
-        51) echo "apothem" ;;
-        551) echo "devnet" ;;
-        *) echo "unknown" ;;
-    esac
-}
-
-# Export functions for use in other scripts
-export -f load_config load_config_standard 2>/dev/null || true
-export -f ensure_xdc_binary 2>/dev/null || true
-export -f detect_rpc_style 2>/dev/null || true
-export -f load_bootnodes 2>/dev/null || true
-export -f log_info log_warn log_error 2>/dev/null || true
-export -f get_or_create_wallet 2>/dev/null || true
-export -f get_network_name 2>/dev/null || true
