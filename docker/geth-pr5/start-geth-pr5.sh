@@ -3,8 +3,8 @@ set -e
 
 #==============================================================================
 # XDC Geth PR5 Start Script (POSIX sh compatible)
-# Feature branch: feature/xdpos-consensus
-# Fixed: Removed bash-isms for Alpine compatibility
+# Feature branch: feature/xdpos-consensus  
+# Compatible with geth 1.17+ (new-style flags)
 #==============================================================================
 
 # Config files
@@ -14,102 +14,62 @@ BOOTNODES_FILE="/work/bootnodes.list"
 PWD_FILE="/work/.pwd"
 DATADIR="/work/xdcchain"
 
+echo "=============================================="
 echo "Starting XDC Geth PR5 node..."
 echo "Datadir: $DATADIR"
-echo "Config: $CONFIG_FILE"
-
-# ============================================================
-# Load config.toml - POSIX sh compatible parser
-# ============================================================
-load_config() {
-    config_file="$1"
-    [ ! -f "$config_file" ] && return
-    
-    section=""
-    while IFS= read -r line || [ -n "$line" ]; do
-        # Skip comments and empty lines
-        case "$line" in
-            \#*|"") continue ;;
-        esac
-        
-        # Track section headers [section.name]
-        case "$line" in
-            \[*\])
-                section=$(echo "$line" | sed 's/.*\[\([^]]*\)\].*/\1/' | sed 's/.*\.//')
-                continue
-                ;;
-        esac
-        
-        # Parse key = "value" or key = value
-        key=$(echo "$line" | sed -n 's/^[[:space:]]*\([a-zA-Z_][a-zA-Z0-9_]*\)[[:space:]]*=.*/\1/p')
-        [ -z "$key" ] && continue
-        
-        value=$(echo "$line" | sed 's/^[^=]*=[[:space:]]*//' | sed 's/^"//' | sed 's/"$//' | sed 's/[[:space:]]*#.*//')
-        
-        # Skip array values
-        case "$value" in
-            \[*) continue ;;
-        esac
-        
-        # Export as uppercase
-        ukey=$(echo "$key" | tr '[:lower:]' '[:upper:]')
-        if [ -n "$section" ]; then
-            usection=$(echo "$section" | tr '[:lower:]' '[:upper:]')
-            eval "export ${usection}_${ukey}='$value'"
-        fi
-        eval "export ${ukey}='$value'"
-    done < "$config_file"
-    echo "Loaded config from $config_file"
-}
-
-if [ -f "$CONFIG_FILE" ]; then
-    load_config "$CONFIG_FILE"
-fi
+echo "=============================================="
 
 # ============================================================
 # Defaults
 # ============================================================
 SYNC_MODE="${SYNC_MODE:-full}"
 GC_MODE="${GC_MODE:-full}"
-LOG_LEVEL="${LEVEL:-2}"
+LOG_LEVEL="${LEVEL:-3}"
 INSTANCE_NAME="${INSTANCE_NAME:-XDC_Geth_PR5}"
 RPC_ADDR="${HTTP_ADDR:-${ADDR:-0.0.0.0}}"
 RPC_PORT="${HTTP_PORT:-${PORT:-8545}}"
-RPC_API="${HTTP_API:-${API:-admin,eth,net,web3,XDPoS}}"
-RPC_CORS_DOMAIN="${HTTP_CORS_DOMAIN:-${CORS_DOMAIN:-*}}"
-RPC_VHOSTS="${HTTP_VHOSTS:-${VHOSTS:-*}}"
+RPC_API="${HTTP_API:-admin,eth,net,web3}"
+RPC_CORS_DOMAIN="${HTTP_CORS_DOMAIN:-*}"
+RPC_VHOSTS="${HTTP_VHOSTS:-*}"
 WS_ADDR="${WS_ADDR:-0.0.0.0}"
 WS_PORT="${WS_PORT:-8546}"
-WS_API="${WS_API:-eth,net,web3,XDPoS}"
+WS_API="${WS_API:-eth,net,web3}"
 WS_ORIGINS="${WS_ORIGINS:-*}"
+NETWORK_ID="${NETWORK_ID:-50}"
 
-echo "Config: sync=$SYNC_MODE gc=$GC_MODE log=$LOG_LEVEL"
+echo "Config: sync=$SYNC_MODE gc=$GC_MODE network=$NETWORK_ID"
 
 # ============================================================
-# Init or recover wallet
+# Init genesis if needed
 # ============================================================
 if [ ! -d "$DATADIR/XDC/chaindata" ]; then
-    echo "Initializing new node..."
+    echo "No existing chaindata found, initializing..."
     
-    # Create wallet
+    # Create wallet if password file exists
     if [ -f "$PWD_FILE" ]; then
+        echo "Creating new wallet..."
         wallet=$(XDC account new --password "$PWD_FILE" --datadir "$DATADIR" 2>/dev/null | grep -oE '\{[^}]+\}' | tr -d '{}' | head -1)
-        echo "$wallet" > "$DATADIR/coinbase.txt"
+        [ -n "$wallet" ] && echo "$wallet" > "$DATADIR/coinbase.txt"
+        echo "Wallet: $wallet"
     fi
     
     # Initialize genesis
     if [ -f "$GENESIS_FILE" ]; then
-        echo "Initializing Genesis Block from $GENESIS_FILE"
+        echo "Initializing Genesis Block..."
         XDC init --datadir "$DATADIR" "$GENESIS_FILE"
+        echo "Genesis initialized successfully"
     else
-        echo "WARNING: No genesis file found at $GENESIS_FILE"
+        echo "ERROR: No genesis file at $GENESIS_FILE"
+        exit 1
     fi
 else
-    echo "Existing chaindata found, recovering wallet..."
-    wallet=$(XDC account list --datadir "$DATADIR" 2>/dev/null | head -n 1 | grep -oE '\{[^}]+\}' | tr -d '{}')
+    echo "Existing chaindata found at $DATADIR/XDC/chaindata"
+    # Get existing wallet
+    if [ -f "$PWD_FILE" ]; then
+        wallet=$(XDC account list --datadir "$DATADIR" 2>/dev/null | head -n 1 | grep -oE '\{[^}]+\}' | tr -d '{}')
+        [ -n "$wallet" ] && echo "Wallet: $wallet"
+    fi
 fi
-
-[ -n "$wallet" ] && echo "Wallet: $wallet"
 
 # ============================================================
 # Bootnodes
@@ -129,11 +89,12 @@ if [ -f "$BOOTNODES_FILE" ]; then
 fi
 
 # ============================================================
-# Get external IP for NAT
+# Get external IP
 # ============================================================
 if [ -z "$EXTERNAL_IP" ]; then
     EXTERNAL_IP=$(wget -qO- https://checkip.amazonaws.com 2>/dev/null || curl -s https://checkip.amazonaws.com 2>/dev/null || echo "")
 fi
+[ -n "$EXTERNAL_IP" ] && echo "External IP: $EXTERNAL_IP"
 
 # ============================================================
 # Ethstats
@@ -141,24 +102,25 @@ fi
 netstats="${INSTANCE_NAME}:xinfin_xdpos_hybrid_network_stats@stats.xinfin.network:3000"
 
 # ============================================================
-# Build command line args
+# Build command line (GP5 / geth 1.17+ style flags)
 # ============================================================
 ARGS="--datadir $DATADIR"
-ARGS="$ARGS --networkid ${NETWORK_ID:-50}"
+ARGS="$ARGS --networkid $NETWORK_ID"
 ARGS="$ARGS --port 30303"
 ARGS="$ARGS --syncmode $SYNC_MODE"
 ARGS="$ARGS --gcmode $GC_MODE"
 ARGS="$ARGS --verbosity $LOG_LEVEL"
 
-# Wallet unlock
+# Miner settings (new geth 1.17+ style)
+ARGS="$ARGS --miner.gasprice 1"
+ARGS="$ARGS --miner.gaslimit 420000000"
+
+# Wallet unlock for mining
 if [ -n "$wallet" ] && [ -f "$PWD_FILE" ]; then
     ARGS="$ARGS --password $PWD_FILE"
     ARGS="$ARGS --unlock $wallet"
     ARGS="$ARGS --mine"
 fi
-
-ARGS="$ARGS --gasprice 1"
-ARGS="$ARGS --targetgaslimit 420000000"
 
 # Bootnodes
 [ -n "$bootnodes" ] && ARGS="$ARGS --bootnodes $bootnodes"
@@ -169,10 +131,7 @@ ARGS="$ARGS --targetgaslimit 420000000"
 # Ethstats
 ARGS="$ARGS --ethstats $netstats"
 
-# XDCx data dir
-ARGS="$ARGS --XDCx.datadir $DATADIR/XDCx"
-
-# HTTP/RPC - GP5 uses new-style --http.* flags
+# HTTP/RPC (geth 1.17+ style)
 ARGS="$ARGS --http"
 ARGS="$ARGS --http.addr $RPC_ADDR"
 ARGS="$ARGS --http.port $RPC_PORT"
@@ -187,12 +146,12 @@ ARGS="$ARGS --ws.port $WS_PORT"
 ARGS="$ARGS --ws.api $WS_API"
 ARGS="$ARGS --ws.origins $WS_ORIGINS"
 
-# Store reward for consensus
-ARGS="$ARGS --store-reward"
+# Pass through any extra args
+ARGS="$ARGS $*"
 
 echo "=============================================="
-echo "Starting XDC Geth PR5..."
-echo "Args: $ARGS"
+echo "Starting XDC with args:"
+echo "$ARGS" | tr ' ' '\n' | grep -v '^$'
 echo "=============================================="
 
 # shellcheck disable=SC2086
