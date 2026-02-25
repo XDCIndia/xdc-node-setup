@@ -10,8 +10,8 @@ services:
     container_name: xdc-node-gp5
     restart: always
     ports:
-      - "${P2P_PORT:-30321}:30303"
-      - "${P2P_PORT:-30321}:30303/udp"
+      - "${P2P_PORT:-30303}:30303"
+      - "${P2P_PORT:-30303}:30303/udp"
       - "${RPC_BIND:-127.0.0.1}:${RPC_PORT:-8582}:8545"
       - "${WS_BIND:-127.0.0.1}:${WS_PORT:-8583}:8546"
     volumes:
