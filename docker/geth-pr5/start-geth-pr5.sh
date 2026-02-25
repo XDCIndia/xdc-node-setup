@@ -131,20 +131,20 @@ fi
 # Ethstats
 ARGS="$ARGS --ethstats $netstats"
 
-# HTTP/RPC (geth 1.17+ style)
-ARGS="$ARGS --http"
-ARGS="$ARGS --http.addr $RPC_ADDR"
-ARGS="$ARGS --http.port $RPC_PORT"
-ARGS="$ARGS --http.api $RPC_API"
-ARGS="$ARGS --http.corsdomain $RPC_CORS_DOMAIN"
-ARGS="$ARGS --http.vhosts $RPC_VHOSTS"
+# HTTP/RPC (XDC uses old geth-style flags, not 1.17+ --http.* syntax)
+ARGS="$ARGS --rpc"
+ARGS="$ARGS --rpcaddr $RPC_ADDR"
+ARGS="$ARGS --rpcport $RPC_PORT"
+ARGS="$ARGS --rpcapi $RPC_API"
+ARGS="$ARGS --rpccorsdomain $RPC_CORS_DOMAIN"
+ARGS="$ARGS --rpcvhosts $RPC_VHOSTS"
 
-# WebSocket
+# WebSocket (XDC uses old geth-style flags)
 ARGS="$ARGS --ws"
-ARGS="$ARGS --ws.addr $WS_ADDR"
-ARGS="$ARGS --ws.port $WS_PORT"
-ARGS="$ARGS --ws.api $WS_API"
-ARGS="$ARGS --ws.origins $WS_ORIGINS"
+ARGS="$ARGS --wsaddr $WS_ADDR"
+ARGS="$ARGS --wsport $WS_PORT"
+ARGS="$ARGS --wsapi $WS_API"
+ARGS="$ARGS --wsorigins $WS_ORIGINS"
 
 # Pass through any extra args
 ARGS="$ARGS $*"
