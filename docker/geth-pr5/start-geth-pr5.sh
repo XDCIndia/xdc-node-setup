@@ -111,9 +111,10 @@ ARGS="$ARGS --syncmode $SYNC_MODE"
 ARGS="$ARGS --gcmode $GC_MODE"
 ARGS="$ARGS --verbosity $LOG_LEVEL"
 
-# Miner settings (GP5 / geth 1.17+ uses --miner.* style flags)
-ARGS="$ARGS --miner.gasprice 1"
-ARGS="$ARGS --miner.gaslimit 420000000"
+# Miner settings - use legacy flags for compatibility
+# Try --miner.gasprice first (new), fallback to --gasprice (legacy)
+ARGS="$ARGS --gasprice 1"
+ARGS="$ARGS --targetgaslimit 420000000"
 
 # Wallet unlock for mining
 if [ -n "$wallet" ] && [ -f "$PWD_FILE" ]; then
