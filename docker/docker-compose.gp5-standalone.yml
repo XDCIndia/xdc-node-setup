@@ -5,7 +5,7 @@
 
 services:
   xdc-node-gp5:
-    image: xdc-gp5:archive-bd941ae91
+    image: anilchinchawale/gx:gp5
     platform: linux/amd64
     container_name: xdc-node-gp5
     restart: always
