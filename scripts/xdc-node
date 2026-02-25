@@ -441,10 +441,6 @@ detect_client() {
         echo "XDPoSChain"
     elif pgrep -x "erigon" &>/dev/null; then
         echo "erigon-xdc"
-    elif pgrep -f "xdc-reth" &>/dev/null; then
-        echo "reth"
-    elif docker ps --format '{{.Names}}' 2>/dev/null | grep -q "xdc-node-reth"; then
-        echo "reth"
     else
         echo "unknown"
     fi
@@ -466,73 +462,6 @@ get_rpc_url() {
     else
         echo "$default_url"
     fi
-}
-
-# Start xdc-agent container for SkyNet monitoring + auto-heal
-_start_xdc_agent() {
-    local network="${1:-mainnet}"
-    local client="${2:-stable}"
-    local node_type="${3:-full}"
-    
-    info "Starting xdc-agent (SkyNet monitoring)..."
-    
-    # Check if agent is already running
-    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "xdc-agent"; then
-        info "xdc-agent already running, restarting with updated config..."
-        docker stop xdc-agent 2>/dev/null || true
-        docker rm xdc-agent 2>/dev/null || true
-    fi
-    
-    # Determine RPC port for the client
-    local agent_rpc_port="${RPC_PORT:-8545}"
-    case "$client" in
-        erigon)      agent_rpc_port="${ERIGON_RPC_PORT:-8547}" ;;
-        nethermind)  agent_rpc_port="${NM_RPC_PORT:-8558}" ;;
-        reth)        agent_rpc_port="${RETH_RPC_PORT:-7073}" ;;
-        geth-pr5)    agent_rpc_port="${GP5_RPC_PORT:-8557}" ;;
-    esac
-    
-    # Read SkyNet config if available
-    local skynet_url="${SKYNET_URL:-https://net.xdc.network}"
-    local skynet_node_id="${SKYNET_NODE_ID:-}"
-    local skynet_api_key="${SKYNET_API_KEY:-}"
-    
-    # Try to read from skynet.conf
-    local skynet_conf="../${network}/.xdc-node/skynet.conf"
-    if [[ -f "$skynet_conf" ]]; then
-        skynet_node_id=$(grep -E '^SKYNET_NODE_ID=' "$skynet_conf" 2>/dev/null | cut -d= -f2 || echo "")
-        skynet_api_key=$(grep -E '^SKYNET_API_KEY=' "$skynet_conf" 2>/dev/null | cut -d= -f2 || echo "")
-        skynet_url=$(grep -E '^SKYNET_URL=' "$skynet_conf" 2>/dev/null | cut -d= -f2 || echo "$skynet_url")
-    fi
-    
-    # Auto-generate node ID if not set
-    if [[ -z "$skynet_node_id" ]]; then
-        local hostname_short=$(hostname -s 2>/dev/null || echo "node")
-        skynet_node_id="xdc-${client}-${hostname_short}-${network}"
-        warn "No SKYNET_NODE_ID configured, using: $skynet_node_id"
-    fi
-    
-    # Ensure xdc-network exists
-    docker network create xdc-network 2>/dev/null || true
-    
-    # Run agent container
-    docker run -d \
-        --name xdc-agent \
-        --restart unless-stopped \
-        --network xdc-network \
-        -e RPC_URL="http://host.docker.internal:${agent_rpc_port}" \
-        -e SKYNET_URL="$skynet_url" \
-        -e SKYNET_NODE_ID="$skynet_node_id" \
-        -e SKYNET_API_KEY="$skynet_api_key" \
-        -e CLIENT_NAME="$client" \
-        -e NODE_TYPE="$node_type" \
-        -e NETWORK="$network" \
-        -e HEARTBEAT_INTERVAL=60 \
-        -v /var/run/docker.sock:/var/run/docker.sock:ro \
-        --add-host=host.docker.internal:host-gateway \
-        anilchinchawale/xdc-agent:v2 2>/dev/null && \
-        log "xdc-agent started (node: $skynet_node_id, rpc: :$agent_rpc_port)" || \
-        warn "Failed to start xdc-agent. Install with: docker pull anilchinchawale/xdc-agent:v2"
 }
 
 # Inject peers from bootnodes.list or SkyNet API
@@ -749,22 +678,14 @@ EOF
         local rpc_url="${XDC_RPC_URL:-http://localhost:8545}"
         local mainnet_rpc="${MAINNET_RPC_URL:-https://erpc.xinfin.network}"
         
-        # Check if multi-client mode is active (multiple clients running)
+        # Check if multi-client mode is active (both geth and erigon running)
         local geth_running=false
         local erigon_running=false
-        local nethermind_running=false
-        local reth_running=false
         if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^xdc-node$"; then
             geth_running=true
         fi
         if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^xdc-node-erigon$"; then
             erigon_running=true
-        fi
-        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^xdc-node-nethermind$"; then
-            nethermind_running=true
-        fi
-        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^xdc-node-reth$"; then
-            reth_running=true
         fi
         
         # Helper function to get client status
@@ -2580,8 +2501,6 @@ cmd_start() {
     local client_override=""
     local install_args=""
     local multi_client=false
-    local node_type=""
-    local with_agent=false
     
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -2594,31 +2513,24 @@ $(c BOLD)USAGE:$(c NC)
 
 $(c BOLD)DESCRIPTION:$(c NC)
     Starts the XDC node. If no configuration is found, runs install.sh first.
-    Supports running multiple clients simultaneously with monitoring agent.
+    Supports running both geth and erigon clients simultaneously.
 
 $(c BOLD)OPTIONS:$(c NC)
     --network NETWORK    Network: mainnet, testnet, devnet, apothem (default: mainnet)
-    --client CLIENT      Client: stable, geth-pr5, erigon, nethermind, reth (default: auto-detect)
-    --type TYPE          Node type: archive, full, snap (default: full)
-                           archive — Keep all historical state (largest storage)
-                           full    — Full validation, pruned state (default)
-                           snap    — Snap sync for fast initial sync (geth/nethermind only)
-    --agent              Start xdc-agent alongside the node (SkyNet monitoring + auto-heal)
-    --multi-client, --all Start all configured clients simultaneously
+    --client CLIENT      Client: stable, geth-pr5, erigon (default: auto-detect from config)
+    --multi-client, --all Start both geth AND erigon clients simultaneously
     --monitoring         Start with full monitoring stack (Prometheus, Grafana, etc.)
     --logging            Start with log aggregation stack (Loki, Promtail, Grafana)
     --help               Show this help
 
 $(c BOLD)EXAMPLES:$(c NC)
-    xdc-node start                                  # Start mainnet full node
-    xdc-node start --type archive                   # Start archive node (all state)
-    xdc-node start --type archive --agent           # Archive node + SkyNet agent
-    xdc-node start --client erigon --type archive   # Erigon archive node
-    xdc-node start --client nethermind --agent      # Nethermind + agent
-    xdc-node start --client geth-pr5 --type full    # GP5 full node
-    xdc-node start --network apothem                # Start Apothem testnet
-    xdc-node start --multi-client --agent           # All clients + agent
-    xdc-node start --monitoring                     # Start with monitoring stack
+    xdc-node start                           # Start mainnet with configured client (geth)
+    xdc-node start --monitoring              # Start with monitoring stack
+    xdc-node start --logging                 # Start with log aggregation (Loki)
+    xdc-node start --network testnet         # Start testnet
+    xdc-node start --client erigon           # Start erigon (standalone if geth running)
+    xdc-node start --multi-client            # Start both geth AND erigon
+    xdc-node start --all                     # Alias for --multi-client
 
 EOF
                 return 0
@@ -2631,18 +2543,6 @@ EOF
             --client)
                 client_override="$2"
                 shift 2
-                ;;
-            --type)
-                node_type="$2"
-                case "$node_type" in
-                    archive|full|snap) ;;
-                    *) die "Invalid node type '$node_type'. Use: archive, full, snap" ;;
-                esac
-                shift 2
-                ;;
-            --agent)
-                with_agent=true
-                shift
                 ;;
             --multi-client|--all)
                 multi_client=true
@@ -2659,12 +2559,6 @@ EOF
             *) shift ;;
         esac
     done
-    
-    # Default node type
-    : "${node_type:=full}"
-    
-    # Export node type for compose files
-    export XDC_NODE_TYPE="$node_type"
     
     # Check if configuration exists
     local config_dir="${INSTALL_DIR:-/opt/xdc-node}"
@@ -2863,18 +2757,9 @@ EOF
             echo -e "    RPC:        http://127.0.0.1:${erigon_rpc_port}"
             echo -e "    P2P:        :${erigon_p2p_port} (eth/63), :${erigon_p2p_68} (eth/68)"
             echo ""
-            echo -e "  $(c BOLD)Node Type:$(c NC) $node_type"
-            [[ "$with_agent" == "true" ]] && echo -e "  $(c BOLD)Agent:$(c NC)      ✅ SkyNet monitoring active"
-            echo ""
             echo -e "  $(c DIM)Check status:  xdc status$(c NC)"
             echo -e "  $(c DIM)View logs:     xdc logs --client erigon$(c NC)"
             echo ""
-            
-            # Start agent if requested
-            if [[ "$with_agent" == "true" ]]; then
-                _start_xdc_agent "$network" "multi" "$node_type"
-            fi
-            
             return 0
         fi
         
@@ -2967,28 +2852,6 @@ EOF
         # Build compose command with client and optional monitoring stack
         local compose_cmd="docker compose -f docker-compose.yml"
         
-        # --- Node type: set GC mode flags per client ---
-        # These env vars are picked up by compose files / entrypoints
-        local gcmode_flag=""
-        case "$node_type" in
-            archive)
-                export XDC_GCMODE="archive"
-                gcmode_flag="--gcmode archive"
-                info "Node type: ARCHIVE (all historical state preserved)"
-                ;;
-            snap)
-                export XDC_SYNCMODE="snap"
-                gcmode_flag="--syncmode snap"
-                info "Node type: SNAP sync (fast initial sync)"
-                ;;
-            full|*)
-                export XDC_GCMODE="full"
-                gcmode_flag="--gcmode full"
-                info "Node type: FULL (default)"
-                ;;
-        esac
-        export XDC_EXTRA_FLAGS="${XDC_EXTRA_FLAGS:-} $gcmode_flag"
-        
         # Add client-specific override
         case "$client" in
             erigon)
@@ -2996,14 +2859,10 @@ EOF
                 if [[ "$geth_running" != "true" ]]; then
                     if [[ -f "docker-compose.erigon.yml" ]]; then
                         compose_cmd="$compose_cmd -f docker-compose.erigon.yml"
-                        info "Using Erigon-XDC client"
+                        info "Using Erigon-XDC client (override mode)"
                     else
                         warn "Erigon compose file not found, using stable client"
                     fi
-                fi
-                # Erigon-specific: archive = --prune=nothing, full = default
-                if [[ "$node_type" == "archive" ]]; then
-                    export ERIGON_EXTRA_FLAGS="${ERIGON_EXTRA_FLAGS:-} --prune=nothing"
                 fi
                 ;;
             geth-pr5)
@@ -3012,34 +2871,6 @@ EOF
                     info "Using Geth PR5 client"
                 else
                     warn "Geth PR5 compose file not found, using stable client"
-                fi
-                ;;
-            nethermind)
-                if [[ -f "docker-compose.nethermind-standalone.yml" ]]; then
-                    compose_cmd="docker compose -f docker-compose.nethermind-standalone.yml"
-                    info "Using Nethermind-XDC client"
-                elif [[ -f "docker-compose.nethermind.yml" ]]; then
-                    compose_cmd="$compose_cmd -f docker-compose.nethermind.yml"
-                    info "Using Nethermind-XDC client (overlay)"
-                else
-                    warn "Nethermind compose file not found, using stable client"
-                fi
-                # Nethermind-specific node type
-                case "$node_type" in
-                    archive) export NM_EXTRA_FLAGS="${NM_EXTRA_FLAGS:-} --Pruning.Mode=None" ;;
-                    snap)    export NM_EXTRA_FLAGS="${NM_EXTRA_FLAGS:-} --Sync.FastSync=true" ;;
-                esac
-                ;;
-            reth)
-                if [[ -f "docker-compose.reth.yml" ]]; then
-                    compose_cmd="docker compose -f docker-compose.reth.yml"
-                    info "Using Reth-XDC client"
-                else
-                    warn "Reth compose file not found. Reth must be run manually."
-                fi
-                # Reth: archive = --full, otherwise default
-                if [[ "$node_type" == "archive" ]]; then
-                    export RETH_EXTRA_FLAGS="${RETH_EXTRA_FLAGS:-} --full"
                 fi
                 ;;
             stable|*)
@@ -3081,12 +2912,7 @@ EOF
             die "Failed to start XDC node. Check 'docker compose logs' for details."
         fi
         
-        log "XDC node started via docker compose ($client, $node_type)"
-        
-        # --- Start xdc-agent if requested ---
-        if [[ "$with_agent" == "true" ]]; then
-            _start_xdc_agent "$network" "$client" "$node_type"
-        fi
+        log "XDC node started via docker compose"
         
         # Wait for RPC
         sleep 5
@@ -3100,13 +2926,10 @@ EOF
         echo -e "$(c GREEN)$(c BOLD)  XDC Node is running!$(c NC)"
         echo -e "$(c GREEN)$(c BOLD)═══════════════════════════════════════════$(c NC)"
         echo ""
-        echo -e "  $(c BOLD)Client:$(c NC)     $client"
-        echo -e "  $(c BOLD)Type:$(c NC)       $node_type"
         echo -e "  $(c BOLD)Dashboard:$(c NC)  http://localhost:${dash_port}"
         echo -e "  $(c BOLD)RPC:$(c NC)        http://127.0.0.1:${rpc_port}"
         echo -e "  $(c BOLD)WebSocket:$(c NC)  ws://127.0.0.1:${ws_port}"
         echo -e "  $(c BOLD)P2P:$(c NC)        :${p2p_port}"
-        [[ "$with_agent" == "true" ]] && echo -e "  $(c BOLD)Agent:$(c NC)      ✅ SkyNet monitoring active"
         echo ""
         echo -e "  $(c DIM)Check status:  xdc status$(c NC)"
         echo -e "  $(c DIM)View logs:     xdc logs$(c NC)"
@@ -3497,12 +3320,8 @@ HELP
         
         # Detect client type from version string
         local detected_client="unknown"
-        if [[ "$client_version" == *"reth"* ]] || [[ "$client_version" == *"Reth"* ]]; then
-            detected_client="Reth-XDC"
-        elif [[ "$client_version" == *"erigon"* ]]; then
+        if [[ "$client_version" == *"erigon"* ]]; then
             detected_client="Erigon-XDC"
-        elif [[ "$client_version" == *"nethermind"* ]] || [[ "$client_version" == *"Nethermind"* ]]; then
-            detected_client="Nethermind-XDC"
         elif [[ "$client_version" == *"feature/xdpos"* ]] || [[ "$client_version" == *"pr5"* ]]; then
             detected_client="XDC Geth PR5"
         elif [[ "$client_version" == *"XDC"* ]]; then

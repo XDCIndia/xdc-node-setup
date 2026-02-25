@@ -1,84 +1,91 @@
-# XDC Node Configuration File (TOML format)
-# Place this file at /opt/xdc-node/config.toml
+# XDC Node Configuration (TOML format)
+# Generated during setup - edit and restart node to apply changes
 
-#==============================================================================
-# Network Configuration
-#==============================================================================
-[network]
-name = mainnet          # mainnet, testnet, devnet, or apothem
-instance_name = xdc-node
+[Node]
+DataDir = "/work/xdcchain"
+NetworkId = 50
+SyncMode = "full"
+GCMode = "full"
 
-#==============================================================================
-# Node Type
-#==============================================================================
-[node]
-type = full             # full, archive, masternode
-sync_mode = full        # full or fast
-gc_mode = full          # full or archive
+[Node.P2P]
+ListenAddr = ":30303"
+MaxPeers = 25
+NoDiscovery = false
+BootstrapNodes = [
+  "enode://7d3bc54f2331a6c87d4d85ad6d77908e42678f8f70d09198b5e9a77cfa7d73bfbbf2529325ed70f213d3c9c1a776405cd38eabaf0d1e206d14d6c84a77431d7@194.163.160.186:30303",  "enode://f8d3d4f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8@54.169.180.136:30303",  "enode://a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2@34.87.87.221:30303",  "enode://b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3@13.251.95.229:30303",  "enode://c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4@18.136.20.170:30303",  "enode://d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5@3.1.89.86:30303",  "enode://e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6@52.221.28.223:30303",  "enode://f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7@47.241.19.238:30303",  "enode://a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8@47.242.33.79:30303",  "enode://a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4@34.230.16.151:30303",  "enode://b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5@34.200.137.251:30303",  "enode://c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6@34.231.235.203:30303"
+]
 
-#==============================================================================
-# P2P Network
-#==============================================================================
-[p2p]
-port = 30303
-nat = any
+[Node.HTTP]
+Enabled = true
+Host = "0.0.0.0"
+Port = 8545
+CORSDomains = ["*"]
+VirtualHosts = ["*"]
+Modules = ["admin", "eth", "net", "web3", "XDPoS"]
 
-#==============================================================================
-# RPC Configuration
-#==============================================================================
-[rpc]
-enabled = true
-addr = 0.0.0.0
-port = 8545
-api = ["admin", "eth", "net", "web3", "XDPoS"]
-cors_domain = *
-vhosts = *
+[Node.WS]
+Enabled = true
+Host = "0.0.0.0"
+Port = 8546
+Origins = ["*"]
+Modules = ["admin", "eth", "net", "web3", "XDPoS"]
 
-#==============================================================================
-# WebSocket Configuration
-#==============================================================================
-[websocket]
-enabled = true
-addr = 0.0.0.0
-port = 8546
-api = ["eth", "net", "web3", "XDPoS"]
-origins = *
+[Node.GraphQL]
+Enabled = false
 
-#==============================================================================
-# Metrics
-#==============================================================================
-[metrics]
-enabled = true
-addr = 0.0.0.0
-port = 6060
+[Eth]
+NetworkId = 50
+NoPruning = false
+NoPrefetch = false
+LightPeers = 100
+UltraLightFraction = 75
+DatabaseCache = 4096
+DatabaseFreezer = ""
+TrieCleanCache = 1024
+TrieCleanCacheJournal = "triecache"
+TrieCleanCacheRejournal = 3600000000000
+TrieDirtyCache = 1024
+TrieTimeout = 600000000000
+SnapshotCache = 1024
+Preimages = false
+FilterLogCacheSize = 32
 
-#==============================================================================
-# Logging
-#==============================================================================
-[log]
-level = 2  # 0=silent, 1=error, 2=warn, 3=info, 4=debug
+[Eth.Miner]
+GasFloor = 8000000
+GasCeil = 420000000
+GasPrice = 1
+Recommit = 3000000000
+Noverify = false
 
-#==============================================================================
-# Data Directories
-# Network-aware structure: <project_dir>/<network>/xdcchain and .xdc-node
-# Change "mainnet" below to match the active network (testnet, devnet, etc.)
-#==============================================================================
-[paths]
-data_dir = /opt/xdc-node/mainnet/xdcchain
-config_dir = /opt/xdc-node/mainnet/.xdc-node
+[Eth.TxPool]
+Locals = []
+NoLocals = false
+Journal = "transactions.rlp"
+Rejournal = 3600000000000
+PriceLimit = 1
+PriceBump = 10
+AccountSlots = 16
+GlobalSlots = 5120
+AccountQueue = 64
+GlobalQueue = 1024
+Lifetime = 10800000000000
 
-#==============================================================================
-# SkyNet Registration (optional)
-#==============================================================================
-[skynet]
-enabled = true
-api_url = https://net.xdc.network/api/v1
-# email = your@email.com
-# telegram = @username
+[Metrics]
+Enabled = true
+HTTP = "0.0.0.0"
+Port = 6060
+InfluxDBEnabled = false
+InfluxDBEndpoint = "http://localhost:8086"
+InfluxDBDatabase = "xdc"
+InfluxDBUsername = "xdc"
+InfluxDBPassword = "xdc"
+InfluxDBTags = "host=localhost"
 
-#==============================================================================
-# Monitoring (optional - requires --profile monitoring)
-#==============================================================================
-[monitoring]
-prometheus_enabled = false
-grafana_enabled = false
+[Logging]
+Verbosity = 3
+VModule = ""
+BacktraceAt = ""
+Debug = false
+CPUProfile = ""
+MemProfile = ""
+Trace = ""

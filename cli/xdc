@@ -2743,11 +2743,15 @@ EOF
             [[ -f "$ef" ]] && env_file="$ef" && break
         done
         
-        # Read current ports from env or defaults
+        # Read current ports and NETWORK from env or defaults
         local rpc_port=8545 ws_port=8546 p2p_port=30303 dash_port=7070
         local erigon_rpc_port=8547 erigon_p2p_port=30304 erigon_p2p_68=30311 erigon_dash_port=7071
         local nethermind_rpc_port=8548 nethermind_p2p_port=30305 nethermind_dash_port=7072
         if [[ -n "$env_file" ]]; then
+            # Read NETWORK from env_file if not already set via --network flag
+            if [[ -z "$network" ]]; then
+                network=$(grep -E '^NETWORK=' "$env_file" 2>/dev/null | cut -d= -f2 || echo "mainnet")
+            fi
             rpc_port=$(grep -E '^RPC_PORT=' "$env_file" 2>/dev/null | cut -d= -f2 || echo 8545)
             ws_port=$(grep -E '^WS_PORT=' "$env_file" 2>/dev/null | cut -d= -f2 || echo 8546)
             p2p_port=$(grep -E '^P2P_PORT=' "$env_file" 2>/dev/null | cut -d= -f2 || echo 30303)
@@ -2762,6 +2766,8 @@ EOF
             nethermind_p2p_port=$(grep -E '^NETHERMIND_P2P_PORT=' "$env_file" 2>/dev/null | cut -d= -f2 || echo 30305)
             nethermind_dash_port=$(grep -E '^NETHERMIND_DASHBOARD_PORT=' "$env_file" 2>/dev/null | cut -d= -f2 || echo 7072)
         fi
+        # Default network to mainnet if still not set
+        : "${network:=mainnet}"
         : "${rpc_port:=8545}" "${ws_port:=8546}" "${p2p_port:=30303}" "${dash_port:=7070}"
         : "${erigon_rpc_port:=8547}" "${erigon_p2p_port:=30304}" "${erigon_p2p_68:=30311}" "${erigon_dash_port:=7071}"
         : "${nethermind_rpc_port:=8548}" "${nethermind_p2p_port:=30305}" "${nethermind_dash_port:=7072}"
@@ -2850,11 +2856,12 @@ EOF
             [[ "$erigon_p2p_68" != "$orig_erigon_p2p_68" ]] && warn "Erigon P2P68 port $orig_erigon_p2p_68 in use → using $erigon_p2p_68"
             [[ "$erigon_dash_port" != "$orig_erigon_dash" ]] && warn "Erigon Dashboard port $orig_erigon_dash in use → using $erigon_dash_port"
             
-            # Export all ports
+            # Export all ports and NETWORK
             export RPC_PORT="$rpc_port" WS_PORT="$ws_port" P2P_PORT="$p2p_port" DASHBOARD_PORT="$dash_port"
             export ERIGON_RPC_PORT="$erigon_rpc_port" ERIGON_P2P_PORT="$erigon_p2p_port" 
             export ERIGON_P2P_PORT_68="$erigon_p2p_68" ERIGON_DASHBOARD_PORT="$erigon_dash_port"
-            [[ -n "$network" ]] && export NETWORK="$network"
+            export NETWORK="${network:-mainnet}"
+            info "Using network: $NETWORK"
             
             # Start geth if not running
             if [[ "$geth_running" != "true" ]]; then
@@ -3046,10 +3053,11 @@ EOF
             [[ "$erigon_p2p_68" != "$orig_erigon_p2p_68" ]] && warn "Erigon P2P68 port $orig_erigon_p2p_68 in use → using $erigon_p2p_68"
             [[ "$erigon_dash_port" != "$orig_erigon_dash" ]] && warn "Erigon Dashboard port $orig_erigon_dash in use → using $erigon_dash_port"
             
-            # Export erigon ports
+            # Export erigon ports and NETWORK
             export ERIGON_RPC_PORT="$erigon_rpc_port" ERIGON_P2P_PORT="$erigon_p2p_port"
             export ERIGON_P2P_PORT_68="$erigon_p2p_68" ERIGON_DASHBOARD_PORT="$erigon_dash_port"
-            [[ -n "$network" ]] && export NETWORK="$network"
+            export NETWORK="${network:-mainnet}"
+            info "Using network: $NETWORK"
             
             if [[ -f "docker-compose.erigon-standalone.yml" ]]; then
                 # Create xdc-network if it doesn't exist (geth should have created it)
@@ -3220,9 +3228,10 @@ EOF
             info "Log dashboard will be available at http://localhost:3200"
         fi
         
-        # Export resolved ports and start
+        # Export resolved ports, NETWORK, and start
         export RPC_PORT="$rpc_port" WS_PORT="$ws_port" PORT="$p2p_port" P2P_PORT="$p2p_port" DASHBOARD_PORT="$dash_port"
-        [[ -n "$network" ]] && export NETWORK="$network"
+        export NETWORK="${network:-mainnet}"
+        info "Using network: $NETWORK"
         
         # Ensure skynet.conf exists as a file (Docker creates a directory if missing)
         local _skynet_conf="../${network:-mainnet}/.xdc-node/skynet.conf"
