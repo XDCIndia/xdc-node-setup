@@ -1,9 +1,10 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 #==============================================================================
-# XDC Geth PR5 Start Script
+# XDC Geth PR5 Start Script (POSIX sh compatible)
 # Feature branch: feature/xdpos-consensus
+# Fixed: Removed bash-isms for Alpine compatibility
 #==============================================================================
 
 # Config files
@@ -18,44 +19,50 @@ echo "Datadir: $DATADIR"
 echo "Config: $CONFIG_FILE"
 
 # ============================================================
-# Load config.toml - section-aware TOML parser
+# Load config.toml - POSIX sh compatible parser
 # ============================================================
 load_config() {
-    local config_file="$1"
-    [[ ! -f "$config_file" ]] && return
+    config_file="$1"
+    [ ! -f "$config_file" ] && return
     
-    local section=""
-    while IFS= read -r line; do
+    section=""
+    while IFS= read -r line || [ -n "$line" ]; do
         # Skip comments and empty lines
-        [[ "$line" =~ ^[[:space:]]*# ]] && continue
-        [[ -z "${line// /}" ]] && continue
+        case "$line" in
+            \#*|"") continue ;;
+        esac
         
-        # Track section headers
-        if [[ "$line" =~ ^[[:space:]]*\[([^]]+)\] ]]; then
-            section="${BASH_REMATCH[1]}"
-            section="${section##*.}"
-            continue
-        fi
+        # Track section headers [section.name]
+        case "$line" in
+            \[*\])
+                section=$(echo "$line" | sed 's/.*\[\([^]]*\)\].*/\1/' | sed 's/.*\.//')
+                continue
+                ;;
+        esac
         
-        # Parse key = "value"
-        if [[ "$line" =~ ^[[:space:]]*([a-zA-Z_][a-zA-Z0-9_]*)[[:space:]]*=[[:space:]]*(.+)$ ]]; then
-            local key="${BASH_REMATCH[1]}"
-            local value="${BASH_REMATCH[2]}"
-            [[ "$value" == "["* ]] && continue
-            value="${value%\"}"
-            value="${value#\"}"
-            value="${value%%#*}"
-            value="${value% }"
-            local ukey="${key^^}"
-            local usection="${section^^}"
-            [[ -n "$section" ]] && export "${usection}_${ukey}=$value"
-            export "${ukey}=$value"
+        # Parse key = "value" or key = value
+        key=$(echo "$line" | sed -n 's/^[[:space:]]*\([a-zA-Z_][a-zA-Z0-9_]*\)[[:space:]]*=.*/\1/p')
+        [ -z "$key" ] && continue
+        
+        value=$(echo "$line" | sed 's/^[^=]*=[[:space:]]*//' | sed 's/^"//' | sed 's/"$//' | sed 's/[[:space:]]*#.*//')
+        
+        # Skip array values
+        case "$value" in
+            \[*) continue ;;
+        esac
+        
+        # Export as uppercase
+        ukey=$(echo "$key" | tr '[:lower:]' '[:upper:]')
+        if [ -n "$section" ]; then
+            usection=$(echo "$section" | tr '[:lower:]' '[:upper:]')
+            eval "export ${usection}_${ukey}='$value'"
         fi
+        eval "export ${ukey}='$value'"
     done < "$config_file"
     echo "Loaded config from $config_file"
 }
 
-if [[ -f "$CONFIG_FILE" ]]; then
+if [ -f "$CONFIG_FILE" ]; then
     load_config "$CONFIG_FILE"
 fi
 
@@ -82,85 +89,111 @@ echo "Config: sync=$SYNC_MODE gc=$GC_MODE log=$LOG_LEVEL"
 # Init or recover wallet
 # ============================================================
 if [ ! -d "$DATADIR/XDC/chaindata" ]; then
-    wallet=$(XDC account new --password "$PWD_FILE" --datadir "$DATADIR" 2>/dev/null | awk -F '[{}]' '{print $2}')
-    echo "Initializing Genesis Block"
-    echo "$wallet" > "$DATADIR/coinbase.txt"
-    XDC init --datadir "$DATADIR" "$GENESIS_FILE"
+    echo "Initializing new node..."
+    
+    # Create wallet
+    if [ -f "$PWD_FILE" ]; then
+        wallet=$(XDC account new --password "$PWD_FILE" --datadir "$DATADIR" 2>/dev/null | grep -oE '\{[^}]+\}' | tr -d '{}' | head -1)
+        echo "$wallet" > "$DATADIR/coinbase.txt"
+    fi
+    
+    # Initialize genesis
+    if [ -f "$GENESIS_FILE" ]; then
+        echo "Initializing Genesis Block from $GENESIS_FILE"
+        XDC init --datadir "$DATADIR" "$GENESIS_FILE"
+    else
+        echo "WARNING: No genesis file found at $GENESIS_FILE"
+    fi
 else
-    wallet=$(XDC account list --datadir "$DATADIR" 2>/dev/null | head -n 1 | awk -F '[{}]' '{print $2}')
+    echo "Existing chaindata found, recovering wallet..."
+    wallet=$(XDC account list --datadir "$DATADIR" 2>/dev/null | head -n 1 | grep -oE '\{[^}]+\}' | tr -d '{}')
 fi
-echo "Wallet: $wallet"
+
+[ -n "$wallet" ] && echo "Wallet: $wallet"
 
 # ============================================================
 # Bootnodes
 # ============================================================
 bootnodes=""
 if [ -f "$BOOTNODES_FILE" ]; then
-    while IFS= read -r line; do
+    while IFS= read -r line || [ -n "$line" ]; do
         [ -z "$line" ] && continue
-        [ -z "$bootnodes" ] && bootnodes="$line" || bootnodes="${bootnodes},$line"
+        case "$line" in \#*) continue ;; esac
+        if [ -z "$bootnodes" ]; then
+            bootnodes="$line"
+        else
+            bootnodes="${bootnodes},$line"
+        fi
     done < "$BOOTNODES_FILE"
-    echo "Loaded bootnodes: $bootnodes"
+    echo "Loaded bootnodes from $BOOTNODES_FILE"
+fi
+
+# ============================================================
+# Get external IP for NAT
+# ============================================================
+if [ -z "$EXTERNAL_IP" ]; then
+    EXTERNAL_IP=$(wget -qO- https://checkip.amazonaws.com 2>/dev/null || curl -s https://checkip.amazonaws.com 2>/dev/null || echo "")
 fi
 
 # ============================================================
 # Ethstats
 # ============================================================
-INSTANCE_IP=$(wget -qO- https://checkip.amazonaws.com 2>/dev/null || echo "unknown")
 netstats="${INSTANCE_NAME}:xinfin_xdpos_hybrid_network_stats@stats.xinfin.network:3000"
 
 # ============================================================
-# Build args
+# Build command line args
 # ============================================================
-LOG_FILE="$DATADIR/xdc-geth-pr5-$(date +%Y%m%d-%H%M%S).log"
+ARGS="--datadir $DATADIR"
+ARGS="$ARGS --networkid ${NETWORK_ID:-50}"
+ARGS="$ARGS --port 30303"
+ARGS="$ARGS --syncmode $SYNC_MODE"
+ARGS="$ARGS --gcmode $GC_MODE"
+ARGS="$ARGS --verbosity $LOG_LEVEL"
 
-args=(
-    --datadir "$DATADIR"
-    --networkid 50
-    --port 30303
-    --syncmode "$SYNC_MODE"
-    --gcmode "$GC_MODE"
-    --verbosity "$LOG_LEVEL"
-    --password "$PWD_FILE"
-    --mine
-    --gasprice 1
-    --targetgaslimit 420000000
-    --ipcpath /tmp/XDC.ipc
-)
+# Wallet unlock
+if [ -n "$wallet" ] && [ -f "$PWD_FILE" ]; then
+    ARGS="$ARGS --password $PWD_FILE"
+    ARGS="$ARGS --unlock $wallet"
+    ARGS="$ARGS --mine"
+fi
 
-# Add wallet unlock if available
-[ -n "$wallet" ] && args+=(--unlock "$wallet")
+ARGS="$ARGS --gasprice 1"
+ARGS="$ARGS --targetgaslimit 420000000"
 
-# Add bootnodes if available
-[ -n "$bootnodes" ] && args+=(--bootnodes "$bootnodes")
+# Bootnodes
+[ -n "$bootnodes" ] && ARGS="$ARGS --bootnodes $bootnodes"
 
-# Add ethstats
-args+=(--ethstats "$netstats")
+# NAT
+[ -n "$EXTERNAL_IP" ] && ARGS="$ARGS --nat extip:$EXTERNAL_IP"
+
+# Ethstats
+ARGS="$ARGS --ethstats $netstats"
 
 # XDCx data dir
-args+=(--XDCx.datadir "$DATADIR/XDCx")
+ARGS="$ARGS --XDCx.datadir $DATADIR/XDCx"
 
-# ============================================================
-# HTTP/RPC flags - PR5 uses new-style --http.* flags
-# ============================================================
-args+=(
-    --http
-    --http.addr "$RPC_ADDR"
-    --http.port "$RPC_PORT"
-    --http.api "$RPC_API"
-    --http.corsdomain "$RPC_CORS_DOMAIN"
-    --http.vhosts "$RPC_VHOSTS"
-    --ws
-    --ws.addr "$WS_ADDR"
-    --ws.port "$WS_PORT"
-    --ws.api "$WS_API"
-    --ws.origins "$WS_ORIGINS"
-    --store-reward
-)
+# HTTP/RPC - GP5 uses new-style --http.* flags
+ARGS="$ARGS --http"
+ARGS="$ARGS --http.addr $RPC_ADDR"
+ARGS="$ARGS --http.port $RPC_PORT"
+ARGS="$ARGS --http.api $RPC_API"
+ARGS="$ARGS --http.corsdomain $RPC_CORS_DOMAIN"
+ARGS="$ARGS --http.vhosts $RPC_VHOSTS"
 
-# Add any extra args from docker command
-args+=("$@")
+# WebSocket
+ARGS="$ARGS --ws"
+ARGS="$ARGS --ws.addr $WS_ADDR"
+ARGS="$ARGS --ws.port $WS_PORT"
+ARGS="$ARGS --ws.api $WS_API"
+ARGS="$ARGS --ws.origins $WS_ORIGINS"
 
+# Store reward for consensus
+ARGS="$ARGS --store-reward"
+
+echo "=============================================="
 echo "Starting XDC Geth PR5..."
-echo "Args: ${args[*]}"
-exec XDC "${args[@]}" 2>&1 | tee -a "$LOG_FILE"
+echo "Args: $ARGS"
+echo "=============================================="
+
+# shellcheck disable=SC2086
+exec XDC $ARGS

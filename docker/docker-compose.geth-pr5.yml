@@ -1,7 +1,7 @@
 #==============================================================================
-# XDC Node Docker Compose — Geth PR5 Client Override
-# Usage: docker compose -f docker-compose.yml -f docker-compose.geth-pr5.yml up -d
-# Or simply: xdc start --client geth-pr5
+# XDC Node Docker Compose — Geth PR5 Client
+# Usage: docker compose -f docker-compose.geth-pr5.yml up -d
+# Or: xdc start --client geth-pr5
 #==============================================================================
 
 services:
@@ -13,24 +13,25 @@ services:
     ports:
       - "${P2P_PORT:-30303}:30303"
       - "${P2P_PORT:-30303}:30303/udp"
-      - "127.0.0.1:${RPC_PORT:-8545}:8545"
-      - "127.0.0.1:${WS_PORT:-8546}:8546"
+      - "${RPC_BIND:-0.0.0.0}:${RPC_PORT:-8545}:8545"
+      - "${WS_BIND:-127.0.0.1}:${WS_PORT:-8546}:8546"
     volumes:
-      - ../${NETWORK:-mainnet}/xdcchain:/work/xdcchain
-      - ./${NETWORK:-mainnet}/genesis.json:/work/genesis.json:ro
+      - ${DATA_DIR:-../mainnet}/xdcchain:/work/xdcchain
+      - ./mainnet/genesis.json:/work/genesis.json:ro
       - ./geth-pr5/start-geth-pr5.sh:/work/start.sh:ro
-      - ./${NETWORK:-mainnet}/bootnodes.list:/work/bootnodes.list:ro
-      - ./${NETWORK:-mainnet}/.pwd:/work/.pwd:ro
-      - ../${NETWORK:-mainnet}/.xdc-node/config.toml:/etc/xdc-node/config.toml:ro
+      - ./mainnet/bootnodes.list:/work/bootnodes.list:ro
+      - ${DATA_DIR:-../mainnet}/.xdc-node/.pwd:/work/.pwd:ro
+      - ${DATA_DIR:-../mainnet}/.xdc-node/config.toml:/etc/xdc-node/config.toml:ro
       - /etc/localtime:/etc/localtime:ro
     environment:
       - NETWORK=${NETWORK:-mainnet}
+      - NETWORK_ID=${NETWORK_ID:-50}
       - SYNC_MODE=${SYNC_MODE:-full}
       - GC_MODE=${GC_MODE:-full}
-      - RPC_PORT=${RPC_PORT:-8545}
-      - WS_PORT=${WS_PORT:-8546}
+      - EXTERNAL_IP=${EXTERNAL_IP:-}
       - INSTANCE_NAME=${INSTANCE_NAME:-XDC_Geth_PR5}
-    entrypoint: ["/bin/bash", "/work/start.sh"]
+      - HTTP_API=${HTTP_API:-admin,eth,net,web3,XDPoS}
+    entrypoint: ["/bin/sh", "/work/start.sh"]
     networks:
       - xdc-network
     healthcheck:
@@ -44,22 +45,21 @@ services:
       options:
         max-size: "100m"
         max-file: "5"
-    deploy:
-      resources:
-        limits:
-          cpus: '4'
-          memory: 8G
-        reservations:
-          cpus: '2'
-          memory: 4G
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - SETGID
-      - SETUID
+
+  # SkyNet monitoring agent
+  xdc-agent:
+    image: anilchinchawale/xdc-agent:v2.6
+    container_name: xdc-agent-gp5
+    restart: always
+    network_mode: host
+    depends_on:
+      xdc-node:
+        condition: service_healthy
+    environment:
+      - RPC_URL=http://localhost:${RPC_PORT:-8545}
+      - NETWORK=${NETWORK:-mainnet}
+      - NODE_NAME=${NODE_NAME:-xdc-geth-pr5}
+      - SKYNET_URL=${SKYNET_URL:-https://net.xdc.network}
 
 networks:
   xdc-network:
