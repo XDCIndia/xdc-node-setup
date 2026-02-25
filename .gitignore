@@ -181,3 +181,14 @@ node_modules/
 !**/.env.example
 *.key
 *.keystore
+
+# Chaindata - never commit blockchain data
+**/xdcchain/
+**/xdcchain-*/
+**/XDC/
+**/*.bag
+**/jwtsecret
+**/nodekey
+SKYNETEOF
+DOCKEREOF
+WREOF
