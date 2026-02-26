@@ -2,105 +2,75 @@
 
 ## Overview
 
-This guide covers all configuration options for XDC Node Setup, including environment variables, config files, and runtime parameters.
+This guide covers all configuration options for XDC Node Setup (SkyOne).
 
-## Configuration Hierarchy
+## Configuration Files
 
-Configuration values are resolved in this order (highest priority first):
+### 1. `.env` - Environment Variables
 
-1. **Environment Variables**
-2. **CLI Arguments**
-3. **Config Files** (.env, config.toml)
-4. **Docker Compose Defaults**
-5. **Script Defaults**
+Location: `mainnet/.xdc-node/.env` (or `testnet/.xdc-node/.env`)
 
-## Environment Variables
+```bash
+# Node Identity
+INSTANCE_NAME=XDC_Node
+CONTACT_DETAILS=admin@example.com
 
-### Core Settings
+# Network Configuration
+NETWORK=mainnet
+NETWORK_ID=50
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NETWORK` | mainnet | Network: mainnet, testnet, apothem, devnet |
-| `NODE_TYPE` | full | Node type: full, archive, masternode |
-| `CLIENT` | xdc | Client: xdc, geth-pr5, erigon, nethermind, reth |
-| `DATA_DIR` | /root/xdcchain | Chain data directory |
+# Sync Configuration
+SYNC_MODE=full
+GC_MODE=full
 
-### RPC Configuration
+# RPC Configuration
+ENABLE_RPC=true
+ENABLE_WS=true
+RPC_ADDR=127.0.0.1
+RPC_PORT=8545
+RPC_API=admin,eth,net,web3,XDPoS
+RPC_CORS_DOMAIN=http://localhost:7070
+RPC_VHOSTS=localhost,127.0.0.1
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RPC_PORT` | 8545 | HTTP RPC port |
-| `WS_PORT` | 8546 | WebSocket port |
-| `RPC_ADDR` | 127.0.0.1 | RPC bind address (security: use 127.0.0.1) |
-| `WS_ADDR` | 127.0.0.1 | WebSocket bind address |
-| `RPC_API` | admin,eth,net,web3,XDPoS | Enabled RPC APIs |
-| `WS_API` | eth,net,web3,XDPoS | Enabled WebSocket APIs |
-| `RPC_CORS_DOMAIN` | localhost | CORS allowed origins |
-| `RPC_VHOSTS` | localhost | Virtual hosts whitelist |
-| `WS_ORIGINS` | localhost | WebSocket origins whitelist |
+# WebSocket Configuration
+WS_ADDR=127.0.0.1
+WS_PORT=8546
+WS_API=admin,eth,net,web3,XDPoS
+WS_ORIGINS=localhost,127.0.0.1
 
-### P2P Configuration
+# P2P Configuration
+P2P_PORT=30303
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `P2P_PORT` | 30303 | P2P TCP/UDP port |
-| `MAX_PEERS` | 50 | Maximum peer connections |
-| `BOOTNODES` | (network default) | Comma-separated bootnode enodes |
+# Dashboard Configuration
+DASHBOARD_PORT=7070
 
-### Sync Configuration
+# Erigon-Specific Ports (Multi-Client Mode)
+ERIGON_RPC_PORT=8547
+ERIGON_AUTHRPC_PORT=8561
+ERIGON_P2P_PORT=30304
+ERIGON_P2P_PORT_68=30311
+ERIGON_DASHBOARD_PORT=7071
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SYNC_MODE` | full | Sync mode: full, snap, fast |
-| `GC_MODE` | full | Garbage collection: full, archive |
-| `PRUNE_MODE` | full | Pruning mode: full, archive |
+# Nethermind-Specific Ports (Multi-Client Mode)
+NETHERMIND_RPC_PORT=8556
+NETHERMIND_P2P_PORT=30306
+NETHERMIND_DASHBOARD_PORT=7072
 
-### Resource Limits
+# Private Key (for masternodes)
+PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000000
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MEMORY_LIMIT` | 8G | Docker memory limit |
-| `CPU_LIMIT` | 4 | Docker CPU limit |
-| `CACHE_SIZE` | 4096 | XDC cache size in MB |
+# Logging
+LOG_LEVEL=2
+```
 
-### Monitoring
+### 2. `config.toml` - Node Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ENABLE_MONITORING` | false | Enable Prometheus/Grafana |
-| `DASHBOARD_PORT` | 7070 | SkyOne dashboard port |
-| `PROMETHEUS_PORT` | 9090 | Prometheus port |
-| `GRAFANA_PORT` | 3000 | Grafana port |
-
-### SkyNet Integration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ENABLE_SKYNET` | false | Enable SkyNet fleet monitoring |
-| `SKYNET_API_KEY` | (generated) | SkyNet API key |
-| `SKYNET_NODE_ID` | (generated) | Unique node identifier |
-| `SKYNET_NODE_NAME` | (hostname) | Node display name |
-| `SKYNET_URL` | https://net.xdc.network | SkyNet API endpoint |
-
-### Security
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ENABLE_SECURITY` | true | Enable security hardening |
-| `ENABLE_FIREWALL` | true | Enable UFW firewall |
-| `ENABLE_FAIL2BAN` | true | Enable fail2ban |
-| `ENABLE_AUTOMATIC_UPDATES` | true | Enable automatic updates |
-
-## Config Files
-
-### Main Config: config.toml
+Location: `mainnet/.xdc-node/config.toml`
 
 ```toml
-# /mainnet/.xdc-node/config.toml
-
 [node]
 NetworkId = 50
-DataDir = "/xdcchain"
+DataDir = "/work/xdcchain"
 HTTPPort = 8545
 WSPort = 8546
 Port = 30303
@@ -115,278 +85,301 @@ Cache = 4096
 Enabled = true
 Port = 6060
 
-# XDPoS 2.0 consensus
-[xdpos]
-Epoch = 900
-Gap = 450
+[rpc]
+Enabled = true
+API = ["admin", "eth", "net", "web3", "XDPoS"]
+CorsDomain = ["*"]
+Vhosts = ["*"]
 ```
 
-### Environment Config: .env
+### 3. `skynet.conf` - SkyNet Integration
+
+Location: `mainnet/.xdc-node/skynet.conf`
 
 ```bash
-# /mainnet/.xdc-node/.env
+# SkyNet API Configuration
+SKYNET_API_URL=https://net.xdc.network/api/v1
+SKYNET_API_KEY=your-api-key-here
 
-# Network
-NETWORK=mainnet
-INSTANCE_NAME=my-xdc-node
+# Node Identity
+SKYNET_NODE_ID=550e8400-e29b-41d4-a716-446655440000
+SKYNET_NODE_NAME=xdc-node-01
+SKYNET_ROLE=fullnode
 
-# RPC (Security: Keep bind to localhost)
-RPC_PORT=8545
-RPC_ADDR=127.0.0.1
-RPC_CORS_DOMAIN=localhost
-
-# P2P
-P2P_PORT=30303
-MAX_PEERS=50
-
-# Sync
-SYNC_MODE=full
-GC_MODE=full
-
-# Resources
-CACHE_SIZE=4096
-```
-
-### SkyNet Config: skynet.conf
-
-```bash
-# /mainnet/.xdc-node/skynet.conf
-
-SKYNET_ENABLED=true
-SKYNET_URL=https://net.xdc.network
-SKYNET_API_KEY=your-api-key
-SKYNET_NODE_ID=uuid-generated-during-setup
-SKYNET_NODE_NAME=my-xdc-node
-HEARTBEAT_INTERVAL=60
+# Heartbeat Configuration
+HEARTBEAT_INTERVAL=30
 ```
 
 ## Client-Specific Configuration
 
-### Erigon Configuration
+### Geth-XDC (Stable)
 
-```bash
-# Erigon uses different ports
-RPC_PORT=8547
-P2P_PORT=30304
-P2P_PORT_68=30311
-
-# Erigon needs more memory
-ERIGON_MEMORY=12G
-ERIGON_CPUS=4
+```yaml
+# docker-compose.yml
+services:
+  xdc-node:
+    image: xinfinorg/xdposchain:v2.6.8
+    ports:
+      - "127.0.0.1:8545:8545"  # RPC
+      - "127.0.0.1:8546:8546"  # WebSocket
+      - "30303:30303"          # P2P
+      - "30303:30303/udp"      # P2P UDP
 ```
 
-### Nethermind Configuration
+### Erigon-XDC
 
-```bash
-# Nethermind ports
-RPC_PORT=8558
-P2P_PORT=30306
-
-# Nethermind memory
-NETHERMIND_MEMORY=12G
+```yaml
+# docker-compose.erigon.yml
+services:
+  xdc-erigon:
+    image: anilchinchawale/erix:latest
+    ports:
+      - "127.0.0.1:8547:8547"  # RPC (different from Geth)
+      - "127.0.0.1:8561:8561"  # Auth RPC
+      - "30304:30304"          # P2P (eth/63 - XDC compatible)
+      - "30311:30311"          # P2P (eth/68 - NOT XDC compatible)
 ```
 
-### Reth Configuration
+**Important:** Erigon uses port 30304 for XDC-compatible peers (eth/63) and port 30311 for standard Ethereum peers (eth/68). Only use port 30304 for XDC Network connections.
 
-```bash
-# Reth ports
-RPC_PORT=7073
-P2P_PORT=40303
+### Nethermind-XDC
 
-# Reth needs more memory
-RETH_MEMORY=16G
+```yaml
+# docker-compose.nethermind.yml
+services:
+  xdc-node:
+    image: anilchinchawale/nmx:latest
+    ports:
+      - "127.0.0.1:8556:8545"  # RPC
+      - "30306:30303"          # P2P
+```
+
+### Reth-XDC
+
+```yaml
+# docker-compose.reth.yml
+services:
+  xdc-reth:
+    image: anilchinchawale/reth-xdc:latest
+    ports:
+      - "127.0.0.1:7073:8545"  # RPC
+      - "40303:30303"          # P2P
 ```
 
 ## Network Configuration
 
-### Mainnet (NetworkId: 50)
+### Mainnet (Chain ID: 50)
 
-```toml
-[network]
-NetworkId = 50
-Bootnodes = [
-  "enode://...",
-  "enode://..."
-]
+```bash
+NETWORK=mainnet
+NETWORK_ID=50
+BOOTNODES=enode://9a977b1ac4320fa2c862dcaf536aaaea3a8f8f7cd14e3bcde32e5a1c0152bd17bd18bfdc3c2ca8c4a0f3da153c62935fea1dc040cc1e66d2c07d6b4c91e2ed42@bootnode.xinfin.network:30303
 ```
 
-### Testnet/Apothem (NetworkId: 51)
+### Testnet/Apothem (Chain ID: 51)
 
-```toml
-[network]
-NetworkId = 51
-Bootnodes = [
-  "enode://...",
-  "enode://..."
-]
+```bash
+NETWORK=apothem
+NETWORK_ID=51
+APOTHEM_FLAG=--apothem
+BOOTNODES=enode://91e59fa1b034ae35e9f4e8a99cc6621f09d74e76a6220abb6c93b29ed41a9e1fc4e5b70e2c5fc43f883cffbdcd6f4f6cbc1d23af077f28c2aecc22403355d4b1@bootnodes.apothem.network:30312
 ```
+
+### Devnet (Chain ID: 551)
+
+```bash
+NETWORK=devnet
+NETWORK_ID=551
+```
+
+## Sync Modes
+
+### Full Sync
+
+```bash
+SYNC_MODE=full
+```
+
+- Downloads and verifies all blocks
+- Highest security
+- Slowest sync
+- Required for masternodes
+
+### Snap Sync
+
+```bash
+SYNC_MODE=snap
+```
+
+- Downloads recent state snapshots
+- Faster initial sync
+- Lower resource usage
+- Not suitable for masternodes
 
 ## Security Configuration
 
-### Secure RPC Setup
+### SSH Hardening
 
 ```bash
-# 1. Bind to localhost only
-RPC_ADDR=127.0.0.1
-WS_ADDR=127.0.0.1
-
-# 2. Restrict CORS
-RPC_CORS_DOMAIN=localhost
-WS_ORIGINS=localhost
-
-# 3. Use nginx reverse proxy for external access
-# See: configs/nginx-rpc.conf
+# /etc/ssh/sshd_config
+Port 2222                          # Non-default port
+PermitRootLogin no                 # Disable root login
+PasswordAuthentication no          # Use keys only
+MaxAuthTries 3
 ```
 
-### Firewall Rules
+### Firewall (UFW)
 
 ```bash
-# Required ports
-sudo ufw allow 30303/tcp  # P2P
-sudo ufw allow 30303/udp  # P2P
-sudo ufw allow from 127.0.0.1 to any port 8545  # RPC (local only)
-sudo ufw allow from 127.0.0.1 to any port 7070  # Dashboard (local only)
+# Default deny
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+
+# Allow SSH (custom port)
+sudo ufw allow 2222/tcp
+
+# Allow XDC P2P
+sudo ufw allow 30303/tcp
+sudo ufw allow 30303/udp
+
+# Allow monitoring (if enabled)
+sudo ufw allow 9090/tcp  # Prometheus
+sudo ufw allow 3000/tcp  # Grafana
+
+# Enable firewall
+sudo ufw enable
+```
+
+### Docker Security
+
+```yaml
+# docker-compose.yml
+services:
+  xdc-node:
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    read_only: true
+    tmpfs:
+      - /tmp:nosuid,size=100m
+```
+
+## Monitoring Configuration
+
+### Prometheus
+
+```yaml
+# docker/prometheus.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'xdc-node'
+    static_configs:
+      - targets: ['xdc-node:6060']
+    metrics_path: /debug/metrics/prometheus
+```
+
+### Grafana
+
+```yaml
+# docker-compose.monitoring.yml
+services:
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=secure-password
+      - GF_USERS_ALLOW_SIGN_UP=false
 ```
 
 ## Advanced Configuration
 
-### Custom Genesis
+### Custom Data Directory
 
 ```bash
-# For private networks
-GENESIS_FILE=/path/to/genesis.json
-NETWORK=local
+# .env
+DATA_DIR=/mnt/xdc-data/xdcchain
 ```
 
-### Extra Flags
+### Memory Limits
 
 ```bash
-# Pass additional flags to XDC
-XDC_EXTRA_FLAGS="--verbosity 5 --metrics"
+# .env
+CACHE_SIZE=8192  # 8GB cache
 ```
 
-### Log Configuration
+### Peer Configuration
 
 ```bash
-# Log level
-LOG_LEVEL=2  # 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail
-
-# Log file
-LOG_FILE=/var/log/xdc/xdc.log
+# .env
+MAX_PEERS=50
 ```
 
-## Configuration Validation
+### Bootnodes
 
-### Test Configuration
+Create `mainnet/bootnodes.list`:
 
-```bash
-# Validate config without starting
-xdc config validate
-
-# Check config values
-xdc config get rpc_port
-xdc config get sync_mode
-
-# List all config
-xdc config list
+```
+enode://9a977b1ac4320fa2c862dcaf536aaaea3a8f8f7cd14e3bcde32e5a1c0152bd17bd18bfdc3c2ca8c4a0f3da153c62935fea1dc040cc1e66d2c07d6b4c91e2ed42@bootnode.xinfin.network:30303
 ```
 
-### Debug Configuration
+## Environment Variables Reference
 
-```bash
-# Show effective configuration
-xdc config dump
-
-# Show configuration sources
-xdc config sources
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NODE_TYPE` | `full` | Node type: full, archive, masternode |
+| `NETWORK` | `mainnet` | Network: mainnet, testnet, devnet |
+| `CLIENT` | `stable` | Client: stable, geth-pr5, erigon, nethermind, reth |
+| `SYNC_MODE` | `full` | Sync mode: full, snap |
+| `RPC_PORT` | `8545` | RPC port |
+| `P2P_PORT` | `30303` | P2P port |
+| `DATA_DIR` | `mainnet/xdcchain` | Data directory |
+| `ENABLE_MONITORING` | `false` | Enable Prometheus/Grafana |
+| `ENABLE_SKYNET` | `false` | Enable SkyNet integration |
+| `ENABLE_SECURITY` | `true` | Enable security hardening |
 
 ## Troubleshooting Configuration
 
-### Common Issues
-
-**Issue: RPC not accessible externally**
-```bash
-# Solution: Check bind address
-RPC_ADDR=0.0.0.0  # Allow external (not recommended without auth)
-# Or use nginx reverse proxy
-```
-
-**Issue: Sync too slow**
-```bash
-# Solution: Increase cache
-CACHE_SIZE=8192
-
-# Or use snap sync
-SYNC_MODE=snap
-```
-
-**Issue: Out of memory**
-```bash
-# Solution: Reduce cache
-CACHE_SIZE=2048
-
-# Or reduce memory limit
-MEMORY_LIMIT=4G
-```
-
-## Configuration Examples
-
-### Production Masternode
+### Reset Configuration
 
 ```bash
-# .env
-NETWORK=mainnet
-NODE_TYPE=masternode
-CLIENT=xdc
-SYNC_MODE=full
-CACHE_SIZE=8192
-MEMORY_LIMIT=16G
-CPU_LIMIT=8
+# Stop node
+xdc stop
 
-# Security
-RPC_ADDR=127.0.0.1
-ENABLE_SECURITY=true
-ENABLE_FIREWALL=true
+# Remove configuration
+rm -rf mainnet/.xdc-node/
 
-# Monitoring
-ENABLE_MONITORING=true
-ENABLE_SKYNET=true
+# Re-run setup
+./setup.sh
 ```
 
-### Development Node
+### View Current Configuration
 
 ```bash
-# .env
-NETWORK=devnet
-NODE_TYPE=full
-CLIENT=geth-pr5
-SYNC_MODE=snap
-CACHE_SIZE=2048
-MEMORY_LIMIT=4G
+# View all config
+xdc config list
 
-# Local development
-RPC_ADDR=0.0.0.0
-RPC_CORS_DOMAIN=*
-ENABLE_MONITORING=false
+# View specific value
+xdc config get rpc_port
+
+# Set value
+xdc config set rpc_port 8546
 ```
 
-### Archive Node
+### Validate Configuration
 
 ```bash
-# .env
-NETWORK=mainnet
-NODE_TYPE=archive
-CLIENT=erigon
-SYNC_MODE=full
-GC_MODE=archive
-CACHE_SIZE=16384
-MEMORY_LIMIT=32G
+# Check for errors
+xdc health --full
 ```
 
-## References
+---
 
-- [Docker Compose Config](docker/docker-compose.yml)
-- [Setup Script](setup.sh)
-- [Security Guide](docs/SECURITY.md)
-- [Troubleshooting](docs/TROUBLESHOOTING.md)
+**Document Version:** 1.0.0  
+**Last Updated:** February 27, 2026
