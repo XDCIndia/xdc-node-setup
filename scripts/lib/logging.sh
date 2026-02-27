@@ -1,152 +1,229 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #===============================================================================
 # XDC Node Setup - Shared Logging Library
 # Centralizes logging functions to avoid duplication across scripts
+#
+# Usage:
+#   source "${SCRIPT_DIR}/../lib/logging.sh"
+#   log "Starting operation..."
+#   warn "This might take a while"
+#   error "Something went wrong"
+#
 #===============================================================================
 
-# Prevent multiple sourcing
-[[ -n "${XDC_LOGGING_SOURCED:-}" ]] && return 0
-XDC_LOGGING_SOURCED=1
+# Color codes
+if [[ -t 1 ]]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    CYAN='\033[0;36m'
+    BOLD='\033[1m'
+    NC='\033[0m' # No Color
+else
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    CYAN=''
+    BOLD=''
+    NC=''
+fi
+
+# Timestamp format
+LOG_TIMESTAMP_FORMAT="${LOG_TIMESTAMP_FORMAT:-%Y-%m-%d %H:%M:%S}"
+
+# Log levels
+LOG_LEVEL_ERROR=0
+LOG_LEVEL_WARN=1
+LOG_LEVEL_INFO=2
+LOG_LEVEL_DEBUG=3
 
 # Default log level
-LOG_LEVEL="${LOG_LEVEL:-INFO}"
-LOG_FILE="${LOG_FILE:-}"
-LOG_COLORS="${LOG_COLORS:-true}"
+CURRENT_LOG_LEVEL="${CURRENT_LOG_LEVEL:-$LOG_LEVEL_INFO}"
 
-# Log levels (numeric values for comparison)
-readonly LOG_LEVEL_DEBUG=0
-readonly LOG_LEVEL_INFO=1
-readonly LOG_LEVEL_WARN=2
-readonly LOG_LEVEL_ERROR=3
-readonly LOG_LEVEL_FATAL=4
+#-------------------------------------------------------------------------------
+# Core Logging Functions
+#-------------------------------------------------------------------------------
 
-# Get numeric value for log level
-_get_log_level_value() {
-    case "${1^^}" in
-        DEBUG) echo 0 ;;
-        INFO)  echo 1 ;;
-        WARN)  echo 2 ;;
-        ERROR) echo 3 ;;
-        FATAL) echo 4 ;;
-        *)     echo 1 ;; # Default to INFO
-    esac
+# Log a timestamped message to stderr
+log() {
+    echo "[$(date "+${LOG_TIMESTAMP_FORMAT}")] $1" >&2
 }
 
-# ANSI color codes
-readonly COLOR_RESET='\033[0m'
-readonly COLOR_DEBUG='\033[36m'   # Cyan
-readonly COLOR_INFO='\033[32m'    # Green
-readonly COLOR_WARN='\033[33m'    # Yellow
-readonly COLOR_ERROR='\033[31m'   # Red
-readonly COLOR_FATAL='\033[35m'   # Magenta
+# Log an info message with green checkmark
+info() {
+    echo -e "${GREEN}✓${NC} $1"
+}
 
-# Internal log function
-_log() {
-    local level="$1"
-    local message="$2"
-    local timestamp
-    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    
-    # Check if we should log this level
-    local level_value
-    local current_level_value
-    level_value=$(_get_log_level_value "$level")
-    current_level_value=$(_get_log_level_value "$LOG_LEVEL")
-    
-    if [[ $level_value -lt $current_level_value ]]; then
-        return 0
-    fi
-    
-    # Format output
-    local color=""
-    local reset=""
-    if [[ "$LOG_COLORS" == "true" && -t 2 ]]; then
-        case "$level" in
-            DEBUG) color="$COLOR_DEBUG" ;;
-            INFO)  color="" ;; # No color for INFO
-            WARN)  color="$COLOR_WARN" ;;
-            ERROR) color="$COLOR_ERROR" ;;
-            FATAL) color="$COLOR_FATAL" ;;
-        esac
-        reset="$COLOR_RESET"
-    fi
-    
-    local formatted="[${timestamp}] [${level}] ${message}"
-    
-    # Output to stderr for WARN/ERROR/FATAL, stdout for INFO/DEBUG
-    if [[ $level_value -ge $LOG_LEVEL_WARN ]]; then
-        echo -e "${color}${formatted}${reset}" >&2
-    else
-        echo -e "${color}${formatted}${reset}"
-    fi
-    
-    # Also log to file if specified
-    if [[ -n "$LOG_FILE" ]]; then
-        echo "[${timestamp}] [${level}] ${message}" >> "$LOG_FILE"
+# Log a warning message with yellow warning symbol
+warn() {
+    echo -e "${YELLOW}⚠${NC} $1" >&2
+}
+
+# Log an error message with red X
+error() {
+    echo -e "${RED}✗${NC} $1" >&2
+}
+
+# Log a debug message (only if DEBUG is set)
+debug() {
+    if [[ "${DEBUG:-}" == "1" || "${VERBOSE:-}" == "1" ]]; then
+        echo -e "${CYAN}ℹ${NC} [DEBUG] $1" >&2
     fi
 }
 
-# Public logging functions
-log_debug() { _log "DEBUG" "$*"; }
-log_info()  { _log "INFO"  "$*"; }
-log_warn()  { _log "WARN"  "$*"; }
-log_error() { _log "ERROR" "$*"; }
-log_fatal() { _log "FATAL" "$*"; }
+# Log a fatal error and exit
+die() {
+    error "$1"
+    exit "${2:-1}"
+}
 
-# Short aliases (for backward compatibility)
-log()    { log_info "$*"; }
-info()   { log_info "$*"; }
-warn()   { log_warn "$*"; }
-error()  { log_error "$*"; }
-die()    { log_fatal "$*"; exit 1; }
+#-------------------------------------------------------------------------------
+# Formatted Logging Functions
+#-------------------------------------------------------------------------------
 
-# Print banner
-print_banner() {
-    local title="$1"
-    local width="${2:-60}"
-    local char="${3:-=}"
-    
-    local padding=$(( (width - ${#title}) / 2 ))
-    
-    printf '%*s\n' "$width" '' | tr ' ' "$char"
-    printf '%*s%s%*s\n' "$padding" '' "$title" "$padding" ''
-    printf '%*s\n' "$width" '' | tr ' ' "$char"
+# Log with timestamp
+log_info() {
+    echo "[$(date "+${LOG_TIMESTAMP_FORMAT}")] INFO: $1" >&2
+}
+
+log_warn() {
+    echo "[$(date "+${LOG_TIMESTAMP_FORMAT}")] WARN: $1" >&2
+}
+
+log_error() {
+    echo "[$(date "+${LOG_TIMESTAMP_FORMAT}")] ERROR: $1" >&2
+}
+
+log_debug() {
+    if [[ "${DEBUG:-}" == "1" || "${VERBOSE:-}" == "1" ]]; then
+        echo "[$(date "+${LOG_TIMESTAMP_FORMAT}")] DEBUG: $1" >&2
+    fi
+}
+
+#-------------------------------------------------------------------------------
+# Visual Output Functions
+#-------------------------------------------------------------------------------
+
+# Print a banner
+cprint_banner() {
+    echo ""
+    echo -e "${BOLD}$1${NC}"
+    echo ""
+}
+
+# Print success message
+print_success() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+# Print warning message  
+print_warning() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
+
+# Print error message
+print_error() {
+    echo -e "${RED}✗${NC} $1"
+}
+
+# Print info message
+print_info() {
+    echo -e "${BLUE}ℹ${NC} $1"
 }
 
 # Print section header
 print_section() {
     echo ""
-    echo "=== $* ==="
+    echo -e "${BOLD}${BLUE}▸ $1${NC}"
     echo ""
 }
 
-# Show progress spinner
-# Usage: spinner & SPINNER_PID=$!; ... ; kill $SPINNER_PID
-spinner() {
+#-------------------------------------------------------------------------------
+# Progress Indicators
+#-------------------------------------------------------------------------------
+
+# Show a spinner while a command runs
+show_spinner() {
+    local pid=$1
+    local msg="${2:-Processing...}"
     local delay=0.1
     local spinstr='|/-\\'
-    while true; do
-        for (( i=0; i<${#spinstr}; i++ )); do
-            printf ' [%s]  ' "${spinstr:$i:1}"
-            sleep "$delay"
-            printf '\b\b\b\b\b\b'
-        done
+    
+    while ps -p $pid > /dev/null 2>&1; do
+        local temp=${spinstr#?}
+        printf " [%c] %s" "$spinstr" "$msg"
+        local spinstr=$temp${spinstr%"$temp"}
+        sleep $delay
+        printf "\r"
     done
+    printf "    \r"
 }
 
 # Show progress bar
-# Usage: progress_bar current total [width]
-progress_bar() {
-    local current="$1"
-    local total="$2"
-    local width="${3:-40}"
+show_progress() {
+    local current=$1
+    local total=$2
+    local msg="${3:-Progress}"
+    local width=40
     
-    local percentage=$(( current * 100 / total ))
-    local filled=$(( width * current / total ))
-    local empty=$(( width - filled ))
+    local percentage=$((current * 100 / total))
+    local filled=$((width * current / total))
+    local empty=$((width - filled))
     
-    printf '\r['
-    printf '%*s' "$filled" '' | tr ' ' '#'
-    printf '%*s' "$empty" '' | tr ' ' '-'
-    printf '] %3d%% (%d/%d)' "$percentage" "$current" "$total"
+    printf "\r%s: [" "$msg"
+    printf "%${filled}s" | tr ' ' '█'
+    printf "%${empty}s" | tr ' ' '░'
+    printf "] %3d%%" "$percentage"
+}
+
+#-------------------------------------------------------------------------------
+# Log File Operations
+#-------------------------------------------------------------------------------
+
+# Initialize log file
+init_log_file() {
+    local log_file="$1"
+    local log_dir
+    log_dir=$(dirname "$log_file")
+    
+    mkdir -p "$log_dir"
+    touch "$log_file"
+    
+    echo "=== Log started at $(date) ===" > "$log_file"
+}
+
+# Write to log file
+log_to_file() {
+    local log_file="$1"
+    local message="$2"
+    local level="${3:-INFO}"
+    
+    echo "[$(date "+${LOG_TIMESTAMP_FORMAT}")] [$level] $message" >> "$log_file"
+}
+
+# Rotate log file if it exceeds size limit
+rotate_log() {
+    local log_file="$1"
+    local max_size="${2:-10485760}" # 10MB default
+    local max_files="${3:-5}"
+    
+    if [[ -f "$log_file" ]]; then
+        local size
+        size=$(stat -f%z "$log_file" 2>/dev/null || stat -c%s "$log_file" 2>/dev/null || echo 0)
+        
+        if [[ $size -gt $max_size ]]; then
+            # Rotate existing backups
+            for ((i=max_files-1; i>=1; i--)); do
+                if [[ -f "${log_file}.$i" ]]; then
+                    mv "${log_file}.$i" "${log_file}.$((i+1))"
+                fi
+            done
+            
+            # Rotate current log
+            mv "$log_file" "${log_file}.1"
+            touch "$log_file"
+        fi
+    fi
 }
