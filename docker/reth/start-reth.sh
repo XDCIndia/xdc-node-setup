@@ -64,7 +64,7 @@ RETH_ARGS=(
     --datadir "$DATADIR"
     --http
     --http.port "${RPC_PORT}"
-    --http.addr "0.0.0.0"
+    --http.addr "127.0.0.1"  # SECURITY FIX #355: Localhost only
     --http.api "eth,net,web3,admin,debug,trace"
     --port "${P2P_PORT}"
     --discovery.port "${DISCOVERY_PORT}"

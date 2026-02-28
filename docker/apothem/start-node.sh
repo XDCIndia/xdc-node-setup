@@ -35,7 +35,7 @@ exec XDC \
   --ethstats xdc-node:xinfin_xdpos_hybrid_network_stats@stats.apothem.network:3001 \
   --XDCx.datadir /work/xdcchain/XDCx \
   --rpc \
-  --rpcaddr 0.0.0.0 \
+  --rpcaddr 127.0.0.1 \  # SECURITY FIX #355: Localhost only
   --rpcport 8545 \
   --rpcapi admin,eth,net,web3,XDPoS \
   --rpccorsdomain "${RPC_CORS:-localhost,https://*.xdc.network,https://*.xinfin.org}" \

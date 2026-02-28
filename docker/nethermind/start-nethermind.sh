@@ -81,7 +81,7 @@ NETHERMIND_ARGS=(
     --datadir /nethermind/data
     --config xdc
     --JsonRpc.Enabled true
-    --JsonRpc.Host 0.0.0.0
+    --JsonRpc.Host 127.0.0.1  # SECURITY FIX #355: Localhost only
     --JsonRpc.Port "${RPC_PORT}"
     --JsonRpc.EnabledModules "${NETHERMIND_JSONRPCCONFIG_ENABLEDMODULES:-eth,net,web3,admin,debug}"
     --Network.P2PPort "${P2P_PORT}"
