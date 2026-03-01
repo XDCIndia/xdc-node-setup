@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Source utility functions
+source "$(dirname "$0")/lib/utils.sh" || { echo "Failed to load utils"; exit 1; }
+
 # Source common utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
@@ -21,9 +24,6 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-error() {
-    echo -e "${RED}✗ $1${NC}" >&2
-}
 
 success() {
     echo -e "${GREEN}✓ $1${NC}"

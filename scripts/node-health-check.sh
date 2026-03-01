@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+# Source utility functions
+source "$(dirname "$0")/lib/utils.sh" || { echo "Failed to load utils"; exit 1; }
 set -euo pipefail
 
 #==============================================================================
@@ -127,10 +130,6 @@ warn() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARNING: $1" >> "$HEALTH_LOG" 2>/dev/null || true
 }
 
-error() {
-    echo -e "${RED}[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1${NC}"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >> "$HEALTH_LOG" 2>/dev/null || true
-}
 
 info() {
     echo -e "${BLUE}[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1${NC}"

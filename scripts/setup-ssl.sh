@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+# Source utility functions
+source "$(dirname "$0")/lib/utils.sh" || { echo "Failed to load utils"; exit 1; }
 set -euo pipefail
 
 # Source common utilities
