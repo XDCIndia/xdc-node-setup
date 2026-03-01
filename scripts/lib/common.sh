@@ -1,128 +1,164 @@
 #!/bin/bash
-# Common utility functions shared across XDC Node Setup scripts
-# Avoids duplication of logging, RPC, and helper functions
-#
-# NOTE: This file is kept for backward compatibility.
-# For new code, prefer scripts/lib/logging.sh which provides:
-# - Structured JSON logging
-# - Configurable log levels
-# - Audit and metric logging
-# - Better observability
-#
-# Source order: Source logging.sh first, then this file will delegate to it.
+# Common utility functions for XDC Node Setup scripts
+# Consolidates duplicate functions across multiple scripts
 
-# Colors
+# Color codes for terminal output
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
 readonly BLUE='\033[0;34m'
-readonly NC='\033[0m'
+readonly NC='\033[0m' # No Color
 
-# =============================================================================
-# Logging Functions (Delegating to logging.sh when available)
-# =============================================================================
-
-# Check if logging.sh functions are available
-__logging_available() { command -v log_info &>/dev/null; }
-
-# Simple logging functions - delegates to structured logging if available
-log() { 
-    if __logging_available; then
-        log_info "$1"
-    else
-        echo -e "${GREEN}✓${NC} $1"
-    fi
+# Logging functions
+log() {
+    echo -e "${GREEN}[INFO]${NC} $*"
 }
 
-info() { 
-    if __logging_available; then
-        log_info "$1"
-    else
-        echo -e "${BLUE}ℹ${NC} $1"
-    fi
+log_info() {
+    log "$@"
 }
 
-warn() { 
-    if __logging_available; then
-        log_warning "$1"
-    else
-        echo -e "${YELLOW}⚠${NC} $1" >&2
-    fi
+info() {
+    log "$@"
 }
 
-error() { 
-    if __logging_available; then
-        log_error "$1"
-    else
-        echo -e "${RED}✗${NC} $1" >&2
-    fi
+warn() {
+    echo -e "${YELLOW}[WARN]${NC} $*" >&2
 }
 
-die() { 
-    if __logging_available; then
-        log_fatal "$1" "{}" "${2:-1}"
-    else
-        error "$1"
-        exit "${2:-1}"
-    fi
+error() {
+    echo -e "${RED}[ERROR]${NC} $*" >&2
 }
 
-# RPC helper
-rpc_call() {
-    local method="$1"
-    local params="${2:-[]}"
-    local rpc_url="${RPC_URL:-http://127.0.0.1:8545}"
+log_error() {
+    error "$@"
+}
+
+die() {
+    error "$@"
+    exit 1
+}
+
+# Banner printing
+print_banner() {
+    local title="$1"
+    echo "=========================================="
+    echo "  $title"
+    echo "=========================================="
+}
+
+# Help/usage functions
+show_help() {
+    local script_name="${1:-$0}"
+    cat <<EOF
+Usage: $script_name [OPTIONS]
+
+For detailed help, see documentation.
+EOF
+}
+
+show_usage() {
+    show_help "$@"
+}
+
+# Network detection
+detect_network() {
+    local network_id="${1:-}"
     
-    curl -sf -m 10 -X POST "$rpc_url" \
-        -H "Content-Type: application/json" \
-        -d "{\"jsonrpc\":\"2.0\",\"method\":\"$method\",\"params\":$params,\"id\":1}"
+    case "$network_id" in
+        50) echo "mainnet" ;;
+        51) echo "testnet" ;;
+        551) echo "devnet" ;;
+        *) echo "unknown" ;;
+    esac
 }
 
-# Hex to decimal conversion
-hex_to_dec() {
-    local hex="$1"
-    hex="${hex#0x}"  # Remove 0x prefix if present
-    echo $((16#$hex))
-}
-
-# Format bytes to human readable
-format_bytes() {
-    local bytes=$1
-    if (( bytes < 1024 )); then
-        echo "${bytes}B"
-    elif (( bytes < 1048576 )); then
-        echo "$(( bytes / 1024 ))KB"
-    elif (( bytes < 1073741824 )); then
-        echo "$(( bytes / 1048576 ))MB"
-    else
-        echo "$(( bytes / 1073741824 ))GB"
-    fi
-}
-
-# Wei to XDC conversion
-wei_to_xdc() {
-    local wei=$1
-    awk "BEGIN {printf \"%.2f\", $wei / 1000000000000000000}"
-}
-
-# Check if command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-# Ensure required commands are available
+# Prerequisites checking
 check_prerequisites() {
-    local required_cmds=("$@")
-    local missing=()
+    local required_commands=("docker" "docker-compose" "jq" "curl")
     
-    for cmd in "${required_cmds[@]}"; do
-        if ! command_exists "$cmd"; then
-            missing+=("$cmd")
+    for cmd in "${required_commands[@]}"; do
+        if ! command -v "$cmd" &> /dev/null; then
+            die "$cmd is required but not installed"
         fi
     done
+}
+
+# Configuration loading
+load_config() {
+    local config_file="${1:-.env}"
     
-    if [ ${#missing[@]} -gt 0 ]; then
-        die "Missing required commands: ${missing[*]}"
+    if [ -f "$config_file" ]; then
+        # shellcheck disable=SC1090
+        source "$config_file"
+    else
+        warn "Config file $config_file not found"
     fi
 }
 
+# RPC utilities
+rpc_call() {
+    local url="${1:-http://localhost:8545}"
+    local method="$2"
+    shift 2
+    local params="$*"
+    
+    curl -s -X POST "$url" \
+        -H "Content-Type: application/json" \
+        -d "{\"jsonrpc\":\"2.0\",\"method\":\"$method\",\"params\":[$params],\"id\":1}"
+}
+
+json_rpc() {
+    rpc_call "$@"
+}
+
+# Hex conversion
+hex_to_dec() {
+    local hex="$1"
+    hex="${hex#0x}"  # Remove 0x prefix
+    printf '%d\n' "0x$hex"
+}
+
+dec_to_hex() {
+    printf '0x%x\n' "$1"
+}
+
+# Summary printing
+print_summary() {
+    local title="$1"
+    shift
+    
+    print_banner "$title"
+    for line in "$@"; do
+        echo "  $line"
+    done
+    echo "=========================================="
+}
+
+# Report generation
+generate_report() {
+    local report_file="${1:-report.txt}"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    
+    cat > "$report_file" <<EOF
+XDC Node Setup Report
+Generated: $timestamp
+==========================================================
+EOF
+}
+
+# History display
+show_history() {
+    local log_file="${1:-/var/log/xdc-node/setup.log}"
+    
+    if [ -f "$log_file" ]; then
+        tail -n 50 "$log_file"
+    else
+        warn "Log file $log_file not found"
+    fi
+}
+
+# Ensure this script is sourced, not executed
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+    die "This script should be sourced, not executed directly"
+fi
