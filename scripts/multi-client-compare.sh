@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Source shared logging library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/logging.sh" 2>/dev/null || source "$(dirname "$0")/lib/logging.sh" || { echo "Error: Cannot find lib/logging.sh" >&2; exit 1; }
+
+
 # Source common utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
@@ -30,17 +35,8 @@ CHECK_INTERVAL="${CHECK_INTERVAL:-300}"  # 5 minutes
 OUTPUT_FILE="${OUTPUT_FILE:-multi-client-compare.log}"
 
 # Functions
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1" | tee -a "$OUTPUT_FILE"
-}
 
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1" | tee -a "$OUTPUT_FILE"
-}
 
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$OUTPUT_FILE"
-}
 
 log_divergence() {
     echo -e "${RED}[DIVERGENCE]${NC} $1" | tee -a "$OUTPUT_FILE"

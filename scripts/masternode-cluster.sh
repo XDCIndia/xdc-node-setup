@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Source shared logging library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/logging.sh" 2>/dev/null || source "$(dirname "$0")/lib/logging.sh" || { echo "Error: Cannot find lib/logging.sh" >&2; exit 1; }
+
+
 # Source common utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
@@ -49,17 +54,8 @@ STATE_DIR="${XDC_STATE_DIR}/cluster"
 source "${LIB_DIR}/notify.sh" 2>/dev/null || true
 
 # Logging functions
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1" | tee -a "$CLUSTER_LOG" 2>/dev/null || echo -e "${GREEN}[INFO]${NC} $1"
-}
 
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1" | tee -a "$CLUSTER_LOG" 2>/dev/null || echo -e "${YELLOW}[WARN]${NC} $1"
-}
 
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$CLUSTER_LOG" 2>/dev/null || echo -e "${RED}[ERROR]${NC} $1"
-}
 
 # Print banner
 print_banner() {
@@ -185,6 +181,11 @@ create_health_check_script() {
     
     cat <<'EOF' > "$script_path"
 #!/bin/bash
+
+# Source shared logging library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/logging.sh" 2>/dev/null || source "$(dirname "$0")/lib/logging.sh" || { echo "Error: Cannot find lib/logging.sh" >&2; exit 1; }
+
 # Cluster health check script
 set -euo pipefail
 
