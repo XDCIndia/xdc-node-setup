@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+# Source common utilities
+source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || source "$(dirname "$0")/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
 #==============================================================================
 # XDC Node Cost Estimator
 # Estimates monthly costs for running XDC nodes across cloud providers
