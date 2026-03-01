@@ -173,7 +173,7 @@ def main():
             # Log
             ts = time.strftime('%H:%M:%S')
             short_hash = block_hash[:18] + "..."
-            print(f"[{ts}] Block {block_num} ({short_hash}) → {status}")
+            print(f"[{ts}] Block {block_num} ({short_hash}) -> {status}")
             
             last_hash = block_hash
             
