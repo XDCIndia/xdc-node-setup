@@ -11,6 +11,9 @@ LIB_DIR="${SCRIPT_DIR}/lib"
 REPORT_FILE="/opt/xdc-node/reports/security-audit-$(date +%Y%m%d-%H%M%S).txt"
 SCORE_FILE="/opt/xdc-node/reports/security-score.json"
 
+# Source common utilities
+source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
+
 # Source notification library
 # shellcheck source=/dev/null
 source "${LIB_DIR}/notify.sh" 2>/dev/null || {

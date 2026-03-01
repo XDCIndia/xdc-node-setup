@@ -10,6 +10,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="${SCRIPT_DIR}/lib"
 
+# Source common utilities
+source "${LIB_DIR}/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
+
 # Source notification library
 # shellcheck source=/dev/null
 source "${LIB_DIR}/notify.sh" 2>/dev/null || {

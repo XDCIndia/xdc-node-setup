@@ -9,6 +9,9 @@ set -euo pipefail
 readonly SCRIPT_VERSION="1.0.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Source common utilities
+source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
+
 # Configuration
 readonly XDC_NODE_HOME="${XDC_NODE_HOME:-/opt/xdc-node}"
 readonly UPDATE_LOG="${UPDATE_LOG:-/var/log/xdc-node-updates.log}"
