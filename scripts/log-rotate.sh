@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
+#==============================================================================
 #==============================================================================
 # XDC Node Log Rotation Script
 # Compress daily logs, move to oldlogs/, and delete logs older than retention period

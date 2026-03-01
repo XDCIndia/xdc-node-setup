@@ -1,4 +1,9 @@
 #!/bin/bash
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
+# XDPoS 2.0 Consensus Validation Script
 # XDPoS 2.0 Consensus Validation Script
 # Validates epoch boundaries, gap blocks, vote participation, and QC formation
 # Author: anilcinchawale <anil24593@gmail.com>
