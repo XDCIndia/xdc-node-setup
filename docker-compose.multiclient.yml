@@ -1,0 +1,212 @@
+version: '3.8'
+
+# Multi-Client XDC Node Setup
+# Runs multiple client implementations simultaneously without port conflicts
+# See docs/MULTI-CLIENT-PORTS.md for details
+
+services:
+  # Geth Stable - Primary Production Client
+  xdc-geth-stable:
+    image: xinfinorg/xdposchain:v2.6.8
+    container_name: xdc-geth-stable
+    hostname: xdc-geth-stable
+    ports:
+      - "30303:30303"      # P2P TCP
+      - "30303:30303/udp"  # P2P UDP
+      - "8545:8545"        # RPC HTTP
+      - "8546:8546"        # RPC WebSocket
+      - "6060:6060"        # Metrics/pprof
+    volumes:
+      - ${DATA_DIR:-./data}/geth-stable:/xdcchain
+      - ./configs/geth:/configs
+    environment:
+      - NETWORK_ID=${NETWORK_ID:-50}
+      - SYNC_MODE=${SYNC_MODE:-snap}
+    command: |
+      --networkid ${NETWORK_ID:-50}
+      --datadir /xdcchain
+      --syncmode ${SYNC_MODE:-snap}
+      --http
+      --http.addr 0.0.0.0
+      --http.port 8545
+      --http.api eth,net,web3,xdc
+      --http.vhosts=*
+      --http.corsdomain=*
+      --ws
+      --ws.addr 0.0.0.0
+      --ws.port 8546
+      --ws.api eth,net,web3,xdc
+      --ws.origins=*
+      --port 30303
+      --maxpeers 50
+      --metrics
+      --pprof
+      --pprof.addr 0.0.0.0
+      --pprof.port 6060
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # Geth PR5 - Feature Branch with XDPoS 2.0
+  xdc-geth-pr5:
+    image: xinfinorg/xdposchain:pr5-latest
+    container_name: xdc-geth-pr5
+    hostname: xdc-geth-pr5
+    ports:
+      - "30304:30304"      # P2P TCP
+      - "30304:30304/udp"  # P2P UDP
+      - "7070:7070"        # RPC HTTP (SkyOne port)
+      - "7071:7071"        # RPC WebSocket
+      - "6070:6070"        # Metrics
+    volumes:
+      - ${DATA_DIR:-./data}/geth-pr5:/xdcchain
+      - ./configs/geth:/configs
+    environment:
+      - NETWORK_ID=${NETWORK_ID:-50}
+    command: |
+      --networkid ${NETWORK_ID:-50}
+      --datadir /xdcchain
+      --http
+      --http.addr 0.0.0.0
+      --http.port 7070
+      --http.api eth,net,web3,xdc
+      --http.vhosts=*
+      --http.corsdomain=*
+      --ws
+      --ws.addr 0.0.0.0
+      --ws.port 7071
+      --ws.api eth,net,web3,xdc
+      --ws.origins=*
+      --port 30304
+      --maxpeers 50
+      --metrics
+      --pprof
+      --pprof.addr 0.0.0.0
+      --pprof.port 6070
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # Erigon - High-Performance Client
+  xdc-erigon:
+    image: anilchinchawale/erix:latest
+    container_name: xdc-erigon
+    hostname: xdc-erigon
+    ports:
+      - "30305:30305"      # P2P TCP
+      - "30305:30305/udp"  # P2P UDP
+      - "7071:7071"        # RPC HTTP (SkyOne port)
+      - "7072:7072"        # RPC WebSocket
+      - "30311:30311"      # Sentry port
+      - "6071:6071"        # Metrics
+    volumes:
+      - ${DATA_DIR:-./data}/erigon:/xdcchain
+    environment:
+      - ERIGON_CHAIN=xdc
+    command: |
+      --chain=xdc
+      --datadir=/xdcchain
+      --http
+      --http.addr=0.0.0.0
+      --http.port=7071
+      --http.api=eth,erigon,web3,net,debug,trace,txpool
+      --http.vhosts=*
+      --http.corsdomain=*
+      --ws
+      --port=30305
+      --torrent.port=30311
+      --metrics
+      --metrics.addr=0.0.0.0
+      --metrics.port=6071
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # Nethermind - .NET Client
+  xdc-nethermind:
+    image: anilchinchawale/nmx:latest
+    container_name: xdc-nethermind
+    hostname: xdc-nethermind
+    ports:
+      - "30306:30306"      # P2P TCP
+      - "30306:30306/udp"  # P2P UDP
+      - "7072:7072"        # RPC HTTP (SkyOne port)
+      - "7073:7073"        # RPC WebSocket
+      - "6072:6072"        # Metrics
+    volumes:
+      - ${DATA_DIR:-./data}/nethermind:/xdcchain
+      - ./configs/nethermind:/configs
+    environment:
+      - NETHERMIND_CONFIG=xdc
+      - NETHERMIND_JSONRPCCONFIG_ENABLED=true
+      - NETHERMIND_JSONRPCCONFIG_HOST=0.0.0.0
+      - NETHERMIND_JSONRPCCONFIG_PORT=7072
+      - NETHERMIND_NETWORK_DISCOVERYPORT=30306
+      - NETHERMIND_NETWORK_P2PPORT=30306
+      - NETHERMIND_METRICSCONFIG_ENABLED=true
+      - NETHERMIND_METRICSCONFIG_EXPOSEPORT=6072
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # Reth - Rust Client (Experimental)
+  xdc-reth:
+    image: xdc/reth:latest
+    container_name: xdc-reth
+    hostname: xdc-reth
+    ports:
+      - "40303:40303"      # P2P TCP
+      - "40303:40303/udp"  # P2P UDP
+      - "8588:8588"        # RPC HTTP (SkyOne port)
+      - "8589:8589"        # RPC WebSocket
+      - "6073:6073"        # Metrics
+    volumes:
+      - ${DATA_DIR:-./data}/reth:/xdcchain
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+    command: |
+      node
+      --chain xdc
+      --datadir /xdcchain
+      --http
+      --http.addr 0.0.0.0
+      --http.port 8588
+      --http.api eth,net,web3,debug,trace
+      --ws
+      --ws.addr 0.0.0.0
+      --ws.port 8589
+      --port 40303
+      --discovery.port 40304
+      --metrics 0.0.0.0:6073
+    restart: unless-stopped
+    profiles:
+      - experimental
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+networks:
+  default:
+    name: xdc-multiclient
+    driver: bridge
+
+volumes:
+  geth-stable:
+  geth-pr5:
+  erigon:
+  nethermind:
+  reth:
