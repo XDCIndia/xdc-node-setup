@@ -40,7 +40,14 @@ WATCH_INTERVAL=5
 # Utility Functions
 #==============================================================================
 
-
+# XDPoS v2 gap block detection
+is_gap_block() {
+    local block_num=$1
+    local epoch_start=$(( (block_num / EPOCH_LENGTH) * EPOCH_LENGTH ))
+    local offset=$((block_num - epoch_start))
+    # Gap blocks at positions: 0, 1, 2, 3, 4, 450, 451, 452, 453, 454
+    [[ $offset -le 4 || ($offset -ge 450 && $offset -le 454) ]]
+}
 
 format_time() {
     local seconds="$1"
@@ -92,6 +99,14 @@ track_epoch() {
     printf "  ${BOLD}%-25s${NC} %d%%\n" "Epoch Progress:" "$epoch_progress"
     printf "  ${BOLD}%-25s${NC} %d blocks\n" "Blocks to Next Epoch:" "$blocks_to_next_epoch"
     printf "  ${BOLD}%-25s${NC} ~%s\n" "ETA Next Epoch:" "$(format_time $seconds_to_next_epoch)"
+    
+    # Gap block status
+    printf "  ${BOLD}%-25s${NC} " "Gap Block:"
+    if is_gap_block "$block_number"; then
+        echo -e "${YELLOW}YES (positions 0-4 or 450-454)${NC}"
+    else
+        echo -e "${GREEN}No${NC}"
+    fi
     
     # Progress bar
     echo ""
