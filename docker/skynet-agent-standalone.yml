@@ -33,7 +33,6 @@ services:
     volumes:
       - ./skynet-agent.sh:/agent.sh:ro
       - ./skynet.conf:/etc/xdc-node/skynet.conf:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro   # Docker stats collection
       - /etc/ssh/sshd_config:/host/sshd_config:ro      # Security audit checks
       - /proc:/host/proc:ro                              # System metrics
     environment:

@@ -180,7 +180,6 @@ services:
     container_name: skynet-agent-geth
     restart: unless-stopped
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - RPC_URL=http://xdc-node-apothem:8545
       - SKYNET_NODE_NAME=local-apothem-geth
@@ -199,7 +198,6 @@ services:
     container_name: skynet-agent-gx
     restart: unless-stopped
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - RPC_URL=http://xdc-node-gx-apothem:8557
       - SKYNET_NODE_NAME=local-apothem-gx
@@ -218,7 +216,6 @@ services:
     container_name: skynet-agent-erigon
     restart: unless-stopped
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - RPC_URL=http://xdc-node-erigon-apothem:8556
       - SKYNET_NODE_NAME=local-apothem-erigon
@@ -237,7 +234,6 @@ services:
     container_name: skynet-agent-nethermind
     restart: unless-stopped
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - RPC_URL=http://xdc-node-nethermind-apothem:8558
       - SKYNET_NODE_NAME=local-apothem-nethermind

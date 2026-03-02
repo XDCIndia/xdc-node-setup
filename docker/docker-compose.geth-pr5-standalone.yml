@@ -75,7 +75,6 @@ services:
     ports:
       - "0.0.0.0:${GP5_DASHBOARD_PORT:-7070}:3000"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - RPC_URL=http://xdc-node-geth-pr5:8557
       - SKYNET_NODE_NAME=${SKYNET_NODE_NAME:-xdc-geth-pr5}
