@@ -752,7 +752,8 @@ check_node_health() {
         if [[ "$WD_RESTART_COUNT" -ge "$MAX_RESTARTS_PER_HOUR" ]]; then
             watchdog_log "🚨 ALERT: Max restarts ($MAX_RESTARTS_PER_HOUR) reached in 1 hour"
             watchdog_log "Issues: ${issues[*]}"
-            # TODO: Send alert notification via SkyNet API
+            # Send critical alert notification via SkyNet API
+            api_call "POST" "/nodes/alerts" "{\"severity\":\"critical\",\"title\":\"Max restarts reached\",\"message\":\"Node has restarted $WD_RESTART_COUNT times in the last hour. Issues: ${issues[*]}\"}" >/dev/null
             save_watchdog_state "$block_height"
             return 1
         fi
