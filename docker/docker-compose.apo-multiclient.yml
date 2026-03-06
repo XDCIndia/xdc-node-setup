@@ -1,0 +1,165 @@
+version: '3.8'
+
+# APO (Apothem) Multi-Client - All 5 XDC Clients + 5 SkyNet Agents + Peer Connector
+# Server: 185.180.220.183, SSH port 52316
+# Generated from xdc-node-setup codebase
+
+services:
+
+  # ==================== PEER CONNECTOR ====================
+  # Continuously cross-peers all 5 clients so they sync from each other
+  peer-connector:
+    image: alpine/curl:latest
+    container_name: peer-connector-apo
+    restart: unless-stopped
+    network_mode: host
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache jq > /dev/null 2>&1
+        echo "[PeerConnector] Starting APO peer connector..."
+
+        add_peer() {
+          local rpc_port=$1
+          local enode=$2
+          local name=$3
+          local result=$(curl -sf -m5 -X POST http://127.0.0.1:$rpc_port \
+            -H "Content-Type: application/json" \
+            -d "{\"jsonrpc\":\"2.0\",\"method\":\"admin_addTrustedPeer\",\"params\":[\"$enode\"],\"id\":1}" 2>/dev/null | jq -r '.result // .error.message' 2>/dev/null)
+          echo "[PeerConnector] $name :$rpc_port -> $result"
+        }
+
+        while true; do
+          echo "[PeerConnector] === Cross-peering all clients ==="
+
+          # Get live enodes from each client
+          STABLE_ENODE=$(curl -sf -m5 -X POST http://127.0.0.1:8545 -H "Content-Type:application/json" \
+            -d '{"jsonrpc":"2.0","method":"admin_nodeInfo","params":[],"id":1}' 2>/dev/null | \
+            jq -r '.result.enode' 2>/dev/null | sed 's/@\[::\]/@172.18.0.2/')
+          GP5_ENODE=$(curl -sf -m5 -X POST http://127.0.0.1:8555 -H "Content-Type:application/json" \
+            -d '{"jsonrpc":"2.0","method":"admin_nodeInfo","params":[],"id":1}' 2>/dev/null | \
+            jq -r '.result.enode' 2>/dev/null | sed 's/@127\.0\.0\.1/@172.18.0.3/')
+          NM_ENODE=$(curl -sf -m5 -X POST http://127.0.0.1:8558 -H "Content-Type:application/json" \
+            -d '{"jsonrpc":"2.0","method":"admin_nodeInfo","params":[],"id":1}' 2>/dev/null | \
+            jq -r '.result.enode' 2>/dev/null | sed 's/@\[::\]/@185.180.220.183/')
+
+          echo "[PeerConnector] Stable: $STABLE_ENODE"
+          echo "[PeerConnector] GP5:    $GP5_ENODE"
+          echo "[PeerConnector] NM:     $NM_ENODE"
+
+          # Stable -> add GP5, NM, Erigon
+          [ -n "$GP5_ENODE" ]  && add_peer 8545 "$GP5_ENODE"  "stable<-gp5"
+          [ -n "$NM_ENODE" ]   && add_peer 8545 "$NM_ENODE"   "stable<-nm"
+
+          # GP5 -> add Stable, NM
+          [ -n "$STABLE_ENODE" ] && add_peer 8555 "$STABLE_ENODE" "gp5<-stable"
+          [ -n "$NM_ENODE" ]    && add_peer 8555 "$NM_ENODE"    "gp5<-nm"
+
+          # NM -> add Stable (host network - use 172.18.0.2)
+          [ -n "$STABLE_ENODE" ] && add_peer 8558 "$STABLE_ENODE" "nm<-stable"
+          [ -n "$GP5_ENODE" ]   && add_peer 8558 "$GP5_ENODE"   "nm<-gp5"
+
+          echo "[PeerConnector] Done. Sleeping 120s..."
+          sleep 120
+        done
+
+  # ==================== SKYONE AGENTS (5 clients) ====================
+  agent-stable:
+    image: anilchinchawale/xdc-agent:latest
+    container_name: agent-stable-apo
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - SKYNET_NODE_ID=f708698c-fbdb-439f-882a-c6e9db6e5870
+      - SKYNET_API_KEY=xdc-netown-key-2026-prod
+      - SKYNET_MASTER_KEY=xdc-netown-key-2026-prod
+      - SKYNET_API_URL=https://net.xdc.network/api
+      - SKYNET_NODE_NAME=apo-stable-183
+      - RPC_URL=http://127.0.0.1:8545
+      - NODE_RPC_PORT=8545
+      - HOST_IP=185.180.220.183
+      - CLIENT_TYPE=geth
+      - NETWORK=apothem
+      - HEARTBEAT_INTERVAL=60
+
+  agent-gp5:
+    image: anilchinchawale/xdc-agent:latest
+    container_name: agent-gp5-apo
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - SKYNET_NODE_ID=2ffab63b-926a-4343-a3c9-96e90eb2c973
+      - SKYNET_API_KEY=xdc-netown-key-2026-prod
+      - SKYNET_MASTER_KEY=xdc-netown-key-2026-prod
+      - SKYNET_API_URL=https://net.xdc.network/api
+      - SKYNET_NODE_NAME=apo-gp5-183
+      - RPC_URL=http://127.0.0.1:8555
+      - NODE_RPC_PORT=8555
+      - HOST_IP=185.180.220.183
+      - CLIENT_TYPE=geth-pr5
+      - NETWORK=apothem
+      - HEARTBEAT_INTERVAL=60
+
+  agent-erigon:
+    image: anilchinchawale/xdc-agent:latest
+    container_name: agent-erigon-apo
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - SKYNET_NODE_ID=40259a1d-26e2-47a1-b44b-1e9858a27dc1
+      - SKYNET_API_KEY=xdc-netown-key-2026-prod
+      - SKYNET_MASTER_KEY=xdc-netown-key-2026-prod
+      - SKYNET_API_URL=https://net.xdc.network/api
+      - SKYNET_NODE_NAME=apo-erigon-183
+      - RPC_URL=http://127.0.0.1:8565
+      - NODE_RPC_PORT=8565
+      - HOST_IP=185.180.220.183
+      - CLIENT_TYPE=erigon
+      - NETWORK=apothem
+      - HEARTBEAT_INTERVAL=60
+
+  agent-nm:
+    image: anilchinchawale/xdc-agent:latest
+    container_name: agent-nm-apo
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - SKYNET_NODE_ID=2beb3132-c268-43d1-b67f-9b9ea1ae014b
+      - SKYNET_API_KEY=xdc-netown-key-2026-prod
+      - SKYNET_MASTER_KEY=xdc-netown-key-2026-prod
+      - SKYNET_API_URL=https://net.xdc.network/api
+      - SKYNET_NODE_NAME=apo-nm-183
+      - RPC_URL=http://127.0.0.1:8558
+      - NODE_RPC_PORT=8558
+      - HOST_IP=185.180.220.183
+      - CLIENT_TYPE=nethermind
+      - NETWORK=apothem
+      - HEARTBEAT_INTERVAL=60
+
+  agent-reth:
+    image: anilchinchawale/xdc-agent:latest
+    container_name: agent-reth-apo
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - SKYNET_NODE_ID=3755a126-c335-4028-bbf6-87c517b99000
+      - SKYNET_API_KEY=xdc-netown-key-2026-prod
+      - SKYNET_MASTER_KEY=xdc-netown-key-2026-prod
+      - SKYNET_API_URL=https://net.xdc.network/api
+      - SKYNET_NODE_NAME=apo-reth-183
+      - RPC_URL=http://127.0.0.1:8588
+      - NODE_RPC_PORT=8588
+      - HOST_IP=185.180.220.183
+      - CLIENT_TYPE=reth
+      - NETWORK=apothem
+      - HEARTBEAT_INTERVAL=60
