@@ -154,8 +154,6 @@ LFG_CHECK_INTERVAL=${LFG_CHECK_INTERVAL:-600}
   done
 ) &
 
-# Dashboard disabled for now - focus on heartbeats
-echo "Dashboard startup disabled - heartbeat-only mode" | tee -a /var/log/xdc/dashboard.log
-echo "Heartbeat loop running, waiting for signals..." | tee -a /var/log/xdc/heartbeat.log
-# Keep container alive by waiting indefinitely
-wait
+# Start Next.js dashboard
+echo "Starting SkyOne Dashboard on port 3000..." | tee -a /var/log/xdc/dashboard.log
+cd /app && exec npx next start -p 3000
