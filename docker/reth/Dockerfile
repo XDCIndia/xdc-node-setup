@@ -23,10 +23,14 @@ RUN mkdir -p /reth/bin /work/xdcchain /reth/logs \
     && chown -R reth:reth /reth /work
 
 # Copy the pre-built xdc-reth binary
-# In production, this would be built in a builder stage or downloaded
-# For now, we'll expect it to be injected during build or at runtime
-# COPY xdc-reth /reth/bin/xdc-reth
-# RUN chmod +x /reth/bin/xdc-reth
+# Build the binary first with:
+#   cd /path/to/reth-xdc && cargo build --release --bin xdc-reth
+#   cp target/release/xdc-reth docker/reth/xdc-reth
+# Or use the pre-built Docker Hub image directly:
+#   anilchinchawale/rethx:apothem-latest (Apothem testnet)
+#   anilchinchawale/rethx:latest         (Mainnet)
+COPY xdc-reth /reth/bin/xdc-reth
+RUN chmod +x /reth/bin/xdc-reth
 
 WORKDIR /reth
 

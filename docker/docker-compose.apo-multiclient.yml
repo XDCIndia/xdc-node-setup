@@ -100,8 +100,8 @@ services:
       <<: *skynet-env
       SKYNET_NODE_ID: 40259a1d-26e2-47a1-b44b-1e9858a27dc1
       SKYNET_NODE_NAME: apo-erigon-183
-      RPC_URL: http://127.0.0.1:8565
-      NODE_RPC_PORT: "8565"
+      RPC_URL: http://127.0.0.1:8547
+      NODE_RPC_PORT: "8547"
       CLIENT_TYPE: erigon
 
   agent-nm:
@@ -111,8 +111,8 @@ services:
       <<: *skynet-env
       SKYNET_NODE_ID: 2beb3132-c268-43d1-b67f-9b9ea1ae014b
       SKYNET_NODE_NAME: apo-nm-183
-      RPC_URL: http://127.0.0.1:8558
-      NODE_RPC_PORT: "8558"
+      RPC_URL: http://127.0.0.1:8557
+      NODE_RPC_PORT: "8557"
       CLIENT_TYPE: nethermind
 
   agent-reth:
@@ -125,3 +125,4 @@ services:
       RPC_URL: http://127.0.0.1:8588
       NODE_RPC_PORT: "8588"
       CLIENT_TYPE: reth
+      NETWORK: apothem

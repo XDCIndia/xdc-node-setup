@@ -9,8 +9,8 @@ HOST_IP="${HOST_IP:-185.180.220.183}"
 declare -A NODES
 NODES[stable]="f708698c-fbdb-439f-882a-c6e9db6e5870:8545:geth"
 NODES[gp5]="2ffab63b-926a-4343-a3c9-96e90eb2c973:8555:geth-pr5"
-NODES[erigon]="40259a1d-26e2-47a1-b44b-1e9858a27dc1:8565:erigon"
-NODES[nm]="2beb3132-c268-43d1-b67f-9b9ea1ae014b:8558:nethermind"
+NODES[erigon]="40259a1d-26e2-47a1-b44b-1e9858a27dc1:8547:erigon"
+NODES[nm]="2beb3132-c268-43d1-b67f-9b9ea1ae014b:8557:nethermind"
 NODES[reth]="3755a126-c335-4028-bbf6-87c517b99000:8588:reth"
 
 docker rm -f agent-stable agent-gp5 agent-erigon agent-nm agent-reth 2>/dev/null || true
@@ -31,6 +31,6 @@ for client in stable gp5 erigon nm reth; do
     -e CLIENT_TYPE="$CLIENT_TYPE" \
     -e NETWORK="apothem" \
     -e HEARTBEAT_INTERVAL="60" \
-    anilchinchawale/xdc-skynet-agent:latest
+    anilchinchawale/xdc-agent:latest
   echo "✅ agent-$client (nodeId=$NODE_ID rpc=:$RPC_PORT)"
 done

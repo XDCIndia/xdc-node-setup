@@ -11,6 +11,7 @@ set -e
 : "${RPC_PORT:=7073}"
 : "${P2P_PORT:=40303}"
 : "${DISCOVERY_PORT:=40304}"
+: "${AUTHRPC_PORT:=8551}"
 : "${INSTANCE_NAME:=Reth_XDC_Node}"
 : "${DEBUG_TIP:=}"
 : "${BOOTNODES:=}"
@@ -64,10 +65,11 @@ RETH_ARGS=(
     --datadir "$DATADIR"
     --http
     --http.port "${RPC_PORT}"
-    --http.addr "127.0.0.1"  # SECURITY FIX #355: Localhost only
+    --http.addr "0.0.0.0"
     --http.api "eth,net,web3,admin,debug,trace"
     --port "${P2P_PORT}"
     --discovery.port "${DISCOVERY_PORT}"
+    --authrpc.port "${AUTHRPC_PORT}"
 )
 
 # Add debug.tip if provided (required for sync without CL)

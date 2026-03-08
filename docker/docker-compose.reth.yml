@@ -26,6 +26,7 @@ services:
       - RPC_PORT=7073
       - P2P_PORT=40303
       - DISCOVERY_PORT=40304
+      - AUTHRPC_PORT=${AUTHRPC_PORT:-8551}
       - INSTANCE_NAME=${INSTANCE_NAME:-Reth_XDC_Node}
       - DEBUG_TIP=${DEBUG_TIP:-}
       - BOOTNODES=${BOOTNODES:-}
