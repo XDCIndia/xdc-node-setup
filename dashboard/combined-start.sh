@@ -37,7 +37,7 @@ if [ -f "$SKYNET_CONF" ]; then
     NODE_NAME="${SKYNET_NODE_NAME:-${CLIENT_TAG}$(hostname)-$(curl -s -m 3 https://api.ipify.org | tail -c 8)}"
     PUBLIC_IP=$(curl -s -m 5 https://api.ipify.org || echo "unknown")
     # Build curl args — auth header only if API key is set
-    CURL_ARGS=(-s -m 10 -X POST "${SKYNET_API_URL}/nodes/register" -H "Content-Type: application/json")
+    CURL_ARGS=(-s -m 10 -X POST "${SKYNET_API_URL}/v1/nodes/register" -H "Content-Type: application/json")
     [ -n "$SKYNET_API_KEY" ] && CURL_ARGS+=(-H "Authorization: Bearer ${SKYNET_API_KEY}")
     CURL_ARGS+=(-d "{\"name\":\"${NODE_NAME}\",\"host\":\"${PUBLIC_IP}\",\"role\":\"${SKYNET_ROLE:-fullnode}\"}")
     REG_RESPONSE=$(curl "${CURL_ARGS[@]}")
@@ -97,7 +97,7 @@ echo "Starting SkyNet heartbeat loop..." | tee -a /var/log/xdc/dashboard.log
     
     # Send heartbeat directly to SkyNet
     if [ -n "$SKYNET_API_URL" ] && [ -n "$SKYNET_NODE_ID" ]; then
-      CURL_ARGS=(-s -m 15 -X POST "${SKYNET_API_URL}/nodes/${SKYNET_NODE_ID}/heartbeat" -H "Content-Type: application/json")
+      CURL_ARGS=(-s -m 15 -X POST "${SKYNET_API_URL}/v1/nodes/${SKYNET_NODE_ID}/heartbeat" -H "Content-Type: application/json")
       [ -n "$SKYNET_API_KEY" ] && CURL_ARGS+=(-H "Authorization: Bearer ${SKYNET_API_KEY}")
       CURL_ARGS+=(-d "{\"blockHeight\":$BLOCK_NUM,\"peerCount\":$PEER_COUNT,\"isSyncing\":$IS_SYNCING,\"clientType\":\"geth\",\"version\":\"v2.6.8\"}")
       
