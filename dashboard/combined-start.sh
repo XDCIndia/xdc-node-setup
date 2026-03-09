@@ -99,7 +99,7 @@ echo "Starting SkyNet heartbeat loop..." | tee -a /var/log/xdc/dashboard.log
     if [ -n "$SKYNET_API_URL" ] && [ -n "$SKYNET_NODE_ID" ]; then
       CURL_ARGS=(-s -m 15 -X POST "${SKYNET_API_URL}/v1/nodes/${SKYNET_NODE_ID}/heartbeat" -H "Content-Type: application/json")
       [ -n "$SKYNET_API_KEY" ] && CURL_ARGS+=(-H "Authorization: Bearer ${SKYNET_API_KEY}")
-      CURL_ARGS+=(-d "{\"blockHeight\":$BLOCK_NUM,\"peerCount\":$PEER_COUNT,\"isSyncing\":$IS_SYNCING,\"clientType\":\"geth\",\"version\":\"v2.6.8\"}")
+      CURL_ARGS+=(-d "{\"blockHeight\":$BLOCK_NUM,\"peerCount\":$PEER_COUNT,\"isSyncing\":$IS_SYNCING,\"clientType\":\"${CLIENT_TYPE:-geth}\",\"version\":\"${CLIENT_VERSION:-unknown}\"}")
       
       RESPONSE=$(curl "${CURL_ARGS[@]}" 2>&1)
       echo "[$(date '+%Y-%m-%d %H:%M:%S')] heartbeat sent: block=$BLOCK_NUM peers=$PEER_COUNT response=$RESPONSE" | tee -a /var/log/xdc/heartbeat.log
