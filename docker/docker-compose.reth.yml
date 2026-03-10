@@ -73,6 +73,7 @@ services:
       - ./skynet-agent.sh:/agent.sh:ro
       - ../${NETWORK:-mainnet}/.xdc-node/skynet-reth.conf:/etc/xdc-node/skynet.conf
       - /proc:/host/proc:ro
+      - /var/run/docker.sock:/var/run/docker.sock
       - ../${NETWORK:-mainnet}/.xdc-node/logs:/var/log/xdc
     environment:
       - RPC_URL=http://xdc-node:7073
