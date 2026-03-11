@@ -1,0 +1,148 @@
+#==============================================================================
+# XDC Node Docker Compose — Core Services
+# For monitoring stack: docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+# Or simply: xdc start --monitoring
+#==============================================================================
+
+services:
+  #--------------------------------------------------------------------------
+  # XDC Node - Main blockchain client
+  #--------------------------------------------------------------------------
+  xdc-node:
+    image: xinfinorg/xdposchain:v2.6.8
+    platform: linux/amd64
+    container_name: xdc-node
+    restart: always
+    ports:
+      - "${P2P_PORT:-30303}:30303"
+      - "${P2P_PORT:-30303}:30303/udp"
+      - "127.0.0.1:${RPC_PORT:-8545}:8545"
+      - "127.0.0.1:${WS_PORT:-8546}:8546"
+    volumes:
+      - ../${NETWORK:-mainnet}/xdcchain:/work/xdcchain
+      - ./${NETWORK:-mainnet}/genesis.json:/work/genesis.json:ro
+      - ./${NETWORK:-mainnet}/start-node.sh:/work/start.sh:ro
+      - ./${NETWORK:-mainnet}/bootnodes.list:/work/bootnodes.list:ro
+      - ./${NETWORK:-mainnet}/.pwd:/work/.pwd:ro
+      - ./entrypoint.sh:/work/entrypoint.sh:ro
+      - ../${NETWORK:-mainnet}/.xdc-node/config.toml:/etc/xdc-node/config.toml:ro
+      - ../${NETWORK:-mainnet}/.xdc-node/logs:/var/log/xdc
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - ../${NETWORK:-mainnet}/.xdc-node/.env
+    environment:
+      - NETWORK=${NETWORK:-mainnet}
+      - SYNC_MODE=${SYNC_MODE:-full}
+      - GC_MODE=${GC_MODE:-full}
+      - RPC_PORT=${RPC_PORT:-8545}
+      - WS_PORT=${WS_PORT:-8546}
+      - INSTANCE_NAME=${INSTANCE_NAME:-xdc-node}
+    entrypoint: ["/bin/bash", "/work/entrypoint.sh"]
+    networks:
+      - xdc-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -X POST http://localhost:8545 -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' | grep result || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 300s
+      retries: 10
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    # Note: read_only disabled — causes binary resolution failures on macOS Docker Desktop
+    # where /usr/bin, /tmp, /usr/local/bin are all read-only or noexec
+    # read_only: true
+    tmpfs:
+      - /tmp:nosuid,size=100m
+      - /root/.npm:nosuid,size=1000m
+
+  #--------------------------------------------------------------------------
+  # XDC Agent - Next.js Dashboard + SkyNet Monitoring (unified container)
+  #--------------------------------------------------------------------------
+  xdc-agent:
+    build:
+      context: ../dashboard
+      dockerfile: Dockerfile
+    container_name: xdc-agent
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${DASHBOARD_PORT:-7070}:3000"
+    volumes:
+      - ./skynet-agent.sh:/agent.sh:ro
+      - ../${NETWORK:-mainnet}/.xdc-node/skynet.conf:/etc/xdc-node/skynet.conf
+      - /proc:/host/proc:ro
+      - ../${NETWORK:-mainnet}/.xdc-node/logs:/var/log/xdc
+    environment:
+      # RPC_URL: Container-to-container uses internal port 8545
+      # For external access (dev mode), use http://localhost:${RPC_PORT}
+      - RPC_URL=${RPC_URL:-http://xdc-node:8545}
+      - NODE_RPC_PORT=${RPC_PORT:-8545}
+      - SKYNET_CONF=/etc/xdc-node/skynet.conf
+      - SKYNET_API_KEY=${SKYNET_API_KEY:-}
+      - NEXT_PUBLIC_REFRESH_INTERVAL=10
+      # Dashboard authentication settings (disabled by default for localhost-only access)
+      - DASHBOARD_AUTH_ENABLED=${DASHBOARD_AUTH_ENABLED:-false}
+      - DASHBOARD_USER=${DASHBOARD_USER:-admin}
+      - DASHBOARD_PASS=${DASHBOARD_PASS:-xdc-skyone}
+    networks:
+      - xdc-network
+    depends_on:
+      xdc-node:
+        condition: service_started
+    healthcheck:
+      # Use wget with fallback to process check for macOS compatibility (Issue #52)
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health/live 2>/dev/null || (ps aux | grep -q '[n]ode' && exit 0) || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # Increased start_period for macOS (Rosetta is slower) - Issue #52
+      start_period: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+    # Read-only root filesystem with tmpfs for writable directories
+    #     read_only: true  # Disabled for npm compatibility
+    tmpfs:
+      - /tmp:nosuid,size=100m
+      - /root/.npm:nosuid,size=1000m
+      - /var/cache:nosuid,size=50m
+      - /app/.next:nosuid,size=500m
+      - /app/node_modules:nosuid,size=1000m
+
+#==============================================================================
+# Networks
+#==============================================================================
+networks:
+  xdc-network:
+    driver: bridge
