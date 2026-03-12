@@ -11,9 +11,9 @@ services:
     container_name: xdc-node-reth
     restart: always
     ports:
-      - "${RETH_P2P_PORT:-40303}:40303"
-      - "${RETH_P2P_PORT:-40303}:40303/udp"
-      - "${RETH_DISCOVERY_PORT:-40304}:40304/udp"
+      - "0.0.0.0:${RETH_P2P_PORT:-40303}:40303"
+      - "0.0.0.0:${RETH_P2P_PORT:-40303}:40303/udp"
+      - "0.0.0.0:${RETH_DISCOVERY_PORT:-40304}:40304/udp"
       - "127.0.0.1:${RETH_RPC_PORT:-7073}:7073"
     volumes:
       - ../${NETWORK:-mainnet}/reth-db:/work/xdcchain

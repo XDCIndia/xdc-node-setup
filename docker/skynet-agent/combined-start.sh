@@ -1738,7 +1738,8 @@ EOF
     "type": "$OS_TYPE",
     "release": "$OS_RELEASE",
     "arch": "$OS_ARCH",
-    "kernel": "$OS_KERNEL"
+    "kernel": "$OS_KERNEL",
+    "ipv4": "$HOST_IP"
   },
   "system": {
     "cpuPercent": $CPU_PERCENT,

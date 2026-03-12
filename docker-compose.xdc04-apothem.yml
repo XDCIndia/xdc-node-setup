@@ -1,0 +1,338 @@
+version: '3.8'
+
+# XDC04 Apothem Multi-Client — 194.163.156.211
+# Based on github.com/AnilChinchawale/xdc-node-setup
+# 4 clients: Stable Geth (v2.6.8) + Erigon + Nethermind + Reth
+# 4 SkyNet agents + peer-connector
+
+x-restart: &restart
+  restart: unless-stopped
+
+x-apothem-bootnodes: &bootnodes >-
+  enode://ee1e11e3f56b015b2b391eb9c45292159713583b4adfe29d24675238f73d33e6ec0a62397847823e2bca622c91892075c517fc383c9355d43a89bb7532e834a0@157.173.120.219:30312,enode://729d763db071595bacbbf33037a8e7639d8e9a97bfcfcda3afe963435d919cb95634f27375f0aadf6494dad47e506c888bf15cb5633d5f81dbb793b05b27e676@207.90.192.100:30312,enode://49c7586c221250cac7070df41c1b6c77180c5d9051e20d1d2b77dfa0dc80b8dc48a8e3c7ca068ac757429223530d6445a06a32ab4af20819cfaa1d47282a0401@80.243.180.121:30312
+
+services:
+
+  # ==================== STABLE GETH (XDC v2.6.8) ====================
+  xdc-apo-stable:
+    image: xinfinorg/xdposchain:v2.6.8
+    platform: linux/amd64
+    container_name: xdc-apo-stable
+    <<: *restart
+    ports:
+      - "8545:8545"
+      - "8546:8546"
+      - "30303:30303"
+      - "30303:30303/udp"
+    volumes:
+      - xdc-apo-stable-data:/work/xdcchain
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        BINARY=$$(which XDC-testnet 2>/dev/null || which XDC 2>/dev/null || echo "/usr/bin/XDC-testnet")
+        exec $$BINARY \
+          --datadir /work/xdcchain \
+          --networkid 51 \
+          --port 30303 \
+          --nat extip:194.163.156.211 \
+          --rpc --rpcaddr 0.0.0.0 --rpcport 8545 \
+          --rpccorsdomain "*" --rpcvhosts "*" \
+          --rpcapi eth,net,web3,txpool,debug,admin,XDPoS \
+          --ws --wsaddr 0.0.0.0 --wsport 8546 --wsorigins "*" \
+          --syncmode full --gcmode full \
+          --apothem \
+          --bootnodes "enode://ee1e11e3f56b015b2b391eb9c45292159713583b4adfe29d24675238f73d33e6ec0a62397847823e2bca622c91892075c517fc383c9355d43a89bb7532e834a0@157.173.120.219:30312,enode://729d763db071595bacbbf33037a8e7639d8e9a97bfcfcda3afe963435d919cb95634f27375f0aadf6494dad47e506c888bf15cb5633d5f81dbb793b05b27e676@207.90.192.100:30312,enode://49c7586c221250cac7070df41c1b6c77180c5d9051e20d1d2b77dfa0dc80b8dc48a8e3c7ca068ac757429223530d6445a06a32ab4af20819cfaa1d47282a0401@80.243.180.121:30312"
+    networks:
+      - xdc-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -X POST http://localhost:8545 -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' | grep -q result || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ==================== ERIGON ====================
+  xdc-apo-erigon:
+    image: anilchinchawale/erix:latest
+    platform: linux/amd64
+    container_name: xdc-apo-erigon
+    <<: *restart
+    user: root
+    ports:
+      - "8556:8556"
+      - "30306:30306"
+      - "30306:30306/udp"
+    volumes:
+      - xdc-apo-erigon-data:/data/erigon
+    environment:
+      - NETWORK=apothem
+    command: >
+      --datadir=/data/erigon
+      --chain=xdc-apothem
+      --networkid=51
+      --port=30306
+      --http
+      --http.addr=0.0.0.0
+      --http.port=8556
+      --http.vhosts=*
+      --http.corsdomain=*
+      --http.api=eth,net,web3,txpool,debug,erigon,admin
+      --ws
+    networks:
+      - xdc-network
+    depends_on:
+      xdc-apo-stable:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -X POST http://localhost:8556 -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' | grep -q result || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  # ==================== NETHERMIND ====================
+  xdc-apo-nm:
+    image: anilchinchawale/nmx:latest
+    platform: linux/amd64
+    container_name: xdc-apo-nm
+    <<: *restart
+    user: root
+    ports:
+      - "8558:8558"
+      - "8559:8559"
+      - "30308:30308"
+      - "30308:30308/udp"
+    volumes:
+      - xdc-apo-nm-data:/nethermind/data
+    entrypoint: ["/nethermind/nethermind"]
+    command: >
+      --config xdc-testnet
+      --datadir /nethermind/data
+      --Network.DiscoveryPort=30308
+      --Network.P2PPort=30308
+      --JsonRpc.Enabled=true
+      --JsonRpc.Host=0.0.0.0
+      --JsonRpc.Port=8558
+      --JsonRpc.WebSocketsPort=8559
+      --JsonRpc.EnabledModules=eth,net,web3,admin,txpool
+      --Sync.FastSync=false
+      --Sync.SnapSync=false
+    networks:
+      - xdc-network
+    depends_on:
+      xdc-apo-stable:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -X POST http://localhost:8558 -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' | grep -q result || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+
+  # ==================== RETH ====================
+  xdc-apo-reth:
+    image: anilchinchawale/rethx:latest
+    platform: linux/amd64
+    container_name: xdc-apo-reth
+    <<: *restart
+    user: root
+    ports:
+      - "8548:7073"
+      - "8551:8551"
+      - "40303:40303"
+      - "40303:40303/udp"
+    volumes:
+      - xdc-apo-reth-data:/work/xdcchain
+      - /root/workspace/xdc-node-setup/data/reth/jwt.hex:/work/jwt.hex:ro
+    environment:
+      - NETWORK=apothem
+    entrypoint: ["/reth/bin/xdc-reth"]
+    command:
+      - node
+      - --chain=xdc-apothem
+      - --datadir=/work/xdcchain
+      - --http
+      - --http.addr=0.0.0.0
+      - --http.port=7073
+      - --http.api=eth,net,web3,admin,debug,trace
+      - --port=40303
+      - --discovery.port=40303
+      - --authrpc.addr=0.0.0.0
+      - --authrpc.port=8551
+      - --authrpc.jwtsecret=/work/jwt.hex
+      - --log.stdout.filter=info
+    networks:
+      - xdc-network
+
+  # ==================== PEER CONNECTOR ====================
+  peer-connector-apo:
+    image: alpine/curl:latest
+    container_name: peer-connector-apo
+    <<: *restart
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache jq > /dev/null 2>&1
+        echo "[PC] APO peer connector started"
+        while true; do
+          echo "[PC] === $$(date '+%H:%M:%S') Cross-peering ==="
+          STABLE=$$(curl -sf -m5 -X POST http://xdc-apo-stable:8545 -H "Content-Type:application/json" \
+            -d '{"jsonrpc":"2.0","method":"admin_nodeInfo","params":[],"id":1}' 2>/dev/null \
+            | jq -r '.result.enode // empty' 2>/dev/null | sed 's/@\[::\]/@xdc-apo-stable/')
+          ERIGON=$$(curl -sf -m5 -X POST http://xdc-apo-erigon:8556 -H "Content-Type:application/json" \
+            -d '{"jsonrpc":"2.0","method":"admin_nodeInfo","params":[],"id":1}' 2>/dev/null \
+            | jq -r '.result.enode // empty' 2>/dev/null | sed 's/@\[::\]/@xdc-apo-erigon/')
+          if [ -n "$$STABLE" ]; then
+            curl -sf -m5 -X POST http://xdc-apo-erigon:8556 -H "Content-Type:application/json" \
+              -d "{\"jsonrpc\":\"2.0\",\"method\":\"admin_addTrustedPeer\",\"params\":[\"$$STABLE\"],\"id\":1}" > /dev/null 2>&1 && echo "[PC] erigon<-stable ok"
+            curl -sf -m5 -X POST http://xdc-apo-nm:8558 -H "Content-Type:application/json" \
+              -d "{\"jsonrpc\":\"2.0\",\"method\":\"admin_addPeer\",\"params\":[\"$$STABLE\"],\"id\":1}" > /dev/null 2>&1 && echo "[PC] nm<-stable ok"
+          fi
+          if [ -n "$$ERIGON" ]; then
+            curl -sf -m5 -X POST http://xdc-apo-stable:8545 -H "Content-Type:application/json" \
+              -d "{\"jsonrpc\":\"2.0\",\"method\":\"admin_addPeer\",\"params\":[\"$$ERIGON\"],\"id\":1}" > /dev/null 2>&1 && echo "[PC] stable<-erigon ok"
+          fi
+          echo "[PC] Done. Sleep 120s"
+          sleep 120
+        done
+    networks:
+      - xdc-network
+    depends_on:
+      - xdc-apo-stable
+
+  # ==================== FCU FEEDER FOR RETH ====================
+  reth-fcu-apo:
+    image: python:3.11-slim
+    container_name: reth-fcu-apo
+    <<: *restart
+    network_mode: host
+    volumes:
+      - /root/workspace/xdc-node-setup/data/reth/jwt.hex:/jwt.hex:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        pip install requests pyjwt -q
+        python3 - << 'PYEOF'
+        import requests, time, json, jwt, os
+        from datetime import datetime, timezone
+
+        ERIGON = "http://localhost:8556"
+        RETH_AUTH = "http://localhost:8551"
+        GENESIS = "0xbdea512b4f12ff1135ec92c00dc047ffb93890c2ea1aa0eefe9b013d80640075"
+        JWT_SECRET = open("/jwt.hex").read().strip()
+
+        def get_jwt_token():
+            now = datetime.now(timezone.utc)
+            payload = {"iat": int(now.timestamp())}
+            return jwt.encode(payload, bytes.fromhex(JWT_SECRET), algorithm="HS256")
+
+        def rpc(url, method, params=[], use_jwt=False):
+            try:
+                headers = {"Content-Type": "application/json"}
+                if use_jwt:
+                    headers["Authorization"] = f"Bearer {get_jwt_token()}"
+                r = requests.post(url, json={"jsonrpc":"2.0","method":method,"params":params,"id":1}, 
+                                headers=headers, timeout=10)
+                return r.json().get("result")
+            except Exception as e:
+                print(f"RPC error: {e}", flush=True)
+                return None
+
+        print("FCU Feeder started for Apothem Reth (with JWT)", flush=True)
+        while True:
+            try:
+                blk_hex = rpc(ERIGON, "eth_blockNumber")
+                if blk_hex and blk_hex != "0x0":
+                    blk = rpc(ERIGON, "eth_getBlockByNumber", [blk_hex, False])
+                    if blk:
+                        head = blk.get("hash", GENESIS)
+                        fcu = {"headBlockHash": head, "safeBlockHash": head, "finalizedBlockHash": GENESIS}
+                        result = rpc(RETH_AUTH, "engine_forkchoiceUpdatedV1", [fcu], use_jwt=True)
+                        print(f"FCU: head={head[:10]}... erigon_blk={int(blk_hex,16)} -> {result}", flush=True)
+            except Exception as e:
+                print(f"FCU error: {e}", flush=True)
+            time.sleep(15)
+        PYEOF
+    depends_on:
+      - xdc-apo-reth
+      - xdc-apo-erigon
+
+  # ==================== SKYONE AGENTS ====================
+  agent-stable-apo:
+    image: anilchinchawale/xdc-agent:latest
+    container_name: agent-stable-apo
+    <<: *restart
+    network_mode: host
+    environment:
+      SKYNET_API_KEY: xdc-netown-key-2026-prod
+      SKYNET_MASTER_KEY: xdc-netown-key-2026-prod
+      SKYNET_API_URL: https://net.xdc.network/api
+      SKYNET_NODE_NAME: xdc04-apo-stable
+      RPC_URL: http://127.0.0.1:8545
+      NODE_RPC_PORT: "8545"
+      CLIENT_TYPE: geth
+      HOST_IP: "194.163.156.211"
+      NETWORK: apothem
+      HEARTBEAT_INTERVAL: "60"
+
+  agent-erigon-apo:
+    image: anilchinchawale/xdc-agent:latest
+    container_name: agent-erigon-apo
+    <<: *restart
+    network_mode: host
+    environment:
+      SKYNET_API_KEY: xdc-netown-key-2026-prod
+      SKYNET_MASTER_KEY: xdc-netown-key-2026-prod
+      SKYNET_API_URL: https://net.xdc.network/api
+      SKYNET_NODE_NAME: xdc04-apo-erigon
+      RPC_URL: http://127.0.0.1:8556
+      NODE_RPC_PORT: "8556"
+      CLIENT_TYPE: erigon
+      HOST_IP: "194.163.156.211"
+      NETWORK: apothem
+      HEARTBEAT_INTERVAL: "60"
+
+  agent-nm-apo:
+    image: anilchinchawale/xdc-agent:latest
+    container_name: agent-nm-apo
+    <<: *restart
+    network_mode: host
+    environment:
+      SKYNET_API_KEY: xdc-netown-key-2026-prod
+      SKYNET_MASTER_KEY: xdc-netown-key-2026-prod
+      SKYNET_API_URL: https://net.xdc.network/api
+      SKYNET_NODE_NAME: xdc04-apo-nm
+      RPC_URL: http://127.0.0.1:8558
+      NODE_RPC_PORT: "8558"
+      CLIENT_TYPE: nethermind
+      HOST_IP: "194.163.156.211"
+      NETWORK: apothem
+      HEARTBEAT_INTERVAL: "60"
+
+  agent-reth-apo:
+    image: anilchinchawale/xdc-agent:latest
+    container_name: agent-reth-apo
+    <<: *restart
+    network_mode: host
+    environment:
+      SKYNET_API_KEY: xdc-netown-key-2026-prod
+      SKYNET_MASTER_KEY: xdc-netown-key-2026-prod
+      SKYNET_API_URL: https://net.xdc.network/api
+      SKYNET_NODE_NAME: xdc04-apo-reth
+      RPC_URL: http://127.0.0.1:8548
+      NODE_RPC_PORT: "8548"
+      CLIENT_TYPE: reth
+      HOST_IP: "194.163.156.211"
+      NETWORK: apothem
+      HEARTBEAT_INTERVAL: "60"
+
+volumes:
+  xdc-apo-stable-data:
+  xdc-apo-erigon-data:
+  xdc-apo-nm-data:
+  xdc-apo-reth-data:
+
+networks:
+  xdc-network:
+    driver: bridge
+    name: docker_xdc-network
