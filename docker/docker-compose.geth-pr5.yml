@@ -11,8 +11,8 @@ services:
     container_name: xdc-node-geth-pr5
     restart: always
     ports:
-      - "${P2P_PORT:-30303}:30303"
-      - "${P2P_PORT:-30303}:30303/udp"
+      - "0.0.0.0:${P2P_PORT:-30303}:30303"
+      - "0.0.0.0:${P2P_PORT:-30303}:30303/udp"
       - "${RPC_BIND:-0.0.0.0}:${RPC_PORT:-8545}:8545"
       - "${WS_BIND:-127.0.0.1}:${WS_PORT:-8546}:8546"
     volumes:

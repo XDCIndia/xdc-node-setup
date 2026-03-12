@@ -64,10 +64,13 @@ WORKDIR /nethermind
 # 30303 - P2P
 EXPOSE 8545 30303 30303/udp
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -sf http://localhost:8545 -X POST -H "Content-Type: application/json" \
-    -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' || exit 1
+# Copy health check script
+COPY healthcheck.sh /nethermind/healthcheck.sh
+RUN chmod +x /nethermind/healthcheck.sh
+
+# Health check - use script for better checking
+HEALTHCHECK --interval=30s --timeout=15s --start-period=120s --retries=5 \
+    CMD /nethermind/healthcheck.sh || exit 1
 
 # Switch to non-root user
 USER nethermind

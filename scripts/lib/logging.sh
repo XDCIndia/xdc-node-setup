@@ -1,299 +1,300 @@
-#!/bin/bash
-#==============================================================================
-# Structured JSON Logging Library for XDC Node Setup
-# Provides consistent, parseable logging for observability
-#==============================================================================
+#!/usr/bin/env bash
+#===============================================================================
+# XDC Node Setup - Shared Logging Library
+# Centralizes logging functions to avoid duplication across scripts
+#
+# Usage:
+#   source "${SCRIPT_DIR}/../lib/logging.sh"
+#   log "Starting operation..."
+#   warn "This might take a while"
+#   error "Something went wrong"
+#
+#===============================================================================
 
-set -euo pipefail
+# Color codes
+if [[ -t 1 ]]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    CYAN='\033[0;36m'
+    BOLD='\033[1m'
+    NC='\033[0m' # No Color
+else
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    CYAN=''
+    BOLD=''
+    NC=''
+fi
+
+# Timestamp format
+LOG_TIMESTAMP_FORMAT="${LOG_TIMESTAMP_FORMAT:-%Y-%m-%d %H:%M:%S}"
+
+# Log levels
+LOG_LEVEL_ERROR=0
+LOG_LEVEL_WARN=1
+LOG_LEVEL_INFO=2
+LOG_LEVEL_DEBUG=3
 
 # Default log level
-LOG_LEVEL="${LOG_LEVEL:-INFO}"
-LOG_FORMAT="${LOG_FORMAT:-json}"  # json or text
-LOG_OUTPUT="${LOG_OUTPUT:-stdout}"  # stdout, file, or both
-LOG_FILE="${LOG_FILE:-/var/log/xdc-node/xdc-node.log}"
+CURRENT_LOG_LEVEL="${CURRENT_LOG_LEVEL:-$LOG_LEVEL_INFO}"
 
-# Log levels (numeric for comparison)
-declare -A LOG_LEVELS=(
-    [DEBUG]=10
-    [INFO]=20
-    [WARNING]=30
-    [ERROR]=40
-    [FATAL]=50
-)
-
-#==============================================================================
+#-------------------------------------------------------------------------------
 # Core Logging Functions
-#==============================================================================
+#-------------------------------------------------------------------------------
 
-# Initialize logging
-init_logging() {
-    local log_dir
-    log_dir=$(dirname "$LOG_FILE")
-    
-    if [[ ! -d "$log_dir" ]]; then
-        mkdir -p "$log_dir" 2>/dev/null || {
-            echo "Warning: Cannot create log directory $log_dir" >&2
-            return 1
-        }
+# Log a timestamped message to stderr
+log() {
+    echo "[$(date "+${LOG_TIMESTAMP_FORMAT}")] $1" >&2
+}
+
+# Log an info message with green checkmark
+info() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+# Log a warning message with yellow warning symbol
+warn() {
+    echo -e "${YELLOW}⚠${NC} $1" >&2
+}
+
+# Log an error message with red X
+error() {
+    echo -e "${RED}✗${NC} $1" >&2
+}
+
+# Log a debug message (only if DEBUG is set)
+debug() {
+    if [[ "${DEBUG:-}" == "1" || "${VERBOSE:-}" == "1" ]]; then
+        echo -e "${CYAN}ℹ${NC} [DEBUG] $1" >&2
     fi
     
-    # Ensure log file exists and has proper permissions
-    touch "$LOG_FILE" 2>/dev/null || {
-        echo "Warning: Cannot write to log file $LOG_FILE" >&2
-        return 1
-    }
-    
-    chmod 640 "$LOG_FILE" 2>/dev/null || true
-    
-    log_info "Logging initialized" "{"log_file":"$LOG_FILE","level":"$LOG_LEVEL"}"
-}
-
-# Check if we should log at this level
-_should_log() {
-    local level="$1"
-    local current_level="${LOG_LEVELS[$LOG_LEVEL]:-20}"
-    local message_level="${LOG_LEVELS[$level]:-20}"
-    
-    [[ $message_level -ge $current_level ]]
-}
-
-# Build JSON log entry
-_build_json_log() {
-    local level="$1"
-    local message="$2"
-    local context="${3:-{}}"
-    local timestamp
-    timestamp=$(date -Iseconds)
-    local hostname
-    hostname=$(hostname)
-    local script="${BASH_SOURCE[2]:-unknown}"
-    local func="${FUNCNAME[2]:-main}"
-    local line="${BASH_LINENO[1]:-0}"
-    
-    # Escape special characters in message
-    local escaped_message
-    escaped_message=$(echo "$message" | sed 's/"/\\"/g' | tr '\n' ' ')
-    
-    cat <<EOF
-{"timestamp":"$timestamp","level":"$level","hostname":"$hostname","script":"$script","function":"$func","line":$line,"message":"$escaped_message","context":$context}
+    # Format output based on LOG_FORMAT
+    local output
+    if [[ "$LOG_FORMAT" == "json" ]]; then
+        # JSON output
+        local json_meta="${metadata:-{}}"
+        [[ "$json_meta" != "{}"* && "$json_meta" != "["* ]] && json_meta="{}"
+        
+        output=$(cat <<EOF
+{"timestamp":"$timestamp","level":"$level","component":"$LOG_COMPONENT","message":"$message","metadata":$json_meta}
 EOF
-}
-
-# Build text log entry
-_build_text_log() {
-    local level="$1"
-    local message="$2"
-    local timestamp
-    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    local script="$(basename "${BASH_SOURCE[2]:-unknown}")"
+)
+    else
+        # Text output with colors
+        local color_code=""
+        local icon=""
+        case "$level" in
+            DEBUG)
+                color_code="${CYAN}"
+                icon="🔍"
+                ;;
+            INFO)
+                color_code="${BLUE}"
+                icon="ℹ"
+                ;;
+            WARN|WARNING)
+                color_code="${YELLOW}"
+                icon="⚠"
+                ;;
+            ERROR)
+                color_code="${RED}"
+                icon="✗"
+                ;;
+            FATAL)
+                color_code="${MAGENTA}${BOLD}"
+                icon="💀"
+                ;;
+        esac
+        
+        output="${color_code}${icon} [${level}]${NC} ${message}"
+        [[ -n "$metadata" && "$metadata" != "{}" ]] && output="${output} ${CYAN}${metadata}${NC}"
+    fi
     
-    echo "[$timestamp] [$level] [$script] $message"
-}
-
-# Write log entry
-_write_log() {
-    local log_entry="$1"
+    # Output to stdout/stderr
+    if [[ "$level" == "ERROR" || "$level" == "FATAL" ]]; then
+        echo -e "$output" >&2
+    else
+        echo -e "$output"
+    fi
     
-    case "$LOG_OUTPUT" in
-        stdout)
-            echo "$log_entry"
-            ;;
-        file)
-            echo "$log_entry" >> "$LOG_FILE"
-            ;;
-        both)
-            echo "$log_entry"
-            echo "$log_entry" >> "$LOG_FILE"
-            ;;
-    esac
+    # Log to file if configured
+    if [[ -n "$LOG_FILE" ]]; then
+        if [[ "$LOG_FORMAT" == "json" ]]; then
+            echo "$output" >> "$LOG_FILE"
+        else
+            # Strip colors for file output
+            echo "[$timestamp] [$level] $message $metadata" >> "$LOG_FILE"
+        fi
+    fi
+    
+    # Exit on FATAL
+    if [[ "$level" == "FATAL" ]]; then
+        exit 1
+    fi
 }
 
 #==============================================================================
-# Public Logging Interface
+# Public Logging Functions - Modern (log_*)
 #==============================================================================
-
 log_debug() {
-    local message="$1"
-    local context="${2:-{}}"
-    
-    if ! _should_log "DEBUG"; then return 0; fi
-    
-    if [[ "$LOG_FORMAT" == "json" ]]; then
-        _write_log "$(_build_json_log "DEBUG" "$message" "$context")"
-    else
-        _write_log "$(_build_text_log "DEBUG" "$message")"
-    fi
+    _log "DEBUG" "$1" "${2:-}"
 }
 
+# Log a fatal error and exit
+die() {
+    error "$1"
+    exit "${2:-1}"
+}
+
+#-------------------------------------------------------------------------------
+# Formatted Logging Functions
+#-------------------------------------------------------------------------------
+
+# Log with timestamp
 log_info() {
-    local message="$1"
-    local context="${2:-{}}"
-    
-    if ! _should_log "INFO"; then return 0; fi
-    
-    if [[ "$LOG_FORMAT" == "json" ]]; then
-        _write_log "$(_build_json_log "INFO" "$message" "$context")"
-    else
-        # Add colors for text output
-        _write_log "\033[0;32m$(_build_text_log "INFO" "$message")\033[0m"
-    fi
+    echo "[$(date "+${LOG_TIMESTAMP_FORMAT}")] INFO: $1" >&2
 }
 
-log_warning() {
-    local message="$1"
-    local context="${2:-{}}"
-    
-    if ! _should_log "WARNING"; then return 0; fi
-    
-    if [[ "$LOG_FORMAT" == "json" ]]; then
-        _write_log "$(_build_json_log "WARNING" "$message" "$context")"
-    else
-        _write_log "\033[1;33m$(_build_text_log "WARNING" "$message")\033[0m"
-    fi
+log_warn() {
+    echo "[$(date "+${LOG_TIMESTAMP_FORMAT}")] WARN: $1" >&2
 }
 
 log_error() {
-    local message="$1"
-    local context="${2:-{}}"
-    
-    if ! _should_log "ERROR"; then return 0; fi
-    
-    if [[ "$LOG_FORMAT" == "json" ]]; then
-        _write_log "$(_build_json_log "ERROR" "$message" "$context")" >&2
-    else
-        _write_log "\033[0;31m$(_build_text_log "ERROR" "$message")\033[0m" >&2
+    echo "[$(date "+${LOG_TIMESTAMP_FORMAT}")] ERROR: $1" >&2
+}
+
+log_debug() {
+    if [[ "${DEBUG:-}" == "1" || "${VERBOSE:-}" == "1" ]]; then
+        echo "[$(date "+${LOG_TIMESTAMP_FORMAT}")] DEBUG: $1" >&2
     fi
 }
 
-log_fatal() {
-    local message="$1"
-    local context="${2:-{}}"
-    local exit_code="${3:-1}"
-    
-    if [[ "$LOG_FORMAT" == "json" ]]; then
-        _write_log "$(_build_json_log "FATAL" "$message" "$context")" >&2
-    else
-        _write_log "\033[0;35m$(_build_text_log "FATAL" "$message")\033[0m" >&2
-    fi
-    
-    exit "$exit_code"
+#-------------------------------------------------------------------------------
+# Visual Output Functions
+#-------------------------------------------------------------------------------
+
+# Print a banner
+cprint_banner() {
+    echo ""
+    echo -e "${BOLD}$1${NC}"
+    echo ""
 }
 
-#==============================================================================
-# Context Building Helpers
-#==============================================================================
+# Print success message
+print_success() {
+    echo -e "${GREEN}✓${NC} $1"
+}
 
-# Build a JSON context string from key=value pairs
-# Usage: context=$(build_context "key1=\"value1\"" "key2=123")
-build_context() {
-    local pairs=("$@")
-    local json="{"
-    local first=true
+# Print warning message  
+print_warning() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
+
+# Print error message
+print_error() {
+    echo -e "${RED}✗${NC} $1"
+}
+
+# Print info message
+print_info() {
+    echo -e "${BLUE}ℹ${NC} $1"
+}
+
+# Print section header
+print_section() {
+    echo ""
+    echo -e "${BOLD}${BLUE}▸ $1${NC}"
+    echo ""
+}
+
+#-------------------------------------------------------------------------------
+# Progress Indicators
+#-------------------------------------------------------------------------------
+
+# Show a spinner while a command runs
+show_spinner() {
+    local pid=$1
+    local msg="${2:-Processing...}"
+    local delay=0.1
+    local spinstr='|/-\\'
     
-    for pair in "${pairs[@]}"; do
-        if [[ "$pair" =~ ^([^=]+)=(.+)$ ]]; then
-            local key="${BASH_REMATCH[1]}"
-            local value="${BASH_REMATCH[2]}"
-            
-            if [[ "$first" == true ]]; then
-                first=false
-            else
-                json+=","
-            fi
-            
-            json+="\"$key\":$value"
-        fi
+    while ps -p $pid > /dev/null 2>&1; do
+        local temp=${spinstr#?}
+        printf " [%c] %s" "$spinstr" "$msg"
+        local spinstr=$temp${spinstr%"$temp"}
+        sleep $delay
+        printf "\r"
     done
-    
-    json+="}"
-    echo "$json"
+    printf "    \r"
 }
 
-# Log with node context
-log_with_node() {
-    local level="$1"
+# Show progress bar
+show_progress() {
+    local current=$1
+    local total=$2
+    local msg="${3:-Progress}"
+    local width=40
+    
+    local percentage=$((current * 100 / total))
+    local filled=$((width * current / total))
+    local empty=$((width - filled))
+    
+    printf "\r%s: [" "$msg"
+    printf "%${filled}s" | tr ' ' '█'
+    printf "%${empty}s" | tr ' ' '░'
+    printf "] %3d%%" "$percentage"
+}
+
+#-------------------------------------------------------------------------------
+# Log File Operations
+#-------------------------------------------------------------------------------
+
+# Initialize log file
+init_log_file() {
+    local log_file="$1"
+    local log_dir
+    log_dir=$(dirname "$log_file")
+    
+    mkdir -p "$log_dir"
+    touch "$log_file"
+    
+    echo "=== Log started at $(date) ===" > "$log_file"
+}
+
+# Write to log file
+log_to_file() {
+    local log_file="$1"
     local message="$2"
-    local node_id="$3"
-    shift 3
+    local level="${3:-INFO}"
     
-    local context
-    context=$(build_context "node_id=\"$node_id\"" "$@")
-    
-    case "$level" in
-        DEBUG) log_debug "$message" "$context" ;;
-        INFO) log_info "$message" "$context" ;;
-        WARNING) log_warning "$message" "$context" ;;
-        ERROR) log_error "$message" "$context" ;;
-        FATAL) log_fatal "$message" "$context" ;;
-    esac
+    echo "[$(date "+${LOG_TIMESTAMP_FORMAT}")] [$level] $message" >> "$log_file"
 }
 
-#==============================================================================
-# Metrics Logging
-#==============================================================================
-
-# Log a metric event
-log_metric() {
-    local metric_name="$1"
-    local value="$2"
-    local unit="${3:-count}"
-    local tags="${4:-{}}"
+# Rotate log file if it exceeds size limit
+rotate_log() {
+    local log_file="$1"
+    local max_size="${2:-10485760}" # 10MB default
+    local max_files="${3:-5}"
     
-    local context
-    context=$(build_context "metric_name=\"$metric_name\"" "value=$value" "unit=\"$unit\"" "tags=$tags")
-    
-    log_info "metric_recorded" "$context"
+    if [[ -f "$log_file" ]]; then
+        local size
+        size=$(stat -f%z "$log_file" 2>/dev/null || stat -c%s "$log_file" 2>/dev/null || echo 0)
+        
+        if [[ $size -gt $max_size ]]; then
+            # Rotate existing backups
+            for ((i=max_files-1; i>=1; i--)); do
+                if [[ -f "${log_file}.$i" ]]; then
+                    mv "${log_file}.$i" "${log_file}.$((i+1))"
+                fi
+            done
+            
+            # Rotate current log
+            mv "$log_file" "${log_file}.1"
+            touch "$log_file"
+        fi
+    fi
 }
-
-# Log an operation with timing
-log_operation() {
-    local operation="$1"
-    local start_time="$2"
-    local status="${3:-success}"
-    local extra_context="${4:-{}}"
-    
-    local end_time
-    end_time=$(date +%s)
-    local duration=$((end_time - start_time))
-    
-    local context
-    context=$(build_context "operation=\"$operation\"" "duration_ms=$((duration * 1000))" "status=\"$status\"" "extra=$extra_context")
-    
-    log_info "operation_completed" "$context"
-}
-
-#==============================================================================
-# Audit Logging
-#==============================================================================
-
-# Log security-relevant events
-log_audit() {
-    local action="$1"
-    local user="${2:-$(whoami)}"
-    local resource="$3"
-    local result="$4"
-    shift 4
-    
-    local context
-    context=$(build_context "action=\"$action\"" "user=\"$user\"" "resource=\"$resource\"" "result=\"$result\"" "$@")
-    
-    log_info "audit_event" "$context"
-}
-
-#==============================================================================
-# Export Functions
-#==============================================================================
-
-if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
-    export -f init_logging
-    export -f log_debug
-    export -f log_info
-    export -f log_warning
-    export -f log_error
-    export -f log_fatal
-    export -f build_context
-    export -f log_with_node
-    export -f log_metric
-    export -f log_operation
-    export -f log_audit
-fi

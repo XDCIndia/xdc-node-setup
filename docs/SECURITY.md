@@ -1,260 +1,236 @@
-# Security Best Practices for XDC Nodes
+# Security Documentation
 
-This document outlines comprehensive security best practices for running XDC Network nodes in production environments.
-
----
+This document outlines security considerations and recommended mitigations for the XDC Node Setup project.
 
 ## Table of Contents
 
-1. [Server Hardening Checklist](#1-server-hardening-checklist)
-2. [Network Security](#2-network-security)
-3. [Key Management](#3-key-management)
-4. [Incident Response Plan](#4-incident-response-plan)
-5. [Compliance](#5-compliance)
+- [Docker Socket Mount Security](#docker-socket-mount-security)
+- [RPC Security](#rpc-security)
+- [Credential Management](#credential-management)
+- [Network Security](#network-security)
+- [Report Security Issues](#report-security-issues)
 
 ---
 
-## 1. Server Hardening Checklist
+## Docker Socket Mount Security
 
-### Pre-Deployment
+### Issue (#499)
 
-- [ ] **Operating System**
-  - [ ] Use Ubuntu 20.04 LTS, 22.04 LTS, or 24.04 LTS
-  - [ ] Apply all security patches
-  - [ ] Remove unnecessary packages and services
-  - [ ] Configure automatic security updates
+The XDC Agent containers mount the Docker socket (`/var/run/docker.sock`) to monitor container health and status. This is a **necessary tradeoff** that requires careful consideration.
 
-- [ ] **SSH Configuration**
-  - [ ] Change default SSH port (22 → 12141 recommended)
-  - [ ] Disable password authentication
-  - [ ] Use SSH key pairs only (RSA 4096-bit or Ed25519)
-  - [ ] Set `MaxAuthTries 3`
-  - [ ] Set `ClientAliveInterval 300`
-  - [ ] Use strong cryptographic algorithms
-  - [ ] Restrict `AllowUsers` to specific accounts
+### Why It's Needed
 
-- [ ] **Firewall (UFW)**
-  - [ ] Default deny all incoming
-  - [ ] Allow SSH on custom port
-  - [ ] Allow XDC P2P (30303/tcp, 30303/udp)
-  - [ ] Never expose RPC ports (8545, 8546, 8989) publicly
-  - [ ] Enable rate limiting on SSH
+The xdc-agent container requires access to docker.sock to:
+- Monitor container health status
+- Read container logs for analysis
+- Perform container lifecycle operations (restart, etc.)
+- Collect metrics from the Docker daemon
 
-- [ ] **Intrusion Detection**
-  - [ ] Install and configure fail2ban
-  - [ ] Enable auditd for system call monitoring
-  - [ ] Configure log aggregation
-  - [ ] Set up real-time alerting
+### Security Risk
 
-### Post-Deployment
+Mounting the Docker socket grants significant privileges:
+- **Container Escape Risk**: A compromised agent container could escape to the host
+- **Root Equivalent**: Access to docker.sock is equivalent to root on the host
+- **Lateral Movement**: Attackers could spawn privileged containers
 
-- [ ] **Docker Security**
-  - [ ] Use official XDC images only
-  - [ ] Never run containers as root
-  - [ ] Enable Docker Content Trust
-  - [ ] Regularly scan images for vulnerabilities
-  - [ ] Use read-only filesystems where possible
+### Recommended Mitigations
 
-- [ ] **Monitoring & Alerting**
-  - [ ] Configure Prometheus + Grafana
-  - [ ] Set up Telegram/Slack alerts
-  - [ ] Monitor for unusual activity
-  - [ ] Track security-related metrics
+1. **Use Read-Only Mount** (where possible):
+   ```yaml
+   volumes:
+     - /var/run/docker.sock:/var/run/docker.sock:ro
+   ```
+   Note: `:ro` provides limited protection but doesn't prevent all attacks.
 
-- [ ] **Backup Strategy**
-  - [ ] Automated daily backups
-  - [ ] Encrypted backup storage
-  - [ ] Off-site backup replication
-  - [ ] Regular backup restoration tests
+2. **Network Isolation**:
+   - Run agent containers on isolated networks
+   - Use `network_mode: bridge` instead of `host` where possible
+   - Restrict inter-container communication
 
----
-
-## 2. Network Security
-
-### Port Configuration
-
-| Port | Protocol | Direction | Purpose | Public |
-|------|----------|-----------|---------|--------|
-| 12141 | TCP | Inbound | SSH | ✅ No (restrict by IP) |
-| 30303 | TCP/UDP | Inbound/Outbound | XDC P2P | ✅ Yes |
-| 8545 | TCP | Inbound | HTTP RPC | ❌ No (localhost only) |
-| 8546 | TCP | Inbound | WebSocket RPC | ❌ No (localhost only) |
-| 9090 | TCP | Inbound | Prometheus | ❌ No (localhost only) |
-| 3000 | TCP | Inbound | Grafana | ❌ No (tunnel/localhost) |
-
-### DDoS Protection
-
-```bash
-# Rate limiting with iptables (in addition to UFW)
-iptables -A INPUT -p tcp --dport 30303 -m limit --limit 25/minute --limit-burst 100 -j ACCEPT
-iptables -A INPUT -p tcp --dport 30303 -j DROP
-
-# Connection tracking
-iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-iptables -A INPUT -m conntrack --ctstate INVALID -j DROP
-```
-
-### VPN & Private Networking
-
-For production deployments:
-- Use private networks between nodes
-- Implement VPN for administrative access
-- Consider using WireGuard for node-to-node communication
-
-```bash
-# WireGuard example configuration
-[Interface]
-PrivateKey = <server-private-key>
-Address = 10.0.0.1/24
-ListenPort = 51820
-
-[Peer]
-PublicKey = <client-public-key>
-AllowedIPs = 10.0.0.2/32
-```
-
----
-
-## 3. Key Management
-
-### Keystore Security
-
-```bash
-# Secure keystore directory
-chmod 700 /root/xdcchain/keystore
-chown -R xdc:xdc /root/xdcchain/keystore
-
-# Encrypt keystore backups
-gpg --symmetric --cipher-algo AES256 --compress-algo 1 --s2k-cipher-algo AES256 --s2k-digest-algo SHA512 --s2k-mode 3 --s2k-count 65536 keystore-backup.tar.gz
-```
-
-### Hardware Security Modules (HSM)
-
-For production validator nodes:
-- Use HSM for key storage (YubiHSM, AWS CloudHSM)
-- Never store private keys on disk
-- Implement multi-sig for critical operations
-
-### Key Rotation Schedule
-
-| Key Type | Rotation Frequency |
-|----------|-------------------|
-| SSH keys | Every 90 days |
-| API keys | Every 30 days |
-| Signing keys | Every 180 days |
-| Backup encryption keys | Every 365 days |
-
----
-
-## 4. Incident Response Plan
-
-### Severity Levels
-
-| Level | Description | Response Time |
-|-------|-------------|---------------|
-| P0 - Critical | Node compromise, funds at risk | Immediate |
-| P1 - High | Node offline, sync issues | 15 minutes |
-| P2 - Medium | Performance degradation | 1 hour |
-| P3 - Low | Non-critical alerts | 4 hours |
-
-### Incident Response Playbook
-
-#### P0 - Critical Security Incident
-
-1. **Immediate Actions (0-5 minutes)**
-   ```bash
-   # Isolate the node
-   ufw --force reset
-   ufw default deny incoming
-   ufw default deny outgoing
-   systemctl stop xdc-node
-   docker stop xdc-node
+3. **Capability Restrictions**:
+   ```yaml
+   cap_drop:
+     - ALL
+   cap_add:
+     - CHOWN
+     - SETGID
+     - SETUID
+   security_opt:
+     - no-new-privileges:true
    ```
 
-2. **Assessment (5-15 minutes)**
-   - Review audit logs: `ausearch -ts recent -k admin-commands`
-   - Check network connections: `ss -tunap`
-   - Analyze process tree: `ps auxf`
+4. **Dedicated Monitoring User**:
+   - Create a dedicated non-root user for monitoring
+   - Use Docker's RBAC if available
 
-3. **Containment (15-30 minutes)**
-   - Rotate all credentials
-   - Revoke API keys
-   - Alert stakeholders via Telegram
-
-4. **Recovery (30+ minutes)**
-   - Deploy from known-good backup
-   - Apply all security patches
-   - Re-enable services incrementally
-
-#### P1 - Node Offline
-
-```bash
-# Check service status
-systemctl status xdc-node
-docker ps | grep xdc-node
-
-# Check logs
-journalctl -u xdc -f
-docker logs xdc --tail 100
-
-# Restart if needed
-docker compose -f /opt/xdc-node/docker/docker-compose.yml restart
-```
-
-### Emergency Contacts
-
-- **Security Team**: security@xdc.community
-- **On-call Engineer**: Telegram @xdc-oncall
-- **Escalation**: +1-XXX-XXX-XXXX
+5. **Alternative: Docker API Proxy**:
+   Consider using a restricted Docker API proxy like [Docker Socket Proxy](https://github.com/Tecnativa/docker-socket-proxy) to limit API access.
 
 ---
 
-## 5. Compliance
+## RPC Security
 
-### SOC 2 Type II Requirements
+### Issues (#492, #493)
 
-| Control | Implementation |
-|---------|---------------|
-| CC6.1 | Logical access controls, MFA |
-| CC6.2 | Encryption at rest (LUKS) and in transit (TLS) |
-| CC6.3 | Role-based access control (RBAC) |
-| CC6.6 | Intrusion detection (fail2ban, auditd) |
-| CC7.1 | Vulnerability scanning |
-| CC7.2 | Patch management (unattended-upgrades) |
-| A1.2 | Availability monitoring (Prometheus) |
+By default, all XDC node clients now bind RPC to `127.0.0.1` (localhost only) with:
+- **CORS**: Restricted to `localhost` (not `*` wildcard)
+- **VHosts**: Restricted to `localhost` (not `*` wildcard)
+- **RPC Address**: `127.0.0.1` (not `0.0.0.0` which binds all interfaces)
 
-### CIS Benchmarks
+### Configuration
 
-Run CIS hardening script:
+To override for production deployments (with caution):
+
 ```bash
-curl -sSL https://raw.githubusercontent.com/AnilChinchawale/XDC-Node-Setup/main/scripts/security-harden.sh | bash
+# In your .env file or environment
+RPC_ADDR=0.0.0.0              # Bind to all interfaces
+RPC_ALLOW_ORIGINS=example.com # Specific origin(s)
+RPC_VHOSTS=example.com        # Specific vhost(s)
 ```
 
-Key CIS controls implemented:
-- 1.1.1 Disable unused filesystems
-- 3.1 Network parameters (sysctl hardening)
-- 4.2.1 Configure rsyslog
-- 5.1 Configure cron
-- 5.2 SSH configuration
-- 5.3 PAM configuration
-- 5.4 User accounts and environment
+### Environment Variables
 
-### Audit Trail
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RPC_ADDR` | `127.0.0.1` | RPC bind address |
+| `RPC_ALLOW_ORIGINS` | `localhost` | CORS allowed origins |
+| `RPC_VHOSTS` | `localhost` | HTTP virtual hosts |
+| `RPC_PORT` | Varies | RPC listening port |
 
-Maintain comprehensive audit logs:
-- All administrative commands
-- Configuration changes
-- Access to sensitive data
-- Network connections
-- Authentication events
+### Production Recommendations
 
-Retention: 1 year minimum, encrypted storage.
+1. **Use a Reverse Proxy**: Put Nginx or Traefik in front with SSL/TLS
+2. **Firewall Rules**: Restrict access to specific IPs
+3. **Authentication**: Enable dashboard authentication
+   ```bash
+   DASHBOARD_AUTH_ENABLED=true
+   DASHBOARD_USER=secure_admin
+   DASHBOARD_PASS=strong_password_here
+   ```
 
 ---
 
-## References
+## Credential Management
 
-- [NIST Cybersecurity Framework](https://www.nist.gov/cyberframework)
-- [CIS Ubuntu Benchmarks](https://www.cisecurity.org/benchmark/ubuntu_linux)
-- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
-- [XDC Network Security Guidelines](https://docs.xdc.community/security)
+### Issue (#498)
+
+Never commit credentials to version control. All sensitive values use environment variable fallbacks.
+
+### Environment Files
+
+Create a `.env` file in your network directory:
+
+```bash
+# /mainnet/.xdc-node/.env
+GRAFANA_PASSWORD=your_secure_password_here
+SKYNET_API_KEY=your_api_key_here
+DASHBOARD_PASS=another_secure_password
+```
+
+### Template (`.env.example`)
+
+Copy from `.env.example` files and customize:
+
+```bash
+cp mainnet/.xdc-node/.env.example mainnet/.xdc-node/.env
+# Edit mainnet/.xdc-node/.env with your values
+```
+
+### Protected Files (in .gitignore)
+
+```
+.env
+**/.env
+*.secret
+*.key
+keystore/
+```
+
+---
+
+## Network Security
+
+### Default Ports
+
+| Service | Default Port | Bind Address | Notes |
+|---------|--------------|--------------|-------|
+| Geth RPC | 8545 | 127.0.0.1 | Localhost only |
+| Geth WS | 8546 | 127.0.0.1 | Localhost only |
+| Erigon RPC | 8547 | 127.0.0.1 | Localhost only |
+| Nethermind RPC | 8556 | 127.0.0.1 | Localhost only |
+| Reth RPC | 7073 | 127.0.0.1 | Localhost only |
+| Dashboard | 7070 | 127.0.0.1 | Localhost only |
+| Grafana | 3000 | 127.0.0.1 | Localhost only |
+
+### P2P Ports
+
+P2P ports must be exposed externally for blockchain synchronization:
+- Geth: 30303/tcp+udp
+- Erigon: 30304/tcp+udp, 30311/tcp+udp
+- Nethermind: 30306/tcp+udp
+- Reth: 40303/tcp+udp
+
+---
+
+## Installation Security
+
+### Issue (#507)
+
+The `curl | bash` installation pattern has inherent security risks:
+
+1. **MITM Attacks**: If HTTPS is compromised
+2. **Supply Chain**: Script could be modified on the server
+3. **No Verification**: Hard to verify what will execute
+
+### Safer Installation Methods
+
+**Method 1: Git Clone (Recommended)**
+```bash
+git clone https://github.com/AnilChinchawale/xdc-node-setup.git
+cd xdc-node-setup
+bash install.sh
+```
+
+**Method 2: Download and Review**
+```bash
+curl -fsSL -o install.sh https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/install.sh
+# Review the script
+cat install.sh
+# Then execute
+bash install.sh
+```
+
+**Method 3: With Verification**
+```bash
+curl -fsSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/install.sh | bash -s -- --verify
+```
+
+---
+
+## Report Security Issues
+
+If you discover a security vulnerability:
+
+1. **DO NOT** open a public issue
+2. Email security concerns to: `anil24593@gmail.com`
+3. Include detailed description and reproduction steps
+4. Allow time for response before public disclosure
+
+---
+
+## Security Checklist
+
+Before deploying to production:
+
+- [ ] Changed all default passwords
+- [ ] RPC bound to specific IPs or localhost
+- [ ] Firewall rules configured
+- [ ] SSL/TLS enabled for external access
+- [ ] Dashboard authentication enabled
+- [ ] Docker socket mounted read-only where possible
+- [ ] Regular security updates applied
+- [ ] Monitoring and alerting configured
+
+---
+
+*Last updated: March 2025*

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Source unified logging library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || source "/root/.openclaw/workspace/XDC-Node-Setup/scripts/lib/common.sh"
 set -euo pipefail
 
 #==============================================================================
@@ -199,25 +202,9 @@ $(c BOLD)MORE INFO:$(c NC)
 EOF
 }
 
-log() {
-    if [[ "$QUIET" != "true" ]]; then
-        echo -e "$(c GREEN)✓$(c NC) $1"
-    fi
-}
 
-info() {
-    if [[ "$QUIET" != "true" ]]; then
-        echo -e "$(c BLUE)ℹ$(c NC) $1"
-    fi
-}
 
-warn() {
-    echo -e "$(c YELLOW)⚠$(c NC) $1" >&2
-}
 
-error() {
-    echo -e "$(c RED)✗$(c NC) $1" >&2
-}
 
 die() {
     error "$1"

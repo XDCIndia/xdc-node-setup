@@ -11,6 +11,8 @@ readonly LIB_DIR="${SCRIPT_DIR}/lib"
 
 # Source libraries
 # shellcheck source=/dev/null
+source "${LIB_DIR}/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
+# shellcheck source=/dev/null
 source "${LIB_DIR}/logging.sh" 2>/dev/null || true
 # shellcheck source=/dev/null
 source "${LIB_DIR}/error-handler.sh" 2>/dev/null || init_error_handling

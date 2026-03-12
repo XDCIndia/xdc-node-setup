@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
+
+# Source utility functions
+source "$(dirname "$0")/lib/utils.sh" || { echo "Failed to load utils"; exit 1; }
 set -euo pipefail
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
 
 #==============================================================================
 # XDC Bootnode Optimizer
@@ -22,16 +29,6 @@ NC='\033[0m'
 # Default settings
 readonly DEFAULT_TOP_N=10
 # Detect network for network-aware directory structure
-detect_network() {
-    local network="${NETWORK:-}"
-    if [[ -z "$network" && -f "$(pwd)/config.toml" ]]; then
-        network=$(grep -E '^\s*name\s*=' "$(pwd)/config.toml" 2>/dev/null | sed -E 's/.*=\s*"([^"]+)".*/\1/' | head -1)
-    fi
-    if [[ -z "$network" && -f "/opt/xdc-node/config.toml" ]]; then
-        network=$(grep -E '^\s*name\s*=' "/opt/xdc-node/config.toml" 2>/dev/null | sed -E 's/.*=\s*"([^"]+)".*/\1/' | head -1)
-    fi
-    echo "${network:-mainnet}"
-}
 readonly XDC_NETWORK="${XDC_NETWORK:-$(detect_network)}"
 readonly DEFAULT_DATADIR="${XDC_DATADIR:-$(pwd)/${XDC_NETWORK}/xdcchain}"
 readonly PING_TIMEOUT=5
@@ -44,55 +41,6 @@ USE_TESTNET=false
 # Utility Functions
 #==============================================================================
 
-log() { echo -e "${GREEN}✓${NC} $1"; }
-info() { echo -e "${BLUE}ℹ${NC} $1"; }
-warn() { echo -e "${YELLOW}⚠${NC} $1" >&2; }
-error() { echo -e "${RED}✗${NC} $1" >&2; }
-die() { error "$1"; exit 1; }
-
-#==============================================================================
-# Bootnode Lists
-#==============================================================================
-
-# XDC Mainnet bootnodes (from official sources)
-declare -A MAINNET_BOOTNODES=(
-    ["enode://7d3bc54f2331a6c87d4d85ad6d77908e42678f8f70d09198b5e9a77cfa7d73bfbbf2529325ed70f213d3c9c1a776405cd38eabaf0d1e206d14d6c84a77431d7@194.163.160.186:30303"]="Germany"
-    ["enode://f8d3d4f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8@54.169.180.136:30303"]="Singapore"
-    ["enode://a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2@34.87.87.221:30303"]="Singapore"
-    ["enode://b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3@13.251.95.229:30303"]="Singapore"
-    ["enode://c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4@18.136.20.170:30303"]="Singapore"
-    ["enode://d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5@3.1.89.86:30303"]="Singapore"
-    ["enode://e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6@52.221.28.223:30303"]="Singapore"
-    ["enode://f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7@47.241.19.238:30303"]="China"
-    ["enode://a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8@47.242.33.79:30303"]="China"
-    ["enode://b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9@47.242.34.106:30303"]="China"
-    ["enode://c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0@47.242.27.183:30303"]="China"
-    ["enode://d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1@47.242.23.247:30303"]="China"
-    ["enode://e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2@47.242.12.220:30303"]="China"
-    ["enode://f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3@47.242.17.210:30303"]="China"
-    ["enode://a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4@34.230.16.151:30303"]="USA"
-    ["enode://b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5@34.200.137.251:30303"]="USA"
-    ["enode://c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6@34.231.235.203:30303"]="USA"
-    ["enode://d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7@34.201.172.203:30303"]="USA"
-    ["enode://e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8@54.152.82.52:30303"]="USA"
-)
-
-# XDC Apothem Testnet bootnodes
-declare -A TESTNET_BOOTNODES=(
-    ["enode://8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8@54.254.220.233:30303"]="Singapore"
-    ["enode://9a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8@18.136.101.40:30303"]="Singapore"
-    ["enode://aa8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8e8f8a8b8c8d8@13.229.233.150:30303"]="Singapore"
-)
-
-#==============================================================================
-# Parse enode and extract IP
-#==============================================================================
-
-parse_enode_ip() {
-    local enode="$1"
-    # Extract IP from enode://pubkey@IP:port
-    echo "$enode" | sed -n 's|enode://[^@]*@\([^:]*\):.*|\1|p'
-}
 
 parse_enode_port() {
     local enode="$1"

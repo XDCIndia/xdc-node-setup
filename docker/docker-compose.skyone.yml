@@ -1,0 +1,230 @@
+# =============================================================================
+# XDC SkyOne Agent - Docker Compose
+# Unified Dashboard + SkyNet Agent + Optional XDC Node
+# =============================================================================
+
+version: "3.8"
+
+services:
+  # ==========================================================================
+  # Option 1: Dashboard + SkyNet Only (Monitoring External Node)
+  # ==========================================================================
+  xdc-skyone-external:
+    profiles: ["external"]
+    image: anilchinchawale/xdc-skyone:latest
+    container_name: xdc-skyone-external
+    restart: unless-stopped
+    ports:
+      - "7070:7070"     # Dashboard
+      - "6060:6060"     # Prometheus Metrics
+    environment:
+      # Dashboard Configuration
+      - DASHBOARD_PORT=7070
+      - DASHBOARD_REFRESH=10
+      - XDC_RPC_URL=${XDC_RPC_URL:-http://host.docker.internal:8545}
+      
+      # SkyNet Configuration
+      - SKYNET_ENABLED=true
+      - SKYNET_API_URL=${SKYNET_API_URL:-https://net.xdc.network/api}
+      - SKYNET_API_KEY=${SKYNET_API_KEY}
+      - SKYNET_NODE_NAME=${SKYNET_NODE_NAME:-xdc-external-monitor}
+      - SKYNET_ROLE=monitor
+      
+      # XDPoS 2.0 Consensus Monitoring
+      - XDPOS2_GAP_DETECTION=${XDPOS2_GAP_DETECTION:-1}
+      - XDPOS2_QC_VALIDATION=${XDPOS2_QC_VALIDATION:-1}
+      - XDPOS2_EPOCH_MONITOR=${XDPOS2_EPOCH_MONITOR:-1}
+      - XDPOS2_VOTE_MONITOR=${XDPOS2_VOTE_MONITOR:-1}
+      - XDPOS2_GAP_POLL_INTERVAL=${XDPOS2_GAP_POLL_INTERVAL:-10}
+      - XDPOS2_QC_POLL_INTERVAL=${XDPOS2_QC_POLL_INTERVAL:-30}
+      - XDPOS2_EPOCH_POLL_INTERVAL=${XDPOS2_EPOCH_POLL_INTERVAL:-15}
+      - XDPOS2_VOTE_POLL_INTERVAL=${XDPOS2_VOTE_POLL_INTERVAL:-20}
+      
+      # Node Identification
+      - INSTANCE_NAME=${INSTANCE_NAME:-XDC-External-Monitor}
+    volumes:
+      - skyone-logs:/var/log/xdc
+      - ./skynet.conf:/etc/xdc-node/skynet.conf:ro
+    healthcheck:
+      test: ["CMD", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - xdc-skyone
+
+  # ==========================================================================
+  # Option 2: Full Stack (Dashboard + SkyNet + XDC Node)
+  # ==========================================================================
+  xdc-skyone-full:
+    profiles: ["full"]
+    image: anilchinchawale/xdc-skyone:latest
+    container_name: xdc-skyone-full
+    restart: unless-stopped
+    ports:
+      - "8545:8545"     # XDC RPC
+      - "8546:8546"     # XDC WebSocket
+      - "0.0.0.0:30303:30303"   # XDC P2P TCP
+      - "0.0.0.0:30303:30303/udp" # XDC P2P UDP
+      - "7070:7070"     # Dashboard
+      - "6060:6060"     # Prometheus Metrics
+    environment:
+      # XDC Node Configuration
+      - NODE_TYPE=${NODE_TYPE:-full}
+      - NETWORK=${NETWORK:-mainnet}
+      - CLIENT=${CLIENT:-stable}
+      - SYNC_MODE=${SYNC_MODE:-snap}
+      - INSTANCE_NAME=${INSTANCE_NAME:-XDC-SkyOne-Full}
+      
+      # Dashboard Configuration
+      - DASHBOARD_PORT=7070
+      - DASHBOARD_REFRESH=10
+      - XDC_RPC_URL=http://localhost:8545
+      
+      # SkyNet Configuration
+      - SKYNET_ENABLED=true
+      - SKYNET_API_URL=${SKYNET_API_URL:-https://net.xdc.network/api}
+      - SKYNET_API_KEY=${SKYNET_API_KEY}
+      - SKYNET_NODE_NAME=${SKYNET_NODE_NAME:-$(hostname)}
+      - SKYNET_ROLE=${SKYNET_ROLE:-fullnode}
+      
+      # XDPoS 2.0 Consensus Monitoring
+      - XDPOS2_GAP_DETECTION=${XDPOS2_GAP_DETECTION:-1}
+      - XDPOS2_QC_VALIDATION=${XDPOS2_QC_VALIDATION:-1}
+      - XDPOS2_EPOCH_MONITOR=${XDPOS2_EPOCH_MONITOR:-1}
+      - XDPOS2_VOTE_MONITOR=${XDPOS2_VOTE_MONITOR:-1}
+      - XDPOS2_GAP_POLL_INTERVAL=${XDPOS2_GAP_POLL_INTERVAL:-10}
+      - XDPOS2_QC_POLL_INTERVAL=${XDPOS2_QC_POLL_INTERVAL:-30}
+      - XDPOS2_EPOCH_POLL_INTERVAL=${XDPOS2_EPOCH_POLL_INTERVAL:-15}
+      - XDPOS2_VOTE_POLL_INTERVAL=${XDPOS2_VOTE_POLL_INTERVAL:-20}
+      
+      # Security
+      - RPC_CORS=${RPC_CORS:-localhost}
+      - RPC_VHOSTS=${RPC_VHOSTS:-localhost,127.0.0.1}
+    volumes:
+      - xdc-data:/data/xdcchain
+      - skyone-logs:/var/log/xdc
+      - ./skynet.conf:/etc/xdc-node/skynet.conf:ro
+    healthcheck:
+      test: ["CMD", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - xdc-skyone
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+
+  # ==========================================================================
+  # Option 3: Validator Node (Dashboard + SkyNet + Validator)
+  # ==========================================================================
+  xdc-skyone-validator:
+    profiles: ["validator"]
+    image: anilchinchawale/xdc-skyone:latest
+    container_name: xdc-skyone-validator
+    restart: unless-stopped
+    ports:
+      - "8545:8545"     # XDC RPC (localhost only recommended)
+      - "0.0.0.0:30303:30303"   # XDC P2P
+      - "0.0.0.0:30303:30303/udp"
+      - "7070:7070"     # Dashboard
+    environment:
+      - NODE_TYPE=masternode
+      - NETWORK=mainnet
+      - CLIENT=stable
+      - SYNC_MODE=snap
+      - INSTANCE_NAME=${INSTANCE_NAME:-XDC-Validator}
+      
+      # SkyNet
+      - SKYNET_ENABLED=true
+      - SKYNET_API_KEY=${SKYNET_API_KEY}
+      - SKYNET_NODE_NAME=${SKYNET_NODE_NAME:-xdc-validator}
+      - SKYNET_ROLE=validator
+      
+      # XDPoS 2.0 Consensus Monitoring
+      - XDPOS2_GAP_DETECTION=${XDPOS2_GAP_DETECTION:-1}
+      - XDPOS2_QC_VALIDATION=${XDPOS2_QC_VALIDATION:-1}
+      - XDPOS2_EPOCH_MONITOR=${XDPOS2_EPOCH_MONITOR:-1}
+      - XDPOS2_VOTE_MONITOR=${XDPOS2_VOTE_MONITOR:-1}
+      - XDPOS2_GAP_POLL_INTERVAL=${XDPOS2_GAP_POLL_INTERVAL:-10}
+      - XDPOS2_QC_POLL_INTERVAL=${XDPOS2_QC_POLL_INTERVAL:-30}
+      - XDPOS2_EPOCH_POLL_INTERVAL=${XDPOS2_EPOCH_POLL_INTERVAL:-15}
+      - XDPOS2_VOTE_POLL_INTERVAL=${XDPOS2_VOTE_POLL_INTERVAL:-20}
+      
+      # Validator-specific
+      - VALIDATOR_ADDRESS=${VALIDATOR_ADDRESS}
+      - VALIDATOR_KEYSTORE_PATH=/secrets/keystore
+    volumes:
+      - xdc-validator-data:/data/xdcchain
+      - skyone-logs:/var/log/xdc
+      - ./skynet.conf:/etc/xdc-node/skynet.conf:ro
+      - ./validator-secrets:/secrets:ro
+    networks:
+      - xdc-skyone
+
+  # ==========================================================================
+  # Prometheus (Optional - For Advanced Monitoring)
+  # ==========================================================================
+  prometheus:
+    profiles: ["monitoring"]
+    image: prom/prometheus:v2.48.0
+    container_name: xdc-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - xdc-skyone
+
+  # ==========================================================================
+  # Grafana (Optional - For Advanced Visualization)
+  # ==========================================================================
+  grafana:
+    profiles: ["monitoring"]
+    image: grafana/grafana:10.2.3
+    container_name: xdc-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./configs/grafana:/etc/grafana/provisioning:ro
+    networks:
+      - xdc-skyone
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  xdc-data:
+    driver: local
+  xdc-validator-data:
+    driver: local
+  skyone-logs:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  xdc-skyone:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

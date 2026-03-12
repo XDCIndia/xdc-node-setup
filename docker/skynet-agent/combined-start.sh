@@ -18,7 +18,125 @@
 #   - Network Height Awareness (every 20 HB = 10 min)
 #   - Self-Diagnostic Reports (every 120 HB = 1 hour)
 #   - Config Refresh from SkyNet (every 50 HB = ~25 min)
+#   - Self-Resolving RPC: auto-detects container IP via docker socket on
+#     startup and refreshes whenever the connection goes stale. Works in
+#     both compose (named-network DNS) and standalone docker-run deployments.
 # ============================================================================
+
+# ============================================================================
+# RPC SELF-RESOLUTION — run before everything else
+# Solves: blank host in RPC_URL (http://:8545) after container restart
+#
+# Env vars consumed:
+#   XDC_CONTAINER_NAME  — the node container to inspect (e.g. xdc-node-erigon)
+#   XDC_RPC_PORT        — internal port override (fallback: parse from RPC_URL)
+#   RPC_URL             — may have empty host; will be rewritten if so
+# ============================================================================
+
+# Extract host from a URL like http://1.2.3.4:8545 → "1.2.3.4"
+_rpc_host() { echo "$1" | sed 's|http://||' | cut -d: -f1; }
+# Extract port from a URL like http://1.2.3.4:8545 → "8545"
+_rpc_port() { echo "$1" | sed 's|http://||' | cut -d: -f2 | cut -d/ -f1; }
+
+# Resolve container IP via docker socket (requires /var/run/docker.sock mount)
+_container_ip() {
+  local cname="$1"
+  docker inspect "$cname" 2>/dev/null | \
+    python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+if not data: sys.exit(1)
+nets = data[0]['NetworkSettings']['Networks']
+ips = [v['IPAddress'] for v in nets.values() if v.get('IPAddress')]
+print(ips[0] if ips else '')
+" 2>/dev/null || echo ""
+}
+
+# Test if an RPC endpoint is alive (returns a result within 3s)
+_rpc_alive() {
+  local url="$1"
+  local host; host=$(_rpc_host "$url")
+  [ -z "$host" ] && return 1
+  local r
+  r=$(curl -s -m 3 -X POST "$url" \
+    -H "Content-Type: application/json" \
+    -d '{"jsonrpc":"2.0","method":"net_version","params":[],"id":1}' 2>/dev/null \
+    | jq -r '.result // empty' 2>/dev/null)
+  [ -n "$r" ] && [ "$r" != "null" ]
+}
+
+# Build resolved RPC_URL from container name + port
+# Returns empty string if resolution fails
+_resolve_from_container() {
+  local container="$1"
+  local port="$2"
+  [ -z "$container" ] && echo "" && return
+  local ip; ip=$(_container_ip "$container")
+  if [ -n "$ip" ]; then
+    echo "http://${ip}:${port}"
+  else
+    echo ""
+  fi
+}
+
+# Main resolution entry point — called at startup and on RPC failure
+# Updates global RPC_URL
+resolve_rpc() {
+  local container="${XDC_CONTAINER_NAME:-}"
+  local current_url="${RPC_URL:-http://xdc-node:8545}"
+  local port; port="${XDC_RPC_PORT:-$(_rpc_port "$current_url")}"
+  [ -z "$port" ] && port="8545"
+
+  # Case 1: URL has empty host (http://:8545) — always resolve
+  local host; host=$(_rpc_host "$current_url")
+  if [ -z "$host" ]; then
+    echo "[RPC-Resolve] RPC_URL has no host — resolving from container: ${container:-<none>}"
+    if [ -n "$container" ]; then
+      local resolved; resolved=$(_resolve_from_container "$container" "$port")
+      if [ -n "$resolved" ]; then
+        echo "[RPC-Resolve] ✅ Resolved: $resolved"
+        RPC_URL="$resolved"
+        return 0
+      fi
+    fi
+    # Fallback: try container name as DNS (works on custom docker networks)
+    if [ -n "$container" ]; then
+      RPC_URL="http://${container}:${port}"
+      echo "[RPC-Resolve] Fallback DNS: $RPC_URL"
+    fi
+    return 0
+  fi
+
+  # Case 2: URL has a host — test it; re-resolve only if dead
+  if _rpc_alive "$current_url"; then
+    return 0  # Already working, do nothing
+  fi
+
+  echo "[RPC-Resolve] ⚠️  RPC unreachable at $current_url — re-resolving"
+  if [ -n "$container" ]; then
+    local resolved; resolved=$(_resolve_from_container "$container" "$port")
+    if [ -n "$resolved" ] && [ "$resolved" != "$current_url" ]; then
+      # Verify new URL works before switching
+      if _rpc_alive "$resolved"; then
+        echo "[RPC-Resolve] ✅ Re-resolved: $resolved"
+        RPC_URL="$resolved"
+        return 0
+      fi
+    fi
+    # Also try DNS by container name (named networks)
+    local dns_url="http://${container}:${port}"
+    if _rpc_alive "$dns_url"; then
+      echo "[RPC-Resolve] ✅ DNS resolved: $dns_url"
+      RPC_URL="$dns_url"
+      return 0
+    fi
+  fi
+  echo "[RPC-Resolve] ❌ Could not resolve RPC — keeping $current_url (will retry)"
+  return 1
+}
+
+# Run at startup
+resolve_rpc || true
 
 # Load SkyNet config
 SKYNET_CONF="${SKYNET_CONF:-/etc/xdc-node/skynet.conf}"
@@ -329,8 +447,21 @@ inject_healthy_peers() {
       ;;
     
     nethermind)
-      # Log for manual config update (Nethermind uses static nodes file)
-      echo "[Phase2-PeerMgmt] ℹ️  Nethermind detected, recommend updating static-nodes.json"
+      # Nethermind supports admin_addPeer RPC (same as Geth)
+      while IFS= read -r enode; do
+        [ -z "$enode" ] && continue
+        local add_result=$(curl -s -m 5 -X POST "$rpc_url" \
+          -H "Content-Type: application/json" \
+          -d "{\"jsonrpc\":\"2.0\",\"method\":\"admin_addPeer\",\"params\":[\"$enode\"],\"id\":1}" 2>/dev/null)
+        
+        if echo "$add_result" | jq -e '.result' >/dev/null 2>&1; then
+          injected=$((injected + 1))
+          echo "[Phase2-PeerMgmt] ✅ Injected peer (Nethermind): ${enode:0:30}..."
+        fi
+        
+        # Limit to 3 peers per injection
+        [ $injected -ge 3 ] && break
+      done <<< "$peer_enodes"
       ;;
   esac
   
@@ -667,7 +798,7 @@ auto_register_identity() {
   local network_name="$3"
   local client_type="$4"
   local client_version="$5"
-  local api_url="${SKYNET_API_URL:-https://net.xdc.network/api/v1}"
+  local api_url="${SKYNET_API_URL:-https://net.xdc.network/api}"
   
   # Issue #71: Get coinbase from RPC
   local coinbase
@@ -678,9 +809,10 @@ auto_register_identity() {
   local host_ip
   host_ip=$(curl -4 -s -m 5 https://ifconfig.me 2>/dev/null || curl -4 -s -m 5 https://api.ipify.org 2>/dev/null || echo "unknown")
   
-  # Issue #71: Compute fingerprint
-  local fingerprint="${coinbase}@${host_ip}"
-  
+  # Fingerprint includes client_type to prevent collision when multiple
+  # nodes share the same IP (e.g. reth + geth on the same host, both coinbase=null)
+  local fingerprint="${coinbase}@${host_ip}:${client_type}"
+
   # Generate smart node name
   local smart_name
   smart_name=$(generate_smart_node_name "$client_type" "$client_version" "$network_name" "$host_ip")
@@ -755,7 +887,7 @@ auto_register() {
   local network_name="$3"
   local client_type="$4"
   local client_version="$5"
-  local api_url="${SKYNET_API_URL:-https://net.xdc.network/api/v1}"
+  local api_url="${SKYNET_API_URL:-https://net.xdc.network/api}"
   
   # Get host IP (prefer IPv4)
   HOST_IP=$(curl -4 -s -m 5 https://ifconfig.me 2>/dev/null || curl -4 -s -m 5 https://api.ipify.org 2>/dev/null || echo "unknown")
@@ -1224,9 +1356,21 @@ monitor_container_logs() {
   echo "[Phase2-Config] Using heartbeat interval: ${HEARTBEAT_INTERVAL}s"
   echo "[Phase2-Config] Block window: 30 samples = $(echo "scale=1; 30 * $HEARTBEAT_INTERVAL / 60" | bc) minutes"
 
+  # Counter for RPC re-resolution (every 10 heartbeats ≈ 5 min)
+  RPC_RESOLVE_COUNTER=0
+  RPC_FAIL_STREAK=0
+
   while true; do
     RPC_URL="${RPC_URL:-http://xdc-node:8545}"
-    
+
+    # === SELF-HEALING RPC RESOLUTION ===
+    # Re-resolve every 10 heartbeats (proactive) or after 3 consecutive failures
+    RPC_RESOLVE_COUNTER=$(( RPC_RESOLVE_COUNTER + 1 ))
+    if [ "$RPC_RESOLVE_COUNTER" -ge 10 ] || [ "$RPC_FAIL_STREAK" -ge 3 ]; then
+      resolve_rpc || true
+      RPC_RESOLVE_COUNTER=0
+    fi
+
     # Get metrics from node
     BLOCK_HEX=$(curl -s -m 5 -X POST "$RPC_URL" -H "Content-Type: application/json" \
       -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' 2>/dev/null | jq -r .result 2>/dev/null)
@@ -1251,7 +1395,14 @@ monitor_container_logs() {
     
     BLOCK_NUM=0
     [ -n "$BLOCK_HEX" ] && [ "$BLOCK_HEX" != "null" ] && BLOCK_NUM=$(printf "%d" "$BLOCK_HEX" 2>/dev/null || echo "0")
-    
+
+    # Track RPC failure streak for reactive re-resolution
+    if [ -z "$BLOCK_HEX" ] || [ "$BLOCK_HEX" = "null" ]; then
+      RPC_FAIL_STREAK=$(( RPC_FAIL_STREAK + 1 ))
+    else
+      RPC_FAIL_STREAK=0
+    fi
+
     PEER_COUNT=0
     [ -n "$PEER_HEX" ] && [ "$PEER_HEX" != "null" ] && PEER_COUNT=$(printf "%d" "$PEER_HEX" 2>/dev/null || echo "0")
     
@@ -1600,7 +1751,8 @@ EOF
     "type": "$OS_TYPE",
     "release": "$OS_RELEASE",
     "arch": "$OS_ARCH",
-    "kernel": "$OS_KERNEL"
+    "kernel": "$OS_KERNEL",
+    "ipv4": "$HOST_IP"
   },
   "system": {
     "cpuPercent": $CPU_PERCENT,

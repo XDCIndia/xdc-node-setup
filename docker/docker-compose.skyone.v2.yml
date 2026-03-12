@@ -1,0 +1,255 @@
+# =============================================================================
+# XDC SkyOne Agent - Optimized Docker Compose
+# 
+# Key Optimizations:
+#   - Separate profiles for different use cases
+#   - Shared volume mounts to reduce duplication
+#   - Health checks with proper intervals
+#   - Resource limits for production
+# =============================================================================
+
+version: "3.8"
+
+x-common-variables: &common-variables
+  NODE_TYPE: ${NODE_TYPE:-full}
+  NETWORK: ${NETWORK:-mainnet}
+  CLIENT: ${CLIENT:-stable}
+  SYNC_MODE: ${SYNC_MODE:-snap}
+  INSTANCE_NAME: ${INSTANCE_NAME:-XDC-SkyOne}
+  DASHBOARD_PORT: ${DASHBOARD_PORT:-7070}
+  DASHBOARD_REFRESH: ${DASHBOARD_REFRESH:-10}
+  SKYNET_ENABLED: ${SKYNET_ENABLED:-true}
+  SKYNET_API_URL: ${SKYNET_API_URL:-https://net.xdc.network/api}
+  SKYNET_API_KEY: ${SKYNET_API_KEY}
+  SKYNET_NODE_NAME: ${SKYNET_NODE_NAME:-xdc-node}
+  SKYNET_ROLE: ${SKYNET_ROLE:-fullnode}
+  HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-30}
+
+x-common-healthcheck: &common-healthcheck
+  test: ["CMD", "/app/healthcheck.sh"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 60s
+
+services:
+  # ==========================================================================
+  # SkyOne Agent - External Monitoring (No XDC Node)
+  # Profile: external
+  # ==========================================================================
+  skyone-external:
+    profiles: ["external"]
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile.skyone.v2
+      args:
+        CLIENT: stable
+    container_name: skyone-external
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT:-7070}:7070"
+      - "6060:6060"
+    environment:
+      <<: *common-variables
+      START_XDC_NODE: "false"
+      XDC_RPC_URL: ${XDC_RPC_URL:-http://host.docker.internal:8545}
+      SKYNET_ROLE: monitor
+    volumes:
+      - skyone-logs:/var/log/xdc
+      - skynet-config:/etc/xdc-node
+    healthcheck:
+      <<: *common-healthcheck
+      start_period: 30s
+    networks:
+      - xdc-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # ==========================================================================
+  # SkyOne Agent - Full Node Stack
+  # Profile: full
+  # ==========================================================================
+  skyone-full:
+    profiles: ["full", ""]  # Default profile
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile.skyone.v2
+      args:
+        CLIENT: ${CLIENT:-stable}
+    container_name: skyone-full
+    restart: unless-stopped
+    ports:
+      - "8545:8545"       # RPC
+      - "8546:8546"       # WebSocket
+      - "30303:30303/tcp" # P2P TCP
+      - "30303:30303/udp" # P2P UDP
+      - "7070:7070"       # Dashboard
+      - "6060:6060"       # Metrics
+    environment:
+      <<: *common-variables
+      START_XDC_NODE: "true"
+      XDC_RPC_URL: http://localhost:8545
+      RPC_CORS: ${RPC_CORS:-localhost}
+      RPC_VHOSTS: ${RPC_VHOSTS:-localhost,127.0.0.1}
+    volumes:
+      - xdc-chain-data:/data/xdcchain
+      - skyone-logs:/var/log/xdc
+      - skynet-config:/etc/xdc-node
+    healthcheck:
+      <<: *common-healthcheck
+      start_period: 120s
+    networks:
+      - xdc-network
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G
+        reservations:
+          cpus: '2.0'
+          memory: 4G
+
+  # ==========================================================================
+  # SkyOne Agent - Validator Node
+  # Profile: validator
+  # ==========================================================================
+  skyone-validator:
+    profiles: ["validator"]
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile.skyone.v2
+      args:
+        CLIENT: stable
+    container_name: skyone-validator
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8545:8545"  # RPC - localhost only for security
+      - "30303:30303/tcp"
+      - "30303:30303/udp"
+      - "7070:7070"
+    environment:
+      <<: *common-variables
+      NODE_TYPE: masternode
+      START_XDC_NODE: "true"
+      VALIDATOR_ADDRESS: ${VALIDATOR_ADDRESS}
+      SKYNET_ROLE: validator
+      RPC_CORS: localhost
+      RPC_VHOSTS: localhost,127.0.0.1
+    volumes:
+      - xdc-validator-data:/data/xdcchain
+      - skyone-logs:/var/log/xdc
+      - skynet-config:/etc/xdc-node
+      - ${VALIDATOR_KEYSTORE_PATH:-./validator-secrets}:/secrets:ro
+    healthcheck:
+      <<: *common-healthcheck
+      start_period: 180s
+    networks:
+      - xdc-network
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 16G
+        reservations:
+          cpus: '2.0'
+          memory: 8G
+
+  # ==========================================================================
+  # Optional: Prometheus for Advanced Monitoring
+  # Profile: monitoring
+  # ==========================================================================
+  prometheus:
+    profiles: ["monitoring"]
+    image: prom/prometheus:v2.48.0
+    container_name: xdc-prometheus
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"  # Localhost only
+    volumes:
+      - ../configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - xdc-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+
+  # ==========================================================================
+  # Optional: Grafana for Visualization
+  # Profile: monitoring
+  # ==========================================================================
+  grafana:
+    profiles: ["monitoring"]
+    image: grafana/grafana:10.3.1
+    container_name: xdc-grafana
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"  # Localhost only
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ../configs/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - xdc-network
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  xdc-chain-data:
+    driver: local
+  xdc-validator-data:
+    driver: local
+  skyone-logs:
+    driver: local
+  skynet-config:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  xdc-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16

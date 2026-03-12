@@ -13,8 +13,8 @@ services:
     ports:
       - "8545:8545"    # HTTP RPC
       - "8546:8546"    # WebSocket
-      - "30303:30303"  # P2P TCP
-      - "30303:30303/udp"  # P2P UDP
+      - "0.0.0.0:30303:30303"  # P2P TCP
+      - "0.0.0.0:30303:30303/udp"  # P2P UDP
     volumes:
       - xdc-geth-data:/data/xdcchain
     environment:
@@ -49,8 +49,8 @@ services:
     ports:
       - "8557:8557"    # HTTP RPC
       - "8558:8558"    # WebSocket
-      - "30305:30305"  # P2P TCP
-      - "30305:30305/udp"  # P2P UDP
+      - "0.0.0.0:30305:30305"  # P2P TCP
+      - "0.0.0.0:30305:30305/udp"  # P2P UDP
     volumes:
       - xdc-nethermind-data:/data/nethermind
     environment:
@@ -82,8 +82,8 @@ services:
       - "8556:8556"    # WebSocket
       - "9090:9090"    # Private API
       - "6060:6060"    # Metrics
-      - "30304:30304"  # P2P TCP
-      - "30304:30304/udp"  # P2P UDP
+      - "0.0.0.0:30304:30304"  # P2P TCP
+      - "0.0.0.0:30304:30304/udp"  # P2P UDP
     volumes:
       - xdc-erigon-data:/data/erigon
     environment:

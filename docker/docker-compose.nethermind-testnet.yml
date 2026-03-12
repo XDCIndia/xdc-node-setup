@@ -6,8 +6,8 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8558:8545"
-      - "30308:30303"
-      - "30308:30303/udp"
+      - "0.0.0.0:30308:30303"
+      - "0.0.0.0:30308:30303/udp"
     volumes:
       - nethermind-testnet-data:/nethermind/data
       - ../testnet/.xdc-node/nethermind.json:/nethermind/configs/xdc.json:ro

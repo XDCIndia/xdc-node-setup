@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
+
+# Source shared logging library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/logging.sh" 2>/dev/null || source "$(dirname "$0")/lib/logging.sh" || { echo "Error: Cannot find lib/logging.sh" >&2; exit 1; }
+
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
+#==============================================================================
 #==============================================================================
 # XDC Node CLI v2.0 - Enhanced Setup Script
 # Interactive wizard, quick deployment, pre-flight checks
@@ -9,6 +19,14 @@ set -euo pipefail
 readonly SCRIPT_VERSION="2.0.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly WIZARD_DIR="${SCRIPT_DIR}/wizard"
+
+# Source shared logging library
+source "${SCRIPT_DIR}/lib/logging.sh" 2>/dev/null || {
+    # Fallback logging if library not available
+    log_info() { echo -e "\033[0;34m[INFO]\033[0m $*"; }
+    log_warn() { echo -e "\033[1;33m[WARN]\033[0m $*" >&2; }
+    log_error() { echo -e "\033[0;31m[ERROR]\033[0m $*" >&2; }
+}
 
 #==============================================================================
 # Colors & UI
@@ -107,22 +125,7 @@ For more information: https://docs.xdc.network
 EOF
 }
 
-log_info() {
-    echo -e "${BLUE}ℹ${NC} $1"
-}
-
-log_success() {
-    echo -e "${GREEN}✓${NC} $1"
-}
-
-log_warning() {
-    echo -e "${YELLOW}⚠${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}✗${NC} $1" >&2
-}
-
+# Logging functions now sourced from lib/logging.sh
 #==============================================================================
 # Pre-flight Checks
 #==============================================================================

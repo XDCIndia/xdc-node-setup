@@ -12,10 +12,10 @@ services:
     container_name: xdc-node-apothem
     restart: unless-stopped
     ports:
-      - "8545:8545"      # HTTP RPC
-      - "8546:8546"      # WebSocket  
-      - "30303:30303"    # P2P TCP
-      - "30303:30303/udp"  # P2P UDP
+      - "0.0.0.0:8545:8545"      # HTTP RPC - exposed on all interfaces
+      - "0.0.0.0:8546:8546"      # WebSocket  
+      - "30303:30303"            # P2P TCP - enode port
+      - "30303:30303/udp"        # P2P UDP
     volumes:
       - xdc-apothem-data:/work/xdcchain
       - ./apothem/genesis.json:/work/genesis.json:ro
@@ -97,11 +97,12 @@ services:
     container_name: xdc-node-erigon-apothem
     restart: unless-stopped
     ports:
-      - "8556:8556"      # HTTP RPC
-      - "30306:30306"    # P2P TCP
-      - "30306:30306/udp"  # P2P UDP
-      - "9090:9090"      # Private API
-      - "6060:6060"      # Metrics
+      - "0.0.0.0:8556:8556"      # HTTP RPC - exposed on all interfaces
+      - "0.0.0.0:8559:8559"      # WebSocket
+      - "30306:30306"            # P2P TCP - enode port
+      - "30306:30306/udp"        # P2P UDP
+      - "9090:9090"              # Private API
+      - "6060:6060"              # Metrics
     volumes:
       - xdc-erigon-apothem-data:/data/erigon
     environment:
@@ -118,6 +119,8 @@ services:
       --http.corsdomain="*"
       --http.api=eth,net,web3,txpool,debug,erigon,admin
       --ws
+      --ws.addr=0.0.0.0
+      --ws.port=8559
       --metrics
       --metrics.addr=0.0.0.0
       --metrics.port=6060
@@ -140,10 +143,10 @@ services:
     container_name: xdc-node-nethermind-apothem
     restart: unless-stopped
     ports:
-      - "8558:8558"      # HTTP RPC
-      - "8559:8559"      # WebSocket
-      - "30308:30308"    # P2P TCP
-      - "30308:30308/udp"  # P2P UDP
+      - "0.0.0.0:8558:8558"      # HTTP RPC - exposed on all interfaces
+      - "0.0.0.0:8559:8559"      # WebSocket
+      - "30308:30308"            # P2P TCP - enode port
+      - "30308:30308/udp"        # P2P UDP
     volumes:
       - xdc-nethermind-apothem-data:/nethermind/data
     command: >

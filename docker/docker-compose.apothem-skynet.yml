@@ -11,7 +11,7 @@ services:
     environment:
       - RPC_URL=http://xdc-node-apothem:8545
       - SKYNET_NODE_NAME=gcx-apothem-geth
-      - SKYNET_API_URL=https://net.xdc.network/api/v1
+      - SKYNET_API_URL=https://net.xdc.network/api
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -33,7 +33,7 @@ services:
     environment:
       - RPC_URL=http://xdc-node-nethermind-apothem:8558
       - SKYNET_NODE_NAME=gcx-apothem-nethermind
-      - SKYNET_API_URL=https://net.xdc.network/api/v1
+      - SKYNET_API_URL=https://net.xdc.network/api
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -55,7 +55,7 @@ services:
     environment:
       - RPC_URL=http://xdc-node-erigon-apothem:8556
       - SKYNET_NODE_NAME=gcx-apothem-erigon
-      - SKYNET_API_URL=https://net.xdc.network/api/v1
+      - SKYNET_API_URL=https://net.xdc.network/api
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |

@@ -8,16 +8,16 @@ services:
     user: "${UID:-1000}:${GID:-1000}"
     
     ports:
-      - "8545:8545"     # HTTP RPC
-      - "8551:8551"     # Engine API (authrpc)
-      - "30303:30303"   # P2P TCP
-      - "30303:30303/udp" # P2P UDP
-      - "30304:30304"   # Sentry eth/63
-      - "30304:30304/udp"
-      - "30311:30311"   # Sentry eth/68
-      - "30311:30311/udp"
-      - "9090:9090"     # gRPC (diagnostics)
-      - "6060:6060"     # Metrics (pprof)
+      - "127.0.0.1:8545:8545"     # HTTP RPC
+      - "127.0.0.1:8551:8551"     # Engine API (authrpc)
+      - "0.0.0.0:30303:30303"     # P2P TCP
+      - "0.0.0.0:30303:30303/udp" # P2P UDP
+      - "0.0.0.0:30304:30304"     # Sentry eth/63
+      - "0.0.0.0:30304:30304/udp"
+      - "0.0.0.0:30311:30311"     # Sentry eth/68
+      - "0.0.0.0:30311:30311/udp"
+      - "127.0.0.1:9090:9090"     # gRPC (diagnostics)
+      - "127.0.0.1:6060:6060"     # Metrics (pprof)
     
     volumes:
       - ${XDC_DATA_DIR:-./data}:/work/xdcchain

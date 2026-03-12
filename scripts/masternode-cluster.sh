@@ -1,4 +1,14 @@
 #!/bin/bash
+
+# Source shared logging library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/logging.sh" 2>/dev/null || source "$(dirname "$0")/lib/logging.sh" || { echo "Error: Cannot find lib/logging.sh" >&2; exit 1; }
+
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
+# XDC Masternode Cluster Management
 # XDC Masternode Cluster Management
 # Multi-node masternode management for high availability
 # Author: anilcinchawale <anil24593@gmail.com>
@@ -25,16 +35,6 @@ CLUSTER_LOG="${LOG_DIR}/cluster.log"
 KEY_DIR="${CONFIG_DIR}/cluster-keys"
 
 # Detect network for network-aware directory structure
-detect_network() {
-    local network="${NETWORK:-}"
-    if [[ -z "$network" && -f "$(pwd)/config.toml" ]]; then
-        network=$(grep -E '^\s*name\s*=' "$(pwd)/config.toml" 2>/dev/null | sed -E 's/.*=\s*"([^"]+)".*/\1/' | head -1)
-    fi
-    if [[ -z "$network" && -f "/opt/xdc-node/config.toml" ]]; then
-        network=$(grep -E '^\s*name\s*=' "/opt/xdc-node/config.toml" 2>/dev/null | sed -E 's/.*=\s*"([^"]+)".*/\1/' | head -1)
-    fi
-    echo "${network:-mainnet}"
-}
 XDC_NETWORK="${XDC_NETWORK:-$(detect_network)}"
 XDC_DATA="${XDC_DATA:-$(pwd)/${XDC_NETWORK}/xdcchain}"
 XDC_STATE_DIR="${XDC_STATE_DIR:-$(pwd)/${XDC_NETWORK}/.xdc-node}"
@@ -44,17 +44,8 @@ STATE_DIR="${XDC_STATE_DIR}/cluster"
 source "${LIB_DIR}/notify.sh" 2>/dev/null || true
 
 # Logging functions
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1" | tee -a "$CLUSTER_LOG" 2>/dev/null || echo -e "${GREEN}[INFO]${NC} $1"
-}
 
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1" | tee -a "$CLUSTER_LOG" 2>/dev/null || echo -e "${YELLOW}[WARN]${NC} $1"
-}
 
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$CLUSTER_LOG" 2>/dev/null || echo -e "${RED}[ERROR]${NC} $1"
-}
 
 # Print banner
 print_banner() {
@@ -180,30 +171,22 @@ create_health_check_script() {
     
     cat <<'EOF' > "$script_path"
 #!/bin/bash
+
+# Source shared logging library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/logging.sh" 2>/dev/null || source "$(dirname "$0")/lib/logging.sh" || { echo "Error: Cannot find lib/logging.sh" >&2; exit 1; }
+
 # Cluster health check script
 set -euo pipefail
 
 LOG_FILE="/var/log/xdc-node/cluster-health.log"
 
 # Detect network for network-aware directory structure (for embedded script)
-detect_network() {
-    local network="${NETWORK:-}"
-    if [[ -z "$network" && -f "$(pwd)/config.toml" ]]; then
-        network=$(grep -E '^\s*name\s*=' "$(pwd)/config.toml" 2>/dev/null | sed -E 's/.*=\s*"([^"]+)".*/\1/' | head -1)
-    fi
-    if [[ -z "$network" && -f "/opt/xdc-node/config.toml" ]]; then
-        network=$(grep -E '^\s*name\s*=' "/opt/xdc-node/config.toml" 2>/dev/null | sed -E 's/.*=\s*"([^"]+)".*/\1/' | head -1)
-    fi
-    echo "${network:-mainnet}"
-}
 XDC_NETWORK="${XDC_NETWORK:-$(detect_network)}"
 XDC_DATA="${XDC_DATA:-$(pwd)/${XDC_NETWORK}/xdcchain}"
 XDC_STATE_DIR="${XDC_STATE_DIR:-$(pwd)/${XDC_NETWORK}/.xdc-node}"
 STATE_DIR="${XDC_STATE_DIR}/cluster"
 
-log() {
-    echo "[$(date -Iseconds)] $1" | tee -a "$LOG_FILE"
-}
 
 check_local_health() {
     # Check if XDC node is running

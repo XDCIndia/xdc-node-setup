@@ -1,9 +1,12 @@
 #!/bin/bash
-set -e
+# Security Fix (#492 #493 #508): Secure RPC defaults + error handling
+set -euo pipefail
+trap 'echo "ERROR at line $LINENO"' ERR
 
 #==============================================================================
 # Erigon-XDC Start Script
 # Multi-sentry P2P support for XDC network
+# Security: RPC binds to 127.0.0.1 by default — set RPC_ADDR=0.0.0.0 for external access
 #==============================================================================
 
 # Config files
@@ -91,19 +94,21 @@ fi
 
 # ============================================================
 # Defaults — Docker env takes priority over config.toml
-# SECURITY FIX (#77): Changed defaults from wildcards (*) to localhost-only
-# Use environment variables to override for external access
+# Security Fix (#492 #493): Changed defaults from wildcards (*) to localhost-only
+# Use environment variables to override for external access:
+#   RPC_ADDR=0.0.0.0 RPC_ALLOW_ORIGINS=* RPC_VHOSTS=* docker-compose up
 # ============================================================
 SYNC_MODE="${SYNC_MODE:-full}"
 LOG_LEVEL="${LEVEL:-3}"
 INSTANCE_NAME="${INSTANCE_NAME:-Erigon_XDC_Node}"
-# SECURITY FIX (#77): Default to localhost only, not 0.0.0.0
+# Security Fix (#493): Default to localhost only, not 0.0.0.0
 RPC_ADDR="${_DOCKER_RPC_ADDR:-${HTTP_ADDR:-${ADDR:-127.0.0.1}}}}"
 RPC_PORT="${_DOCKER_RPC_PORT:-${HTTP_PORT:-${PORT:-8547}}}"
 RPC_API="${HTTP_API:-${API:-eth,net,web3,admin,XDPoS}}"
-# SECURITY FIX (#77): Changed defaults from * to localhost-only
-RPC_CORS_DOMAIN="${_DOCKER_RPC_CORS:-${HTTP_CORS_DOMAIN:-${CORS_DOMAIN:-http://localhost:3000,http://localhost:7070}}}}"
-RPC_VHOSTS="${_DOCKER_RPC_VHOSTS:-${HTTP_VHOSTS:-${VHOSTS:-localhost,127.0.0.1}}}}"
+# Security Fix (#492): Changed defaults from * to localhost-only
+RPC_ALLOW_ORIGINS="${_DOCKER_RPC_CORS:-${HTTP_CORS_DOMAIN:-${CORS_DOMAIN:-localhost}}}}"
+RPC_CORS_DOMAIN="$RPC_ALLOW_ORIGINS"
+RPC_VHOSTS="${_DOCKER_RPC_VHOSTS:-${HTTP_VHOSTS:-${VHOSTS:-localhost}}}}"
 P2P_PORT_63="${_DOCKER_P2P_PORT:-${P2P_PORT:-30304}}"
 P2P_PORT_68="${_DOCKER_P2P_PORT_68:-${P2P_PORT_68:-30311}}"
 
@@ -186,8 +191,8 @@ ARGS=(
     --http.api="$RPC_API"
     --http.corsdomain="$RPC_CORS_DOMAIN"
     --http.vhosts="$RPC_VHOSTS"
-    --port="$P2P_PORT_68"
-    --private.api.addr=0.0.0.0:9092
+    --port="$P2P_PORT_63"
+    --private.api.addr=127.0.0.1:9092
     --p2p.protocol=63,62
     --discovery.v4
     --discovery.xdc

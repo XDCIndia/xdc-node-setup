@@ -15,7 +15,7 @@ exec erigon \
   --networkid 51 \
   --port 30304 \
   --http \
-  --http.addr 0.0.0.0 \
+  --http.addr 127.0.0.1 \  # SECURITY FIX #355: Localhost only
   --http.port 8555 \
   --http.vhosts "*" \
   --http.corsdomain "*" \

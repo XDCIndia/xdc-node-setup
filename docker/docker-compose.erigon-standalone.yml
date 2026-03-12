@@ -17,10 +17,10 @@ services:
     ports:
       - "${ERIGON_RPC_PORT:-8547}:8547"              # HTTP-RPC (erigon default)
       - "${ERIGON_AUTHRPC_PORT:-8561}:8561"          # Auth RPC port
-      - "${ERIGON_P2P_PORT:-30304}:30304"            # eth/63 (primary peer port)
-      - "${ERIGON_P2P_PORT:-30304}:30304/udp"
-      - "${ERIGON_P2P_PORT_68:-30311}:30311"         # eth/68 (new protocol)
-      - "${ERIGON_P2P_PORT_68:-30311}:30311/udp"
+      - "0.0.0.0:${ERIGON_P2P_PORT:-30304}:30304"            # eth/63 (primary peer port)
+      - "0.0.0.0:${ERIGON_P2P_PORT:-30304}:30304/udp"
+      - "0.0.0.0:${ERIGON_P2P_PORT_68:-30311}:30311"         # eth/68 (new protocol)
+      - "0.0.0.0:${ERIGON_P2P_PORT_68:-30311}:30311/udp"
     volumes:
       - ../${NETWORK:-mainnet}/xdcchain-erigon:/data
       - ./erigon/start-erigon.sh:/start.sh:ro
@@ -76,12 +76,13 @@ services:
     container_name: xdc-agent-erigon
     restart: unless-stopped
     ports:
-      - "0.0.0.0:${ERIGON_DASHBOARD_PORT:-7071}:3000"
+      - "127.0.0.1:${ERIGON_DASHBOARD_PORT:-7071}:3000"
     volumes:
       - ./skynet-agent.sh:/agent.sh:ro
       - ../${NETWORK:-mainnet}/.xdc-node/skynet-erigon.conf:/etc/xdc-node/skynet.conf
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - /proc:/host/proc:ro
+      # Security (#499): docker.sock required for xdc-agent container monitoring — see docs/SECURITY.md
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ../${NETWORK:-mainnet}/.xdc-node/logs:/var/log/xdc
     environment:
       # Point to erigon container's RPC port

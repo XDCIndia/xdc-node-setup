@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
+
+# Source utility functions
+source "$(dirname "$0")/lib/utils.sh" || { echo "Failed to load utils"; exit 1; }
 set -euo pipefail
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
 
 #===============================================================================
 # Chaos Engineering Test Suite for XDC Node Resilience
@@ -84,21 +91,9 @@ EOF
     exit 0
 }
 
-log() {
-    echo -e "${GREEN}[$(date '+%Y-%m-%d %H:%M:%S')] $1${NC}" | tee -a "$LOG_FILE"
-}
 
-warn() {
-    echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')] WARNING: $1${NC}" | tee -a "$LOG_FILE"
-}
 
-error() {
-    echo -e "${RED}[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1${NC}" | tee -a "$LOG_FILE"
-}
 
-info() {
-    echo -e "${BLUE}[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1${NC}" | tee -a "$LOG_FILE"
-}
 
 section() {
     echo -e "\n${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}" | tee -a "$LOG_FILE"

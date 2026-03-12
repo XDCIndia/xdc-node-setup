@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
+
+# Source utility functions
+source "$(dirname "$0")/lib/utils.sh" || { echo "Failed to load utils"; exit 1; }
 set -euo pipefail
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
 
 #==============================================================================
 # XDC Node Standards Implementation Script
@@ -41,25 +48,9 @@ get_impl_status() {
 #==============================================================================
 # Logging
 #==============================================================================
-log() {
-    echo -e "${GREEN}[$(date '+%Y-%m-%d %H:%M:%S')] $1${NC}"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE" 2>/dev/null || true
-}
 
-warn() {
-    echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')] WARNING: $1${NC}"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARNING: $1" >> "$LOG_FILE" 2>/dev/null || true
-}
 
-error() {
-    echo -e "${RED}[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1${NC}"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >> "$LOG_FILE" 2>/dev/null || true
-}
 
-info() {
-    echo -e "${BLUE}[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1${NC}"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1" >> "$LOG_FILE" 2>/dev/null || true
-}
 
 step() {
     echo -e "${CYAN}[$(date '+%Y-%m-%d %H:%M:%S')] STEP: $1${NC}"
@@ -223,16 +214,6 @@ configure_backups() {
 # Directories
 BACKUP_DIR=/backup/xdc-node
 # Detect network for network-aware directory structure
-detect_network() {
-    local network="${NETWORK:-}"
-    if [[ -z "$network" && -f "$(pwd)/config.toml" ]]; then
-        network=$(grep -E '^\s*name\s*=' "$(pwd)/config.toml" 2>/dev/null | sed -E 's/.*=\s*"([^"]+)".*/\1/' | head -1)
-    fi
-    if [[ -z "$network" && -f "/opt/xdc-node/config.toml" ]]; then
-        network=$(grep -E '^\s*name\s*=' "/opt/xdc-node/config.toml" 2>/dev/null | sed -E 's/.*=\s*"([^"]+)".*/\1/' | head -1)
-    fi
-    echo "${network:-mainnet}"
-}
 XDC_NETWORK="${XDC_NETWORK:-$(detect_network)}"
 DATA_DIR="${DATA_DIR:-$(pwd)/${XDC_NETWORK}/xdcchain}"
 CONFIG_DIR=/opt/xdc-node

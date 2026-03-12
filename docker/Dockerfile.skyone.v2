@@ -1,0 +1,319 @@
+# =============================================================================
+# XDC SkyOne Agent - Production Dockerfile
+# 
+# Multi-stage build for efficiency:
+#   - Stage 1: Build Next.js dashboard
+#   - Stage 2: Install XDC node binary
+#   - Stage 3: Final runtime image
+# =============================================================================
+
+# =============================================================================
+# Stage 1: Dashboard Builder
+# =============================================================================
+FROM node:20-alpine AS dashboard-builder
+
+WORKDIR /build
+COPY dashboard/package*.json ./
+RUN npm ci --only=production --silent
+
+COPY dashboard/ ./
+RUN npm run build 2>&1 | tee build.log || (cat build.log && exit 1)
+
+# =============================================================================
+# Stage 2: XDC Node Downloader
+# =============================================================================
+FROM alpine:3.19 AS xdc-downloader
+
+ARG XDC_VERSION=v1.6.0
+ARG CLIENT=stable
+
+WORKDIR /download
+
+# Install curl for downloading
+RUN apk add --no-cache curl ca-certificates
+
+# Download XDC binary based on CLIENT type
+RUN case "$CLIENT" in \
+    stable) \
+        echo "Downloading XDC Geth stable..." && \
+        curl -fsSL -o xdc.tar.gz \
+        "https://github.com/XinFinOrg/XDPoSChain/releases/download/${XDC_VERSION}/xdc-linux-amd64.tar.gz" && \
+        tar -xzf xdc.tar.gz && \
+        mv xdc-linux-amd64/xdc /download/xdc || \
+        (echo "Failed to download XDC stable"; exit 1) \
+        ;; \
+    geth-pr5) \
+        echo "Downloading XDC Geth PR5..." && \
+        curl -fsSL -o xdc.tar.gz \
+        "https://github.com/XinFinOrg/XDPoSChain/releases/download/pr5-v1.6.0/xdc-linux-amd64.tar.gz" && \
+        tar -xzf xdc.tar.gz && \
+        mv xdc-linux-amd64/xdc /download/xdc || \
+        (echo "Failed to download XDC PR5"; exit 1) \
+        ;; \
+    *) \
+        echo "Client $CLIENT not yet supported in unified image" && \
+        echo "Using stable as fallback" && \
+        curl -fsSL -o xdc.tar.gz \
+        "https://github.com/XinFinOrg/XDPoSChain/releases/download/${XDC_VERSION}/xdc-linux-amd64.tar.gz" && \
+        tar -xzf xdc.tar.gz && \
+        mv xdc-linux-amd64/xdc /download/xdc \
+        ;; \
+esac
+
+# Verify binary
+RUN chmod +x /download/xdc && /download/xdc version
+
+# =============================================================================
+# Stage 3: Runtime Image
+# =============================================================================
+FROM node:20-alpine AS runtime
+
+LABEL maintainer="Anil Chinchawale"
+LABEL description="XDC SkyOne Agent - Unified Node, Dashboard, and SkyNet"
+LABEL version="3.0.0"
+
+# Install runtime dependencies
+RUN apk add --no-cache \
+    bash \
+    curl \
+    jq \
+    ca-certificates \
+    nginx \
+    supervisor \
+    iputils \
+    bind-tools \
+    procps \
+    coreutils \
+    tzdata \
+    && rm -rf /var/cache/apk/* /var/lib/apk/lists/*
+
+# Create directories
+RUN mkdir -p \
+    /app/dashboard \
+    /app/agent \
+    /app/scripts \
+    /app/xdc \
+    /data/xdcchain \
+    /etc/xdc-node \
+    /etc/supervisor.d \
+    /var/log/xdc \
+    /var/log/supervisor \
+    /run/nginx \
+    /var/lib/node_exporter \
+    && chown -R nobody:nobody /var/log/xdc /run/nginx
+
+# Copy XDC binary
+COPY --from=xdc-downloader /download/xdc /app/xdc/xdc
+RUN chmod +x /app/xdc/xdc && ln -sf /app/xdc/xdc /usr/local/bin/xdc
+
+# Copy dashboard build (only necessary files)
+COPY --from=dashboard-builder /build/.next/standalone /app/dashboard/
+COPY --from=dashboard-builder /build/public /app/dashboard/public
+COPY --from=dashboard-builder /build/.next/static /app/dashboard/.next/static
+
+# Copy scripts
+COPY docker/skynet-agent.sh /app/agent/skynet-agent.sh
+COPY docker/entrypoint.sh /app/entrypoint.sh
+COPY docker/xdc-start.sh /app/xdc-start.sh
+COPY scripts/lib /app/scripts/lib
+
+RUN chmod +x \
+    /app/agent/skynet-agent.sh \
+    /app/entrypoint.sh \
+    /app/xdc-start.sh \
+    /app/scripts/lib/*.sh 2>/dev/null || true
+
+# Generate supervisor config
+RUN cat > /etc/supervisor.d/xdc-skyone.ini << 'SUPERVISOR_EOF'
+[supervisord]
+nodaemon=true
+logfile=/var/log/supervisor/supervisord.log
+pidfile=/run/supervisord.pid
+childlogdir=/var/log/supervisor
+
+[program:nginx]
+command=/usr/sbin/nginx -g 'daemon off;'
+autostart=true
+autorestart=true
+priority=10
+stdout_logfile=/var/log/xdc/nginx.log
+stderr_logfile=/var/log/xdc/nginx-error.log
+
+[program:dashboard]
+command=node /app/dashboard/server.js
+autostart=true
+autorestart=true
+priority=20
+environment=PORT="3000",NODE_ENV="production",HOSTNAME="0.0.0.0"
+stdout_logfile=/var/log/xdc/dashboard.log
+stderr_logfile=/var/log/xdc/dashboard-error.log
+
+[program:skynet-agent]
+command=/app/agent/skynet-agent.sh --daemon
+autostart=true
+autorestart=true
+priority=30
+stdout_logfile=/var/log/xdc/skynet-agent.log
+stderr_logfile=/var/log/xdc/skynet-agent-error.log
+
+[program:xdc-node]
+command=/app/xdc-start.sh
+autostart=%(ENV_START_XDC_NODE)s
+autorestart=true
+priority=40
+stdout_logfile=/var/log/xdc/xdc-node.log
+stderr_logfile=/var/log/xdc/xdc-node-error.log
+SUPERVISOR_EOF
+
+# Generate nginx config
+RUN cat > /etc/nginx/nginx.conf << 'NGINX_EOF'
+worker_processes auto;
+error_log /var/log/xdc/nginx-error.log warn;
+pid /run/nginx/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+    
+    access_log /var/log/xdc/nginx-access.log main;
+    
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+    
+    # Gzip
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css application/json application/javascript;
+    
+    server {
+        listen ${DASHBOARD_PORT};
+        server_name localhost;
+        root /app/dashboard;
+        index index.html;
+        
+        # Dashboard static files
+        location / {
+            try_files $uri $uri/ /index.html;
+            
+            location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
+                expires 1y;
+                add_header Cache-Control "public, immutable";
+            }
+        }
+        
+        # Dashboard API (Next.js)
+        location /api/ {
+            proxy_pass http://localhost:3000/api/;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_cache_bypass $http_upgrade;
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 60s;
+            proxy_read_timeout 60s;
+        }
+        
+        # Health check
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+        
+        # Metrics proxy
+        location /metrics {
+            proxy_pass http://localhost:6060/metrics;
+            proxy_http_version 1.1;
+        }
+        
+        # RPC proxy (if needed)
+        location /rpc/ {
+            proxy_pass http://localhost:8545/;
+            proxy_http_version 1.1;
+        }
+    }
+}
+NGINX_EOF
+
+# Health check script
+RUN cat > /app/healthcheck.sh << 'HEALTH_EOF'
+#!/bin/bash
+set -eo pipefail
+
+# Check Nginx
+if ! curl -sf http://localhost:${DASHBOARD_PORT:-7070}/health > /dev/null 2>&1; then
+    echo "FAIL: Dashboard not responding"
+    exit 1
+fi
+
+# Check Dashboard API
+if ! curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+    echo "FAIL: Dashboard API not responding"
+    exit 1
+fi
+
+# Check SkyNet (if enabled)
+if [ "${SKYNET_ENABLED}" = "true" ] && [ -n "${SKYNET_API_KEY}" ]; then
+    if ! pgrep -f "skynet-agent" > /dev/null 2>&1; then
+        echo "WARN: SkyNet agent not running"
+    fi
+fi
+
+# Check XDC node (if running)
+if [ "${START_XDC_NODE}" = "true" ]; then
+    if ! curl -sf -X POST http://localhost:8545 \
+        -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' > /dev/null 2>&1; then
+        echo "WARN: XDC node RPC not responding"
+    fi
+fi
+
+echo "OK"
+exit 0
+HEALTH_EOF
+RUN chmod +x /app/healthcheck.sh
+
+# Environment variables
+ENV NODE_TYPE=full \
+    NETWORK=mainnet \
+    CLIENT=stable \
+    SYNC_MODE=snap \
+    INSTANCE_NAME=XDC-SkyOne \
+    XDC_RPC_URL=http://localhost:8545 \
+    DASHBOARD_PORT=7070 \
+    DASHBOARD_REFRESH=10 \
+    SKYNET_ENABLED=true \
+    SKYNET_API_URL=https://net.xdc.network/api \
+    HEARTBEAT_INTERVAL=30 \
+    START_XDC_NODE=true \
+    DATA_DIR=/data/xdcchain \
+    LOG_DIR=/var/log/xdc
+
+# Ports
+EXPOSE 7070 8545 8546 30303 30303/udp 6060
+
+# Volumes
+VOLUME ["/data/xdcchain", "/var/log/xdc", "/etc/xdc-node"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD /app/healthcheck.sh
+
+# Entry point
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["supervisord", "-c", "/etc/supervisord.conf"]

@@ -4,8 +4,8 @@ services:
     container_name: xdc-erigon
     restart: always
     ports:
-      - "30304:30304"
-      - "30304:30304/udp"
+      - "0.0.0.0:30304:30304"
+      - "0.0.0.0:30304:30304/udp"
       - "127.0.0.1:8555:8555"
       - "127.0.0.1:9090:9090"
     volumes:
@@ -36,8 +36,8 @@ services:
     container_name: xdc-nethermind
     restart: always
     ports:
-      - "30305:30305"
-      - "30305:30305/udp"
+      - "0.0.0.0:30305:30305"
+      - "0.0.0.0:30305:30305/udp"
       - "127.0.0.1:8557:8557"
       - "127.0.0.1:8558:8558"
     volumes:

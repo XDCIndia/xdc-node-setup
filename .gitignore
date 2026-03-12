@@ -16,8 +16,10 @@ geth/
 */.xdc-node/*.bak
 */.xdc-node/client.conf
 !*/.xdc-node/skynet.conf
-!*/.xdc-node/.env
-!*/.xdc-node/node.env
+*/.xdc-node/.env
+*/.xdc-node/node.env
+!*/.xdc-node/.env.example
+!*/.xdc-node/node.env.example
 !*/.xdc-node/.gitignore
 *.db
 *.ldb
@@ -181,3 +183,14 @@ node_modules/
 !**/.env.example
 *.key
 *.keystore
+
+# Chaindata - never commit blockchain data
+**/xdcchain/
+**/xdcchain-*/
+**/XDC/
+**/*.bag
+**/jwtsecret
+**/nodekey
+SKYNETEOF
+DOCKEREOF
+WREOF
