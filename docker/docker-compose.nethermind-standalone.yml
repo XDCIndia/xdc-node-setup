@@ -11,8 +11,8 @@ services:
     container_name: xdc-node-nethermind
     restart: always
     ports:
-      - "${NETHERMIND_P2P_PORT:-30306}:30303"
-      - "${NETHERMIND_P2P_PORT:-30306}:30303/udp"
+      - "0.0.0.0:${NETHERMIND_P2P_PORT:-30306}:30303"
+      - "0.0.0.0:${NETHERMIND_P2P_PORT:-30306}:30303/udp"
       - "0.0.0.0:${NETHERMIND_RPC_PORT:-8558}:8545"
     volumes:
       - ../${NETWORK:-mainnet}/nethermind-db:/nethermind/data
@@ -56,12 +56,13 @@ services:
     container_name: xdc-agent-nethermind
     restart: unless-stopped
     ports:
-      - "0.0.0.0:${NETHERMIND_DASHBOARD_PORT:-7072}:3000"
+      - "127.0.0.1:${NETHERMIND_DASHBOARD_PORT:-7072}:3000"
     volumes:
       - ./skynet-agent.sh:/agent.sh:ro
       - ../${NETWORK:-mainnet}/.xdc-node/skynet-nethermind.conf:/etc/xdc-node/skynet.conf
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - /proc:/host/proc:ro
+      # Security (#499): docker.sock required for xdc-agent container monitoring — see docs/SECURITY.md
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ../${NETWORK:-mainnet}/.xdc-node/logs:/var/log/xdc
     environment:
       - RPC_URL=http://xdc-node-nethermind:8545

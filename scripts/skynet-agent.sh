@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
+#==============================================================================
 #==============================================================================
 # XDC SkyNet Agent — Monitor + auto-restart XDC nodes
 # 
@@ -51,13 +56,6 @@ API_KEY=""
 # Helpers
 #==============================================================================
 log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >&2; }
-warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >&2; }
-err()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >&2; }
-
-hex_to_dec() {
-    local hex="${1#0x}"
-    printf '%d' "0x${hex}" 2>/dev/null || echo "0"
-}
 
 rpc_call() {
     local method=$1
@@ -754,7 +752,8 @@ check_node_health() {
         if [[ "$WD_RESTART_COUNT" -ge "$MAX_RESTARTS_PER_HOUR" ]]; then
             watchdog_log "🚨 ALERT: Max restarts ($MAX_RESTARTS_PER_HOUR) reached in 1 hour"
             watchdog_log "Issues: ${issues[*]}"
-            # TODO: Send alert notification via SkyNet API
+            # Send critical alert notification via SkyNet API
+            api_call "POST" "/nodes/alerts" "{\"severity\":\"critical\",\"title\":\"Max restarts reached\",\"message\":\"Node has restarted $WD_RESTART_COUNT times in the last hour. Issues: ${issues[*]}\"}" >/dev/null
             save_watchdog_state "$block_height"
             return 1
         fi

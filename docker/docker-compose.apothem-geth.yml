@@ -11,8 +11,8 @@ services:
     ports:
       - "8545:8545"      # HTTP RPC
       - "8546:8546"      # WebSocket  
-      - "30303:30303"    # P2P TCP
-      - "30303:30303/udp"  # P2P UDP
+      - "0.0.0.0:30303:30303"    # P2P TCP
+      - "0.0.0.0:30303:30303/udp"  # P2P UDP
     volumes:
       - xdc-apothem-data:/work/xdcchain
       - ./apothem/genesis.json:/work/genesis.json:ro

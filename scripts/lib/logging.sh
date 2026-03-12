@@ -71,6 +71,77 @@ debug() {
     if [[ "${DEBUG:-}" == "1" || "${VERBOSE:-}" == "1" ]]; then
         echo -e "${CYAN}ℹ${NC} [DEBUG] $1" >&2
     fi
+    
+    # Format output based on LOG_FORMAT
+    local output
+    if [[ "$LOG_FORMAT" == "json" ]]; then
+        # JSON output
+        local json_meta="${metadata:-{}}"
+        [[ "$json_meta" != "{}"* && "$json_meta" != "["* ]] && json_meta="{}"
+        
+        output=$(cat <<EOF
+{"timestamp":"$timestamp","level":"$level","component":"$LOG_COMPONENT","message":"$message","metadata":$json_meta}
+EOF
+)
+    else
+        # Text output with colors
+        local color_code=""
+        local icon=""
+        case "$level" in
+            DEBUG)
+                color_code="${CYAN}"
+                icon="🔍"
+                ;;
+            INFO)
+                color_code="${BLUE}"
+                icon="ℹ"
+                ;;
+            WARN|WARNING)
+                color_code="${YELLOW}"
+                icon="⚠"
+                ;;
+            ERROR)
+                color_code="${RED}"
+                icon="✗"
+                ;;
+            FATAL)
+                color_code="${MAGENTA}${BOLD}"
+                icon="💀"
+                ;;
+        esac
+        
+        output="${color_code}${icon} [${level}]${NC} ${message}"
+        [[ -n "$metadata" && "$metadata" != "{}" ]] && output="${output} ${CYAN}${metadata}${NC}"
+    fi
+    
+    # Output to stdout/stderr
+    if [[ "$level" == "ERROR" || "$level" == "FATAL" ]]; then
+        echo -e "$output" >&2
+    else
+        echo -e "$output"
+    fi
+    
+    # Log to file if configured
+    if [[ -n "$LOG_FILE" ]]; then
+        if [[ "$LOG_FORMAT" == "json" ]]; then
+            echo "$output" >> "$LOG_FILE"
+        else
+            # Strip colors for file output
+            echo "[$timestamp] [$level] $message $metadata" >> "$LOG_FILE"
+        fi
+    fi
+    
+    # Exit on FATAL
+    if [[ "$level" == "FATAL" ]]; then
+        exit 1
+    fi
+}
+
+#==============================================================================
+# Public Logging Functions - Modern (log_*)
+#==============================================================================
+log_debug() {
+    _log "DEBUG" "$1" "${2:-}"
 }
 
 # Log a fatal error and exit

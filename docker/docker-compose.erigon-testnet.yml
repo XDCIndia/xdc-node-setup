@@ -7,8 +7,8 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8547:8545"
-      - "30304:30304"
-      - "30304:30304/udp"
+      - "0.0.0.0:30304:30304"
+      - "0.0.0.0:30304:30304/udp"
     volumes:
       - erigon-testnet-data:/home/erigon/.local/share/erigon
     entrypoint: ["/usr/local/bin/erigon"]
@@ -24,7 +24,7 @@ services:
       - --http.corsdomain=*
       - --http.api=eth,net,web3,txpool,debug,erigon,admin
       - --maxpeers=50
-      - --bootnodes=enode://10f494ec14b098f712bc46d548b3ee774d6e3bb460e4ced49f88b78f119ff56c290525e7ffcbb8ec4dbe28817944a6d6871f70c88a9b2e991b415f5d3d87ae53@172.18.0.2:30303
+      - --bootnodes=enode://10f494ec14b098f712bc46d548b3ee774d6e3bb460e4ced49f88b78f119ff56c290525e7ffcbb8ec4dbe28817944a6d6871f70c88a9b2e991b415f5d3d87ae53@157.173.120.219:30312
       - --verbosity=3
     networks:
       - xdc-network
@@ -38,7 +38,6 @@ services:
       - "0.0.0.0:7071:3000"
     volumes:
       - ../testnet/.xdc-node/skynet-erigon.conf:/etc/xdc-node/skynet.conf
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - /proc:/host/proc:ro
     environment:
       - RPC_URL=http://xdc-node-erigon-testnet:8545

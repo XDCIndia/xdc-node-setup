@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
+
+# Source common utilities
+source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || source "$(dirname "$0")/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
 set -euo pipefail
 
 #===============================================================================
+source "$(dirname "$0")/lib/logging.sh"
 # Enterprise CIS Benchmark Security Audit Script for XDC Nodes
 # Based on CIS Ubuntu Server Benchmark v2.0.0
 #

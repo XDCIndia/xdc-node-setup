@@ -2,15 +2,48 @@
 #===============================================================================
 # Universal XDC Node Setup Installer
 # Works on Linux (Ubuntu/Debian/CentOS), macOS, and WSL2
-# Usage: curl -sSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/install.sh | bash
+#===============================================================================
+
+# Security Warning (#507): curl|bash MITM protection
+if [ "${SKIP_SECURITY_CHECK:-}" != "1" ]; then
+  echo "WARNING: This script downloads and executes code from the internet."
+  echo "Review the script at https://github.com/AnilChinchawale/xdc-node-setup/blob/main/install.sh"
+  echo "Or run with SKIP_SECURITY_CHECK=1 to bypass this warning."
+  read -p "Continue? [y/N] " -n 1 -r
+  echo
+  [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
+fi
+
+#===============================================================================
+# SECURITY WARNING (#507): This script downloads and executes code from the internet.
+# For your security, you should:
+#   1. Review this script before execution: https://github.com/AnilChinchawale/xdc-node-setup/blob/main/install.sh
+#   2. Use the safer git clone method instead of curl | bash:
+#      git clone https://github.com/AnilChinchawale/xdc-node-setup.git
+#      cd xdc-node-setup && bash setup.sh
+#
+# Safer Usage (recommended):
+#   git clone https://github.com/AnilChinchawale/xdc-node-setup.git
+#   cd xdc-node-setup && bash install.sh --verify
+#
+# Traditional Usage (convenient but less secure):
+#   curl -sSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/install.sh | bash
+#
+# With verification:
+#   curl -sSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/install.sh | bash -s -- --verify
 #===============================================================================
 
 set -euo pipefail
 
-# Script version
+# Script version - used for verification
 readonly INSTALLER_VERSION="1.0.0"
 readonly REPO_URL="https://github.com/AnilChinchawale/xdc-node-setup"
 readonly RAW_URL="https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main"
+
+# Expected SHA256 checksum of the install script (update on each release)
+# SECURITY: This is a self-check mechanism. In production, this should be
+# updated by the CI/CD pipeline for each release.
+readonly EXPECTED_CHECKSUM="${INSTALLER_CHECKSUM:-}"  # Set by CI/CD
 
 # Colors
 if [[ -t 1 ]]; then
@@ -148,6 +181,112 @@ check_os_compatibility() {
             return 1
             ;;
     esac
+}
+
+#===============================================================================
+# SECURITY FUNCTIONS (#507): Checksum and Verification
+#===============================================================================
+
+# Verify SHA256 checksum of a file
+verify_checksum() {
+    local file="$1"
+    local expected_checksum="${2:-$EXPECTED_CHECKSUM}"
+    
+    if [[ -z "$expected_checksum" ]]; then
+        warn "No expected checksum provided for verification"
+        return 0  # Don't fail if no checksum is set (development mode)
+    fi
+    
+    if ! command -v sha256sum >/dev/null 2>&1; then
+        warn "sha256sum not available, skipping checksum verification"
+        return 0
+    fi
+    
+    local actual_checksum
+    actual_checksum=$(sha256sum "$file" | cut -d' ' -f1)
+    
+    if [[ "$actual_checksum" == "$expected_checksum" ]]; then
+        log "SHA256 checksum verification passed"
+        return 0
+    else
+        error "SHA256 checksum verification FAILED!"
+        error "Expected: $expected_checksum"
+        error "Actual:   $actual_checksum"
+        error "The script may have been tampered with. Aborting."
+        return 1
+    fi
+}
+
+# Download with integrity check
+download_with_verification() {
+    local url="$1"
+    local output="$2"
+    local verify="${3:-false}"
+    
+    info "Downloading from $url..."
+    
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$url" -o "$output" 2>/dev/null
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q "$url" -O "$output" 2>/dev/null
+    else
+        error "Neither curl nor wget available"
+        return 1
+    fi
+    
+    if [[ ! -f "$output" ]]; then
+        error "Download failed: $url"
+        return 1
+    fi
+    
+    # If verification is requested, try to fetch and verify checksum
+    if [[ "$verify" == "true" ]]; then
+        info "Verification requested — checking download integrity..."
+        
+        # Try to fetch checksums file from repo
+        local checksums_url="${RAW_URL}/checksums.sha256"
+        local checksums_file=$(mktemp)
+        
+        if curl -fsSL "$checksums_url" -o "$checksums_file" 2>/dev/null || \
+           wget -q "$checksums_url" -O "$checksums_file" 2>/dev/null; then
+            
+            local filename=$(basename "$output")
+            local expected=$(grep "  $filename$" "$checksums_file" 2>/dev/null | cut -d' ' -f1)
+            
+            if [[ -n "$expected" ]]; then
+                verify_checksum "$output" "$expected"
+            else
+                warn "No checksum found for $filename in checksums file"
+            fi
+        else
+            warn "Could not fetch checksums file for verification"
+        fi
+        
+        rm -f "$checksums_file"
+    fi
+    
+    return 0
+}
+
+# Print security banner before installation
+print_security_banner() {
+    echo ""
+    echo -e "${YELLOW}╔════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║  SECURITY NOTICE                                               ║${NC}"
+    echo -e "${YELLOW}╠════════════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${YELLOW}║  This script will:                                             ║${NC}"
+    echo -e "${YELLOW}║  • Install Docker (if not present)                             ║${NC}"
+    echo -e "${YELLOW}║  • Download XDC node software                                  ║${NC}"
+    echo -e "${YELLOW}║  • Configure your system                                       ║${NC}"
+    echo -e "${YELLOW}║                                                                ║${NC}"
+    echo -e "${YELLOW}║  For security, review the source at:                           ║${NC}"
+    echo -e "${YELLOW}║  https://github.com/AnilChinchawale/xdc-node-setup             ║${NC}"
+    echo -e "${YELLOW}║                                                                ║${NC}"
+    echo -e "${YELLOW}║  Safer alternative:                                            ║${NC}"
+    echo -e "${YELLOW}║  git clone ${REPO_URL}.git              ║${NC}"
+    echo -e "${YELLOW}║  cd xdc-node-setup && bash install.sh                          ║${NC}"
+    echo -e "${YELLOW}╚════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
 }
 
 #==============================================================================
@@ -540,6 +679,7 @@ EOF
     fi
     
     show_banner
+    print_security_banner
     
     # Print security warning (unless --yes was used)
     if [[ "${SKIP_CONFIRMATION:-false}" != "true" ]]; then

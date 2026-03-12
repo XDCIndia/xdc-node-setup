@@ -1,0 +1,200 @@
+# =============================================================================
+# XDC SkyOne Agent - Unified Container
+# Combines: XDC Node + SkyOne Dashboard + SkyNet Agent + Monitoring
+# =============================================================================
+
+FROM node:20-alpine AS dashboard-builder
+
+# Build SkyOne Dashboard
+WORKDIR /build/dashboard
+COPY dashboard/package*.json ./
+RUN npm ci --only=production
+
+COPY dashboard/ ./
+RUN npm run build
+
+# =============================================================================
+# Main Runtime Image
+# =============================================================================
+FROM alpine:3.19
+
+LABEL maintainer="Anil Chinchawale"
+LABEL description="XDC SkyOne Agent - Unified Node, Dashboard, and SkyNet Agent"
+LABEL version="3.0.0"
+
+# Install dependencies
+RUN apk add --no-cache \
+    bash \
+    curl \
+    jq \
+    ca-certificates \
+    nginx \
+    supervisor \
+    python3 \
+    py3-pip \
+    iputils \
+    bind-tools \
+    procps \
+    coreutils \
+    tzdata \
+    && rm -rf /var/cache/apk/*
+
+# Create necessary directories
+RUN mkdir -p \
+    /app/dashboard \
+    /app/agent \
+    /app/scripts \
+    /app/logs \
+    /data/xdcchain \
+    /etc/xdc-node \
+    /etc/supervisor.d \
+    /var/log/xdc \
+    /var/log/supervisor \
+    /run/nginx
+
+# =============================================================================
+# Copy Dashboard (from builder)
+# =============================================================================
+COPY --from=dashboard-builder /build/dashboard/.next /app/dashboard/.next
+COPY --from=dashboard-builder /build/dashboard/public /app/dashboard/public
+COPY --from=dashboard-builder /build/dashboard/package*.json /app/dashboard/
+COPY --from=dashboard-builder /build/dashboard/node_modules /app/dashboard/node_modules
+COPY --from=dashboard-builder /build/dashboard/html /app/dashboard/html
+COPY --from=dashboard-builder /build/dashboard/nginx.conf /etc/nginx/nginx.conf
+
+# =============================================================================
+# Copy Scripts
+# =============================================================================
+COPY scripts/lib /app/scripts/lib
+COPY docker/skynet-agent.sh /app/agent/skynet-agent.sh
+COPY docker/entrypoint.sh /app/entrypoint.sh
+COPY dashboard/combined-start.sh /app/combined-start.sh
+
+# Make scripts executable
+RUN chmod +x \
+    /app/agent/skynet-agent.sh \
+    /app/entrypoint.sh \
+    /app/combined-start.sh \
+    /app/scripts/lib/*.sh
+
+# =============================================================================
+# Supervisor Configuration
+# =============================================================================
+RUN cat > /etc/supervisor.d/xdc-skyone.ini << 'EOF'
+[supervisord]
+nodaemon=true
+logfile=/var/log/supervisor/supervisord.log
+pidfile=/run/supervisord.pid
+
+[program:nginx]
+command=/usr/sbin/nginx -g 'daemon off;'
+autostart=true
+autorestart=true
+stdout_logfile=/var/log/xdc/nginx.log
+stderr_logfile=/var/log/xdc/nginx-error.log
+
+[program:dashboard]
+command=/app/combined-start.sh
+autostart=true
+autorestart=true
+stdout_logfile=/var/log/xdc/dashboard.log
+stderr_logfile=/var/log/xdc/dashboard-error.log
+environment=PORT="7070",NODE_ENV="production"
+
+[program:skynet-agent]
+command=/app/agent/skynet-agent.sh --daemon
+autostart=true
+autorestart=true
+stdout_logfile=/var/log/xdc/skynet-agent.log
+stderr_logfile=/var/log/xdc/skynet-agent-error.log
+
+[program:metrics-collector]
+command=/bin/sh -c 'while true; do /app/scripts/lib/node-owner-metrics.sh; sleep 60; done'
+autostart=true
+autorestart=true
+stdout_logfile=/var/log/xdc/metrics.log
+stderr_logfile=/var/log/xdc/metrics-error.log
+EOF
+
+# =============================================================================
+# Health Check Script
+# =============================================================================
+RUN cat > /app/healthcheck.sh << 'EOF'
+#!/bin/bash
+# Health check for all services
+
+# Check Nginx
+if ! curl -sf http://localhost:7070/api/health > /dev/null; then
+    echo "FAIL: Dashboard not responding"
+    exit 1
+fi
+
+# Check SkyNet Agent (if configured)
+if [ -f /etc/xdc-node/skynet.conf ]; then
+    if ! pgrep -f "skynet-agent.sh" > /dev/null; then
+        echo "WARN: SkyNet agent not running"
+    fi
+fi
+
+echo "OK: All services healthy"
+exit 0
+EOF
+RUN chmod +x /app/healthcheck.sh
+
+# =============================================================================
+# Default Configuration
+# =============================================================================
+RUN cat > /etc/xdc-node/skynet.conf.template << 'EOF'
+# SkyNet Configuration
+# Copy to /etc/xdc-node/skynet.conf and customize
+
+SKYNET_API_URL=https://net.xdc.network/api
+SKYNET_API_KEY=${SKYNET_API_KEY}
+SKYNET_NODE_ID=${SKYNET_NODE_ID}
+SKYNET_NODE_NAME=${SKYNET_NODE_NAME:-$(hostname)}
+SKYNET_ROLE=${SKYNET_ROLE:-fullnode}
+EOF
+
+# =============================================================================
+# Environment Variables
+# =============================================================================
+ENV NODE_TYPE=full \
+    NETWORK=mainnet \
+    CLIENT=stable \
+    SYNC_MODE=snap \
+    INSTANCE_NAME=XDC-SkyOne \
+    XDC_RPC_URL=http://localhost:8545 \
+    DASHBOARD_PORT=7070 \
+    DASHBOARD_REFRESH=10 \
+    SKYNET_ENABLED=true \
+    SKYNET_API_URL=https://net.xdc.network/api \
+    HEARTBEAT_INTERVAL=30 \
+    DATA_DIR=/data/xdcchain \
+    LOG_DIR=/var/log/xdc
+
+# =============================================================================
+# Expose Ports
+# =============================================================================
+# 7070 - SkyOne Dashboard
+# 8545 - XDC RPC (if node enabled)
+# 8546 - XDC WebSocket (if node enabled)
+# 30303 - XDC P2P (if node enabled)
+# 6060 - Prometheus Metrics
+EXPOSE 7070 8545 8546 30303 30303/udp 6060
+
+# =============================================================================
+# Volumes
+# =============================================================================
+VOLUME ["/data/xdcchain", "/var/log/xdc", "/etc/xdc-node"]
+
+# =============================================================================
+# Health Check
+# =============================================================================
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD /app/healthcheck.sh
+
+# =============================================================================
+# Entry Point
+# =============================================================================
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["supervisord", "-c", "/etc/supervisord.conf"]

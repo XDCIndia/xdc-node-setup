@@ -42,7 +42,6 @@ services:
       - ../configs/promtail/config.yml:/etc/promtail/config.yml:ro
       - /var/log:/var/log:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       # XDC node logs (adjust paths as needed)
       - ${XDC_DATA_DIR:-/xdcchain}:/xdcchain:ro
     command: -config.file=/etc/promtail/config.yml
@@ -63,7 +62,7 @@ services:
       - "3200:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-xdcadmin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Error: GRAFANA_ADMIN_PASSWORD must be set}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3200}
       - GF_INSTALL_PLUGINS=grafana-piechart-panel

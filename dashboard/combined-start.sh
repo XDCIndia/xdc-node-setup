@@ -1,5 +1,7 @@
 #!/bin/bash
-# Combined startup script for XDC Agent (Dashboard + SkyNet)
+# Security Fix (#508): Combined startup script for XDC Agent (Dashboard + SkyNet)
+set -euo pipefail
+trap 'echo "ERROR at line $LINENO"' ERR
 
 # Ensure log directory exists
 mkdir -p /var/log/xdc
@@ -12,7 +14,7 @@ if [ -d "$SKYNET_CONF" ]; then
   rm -rf "$SKYNET_CONF"
   # Create minimal config — auto-registration will fill in the rest
   cat > "$SKYNET_CONF" <<EOCONF
-SKYNET_API_URL=https://net.xdc.network/api/v1
+SKYNET_API_URL=https://net.xdc.network/api
 SKYNET_API_KEY=${SKYNET_API_KEY:-}
 SKYNET_NODE_NAME=$(hostname)
 SKYNET_ROLE=fullnode
@@ -37,7 +39,7 @@ if [ -f "$SKYNET_CONF" ]; then
     NODE_NAME="${SKYNET_NODE_NAME:-${CLIENT_TAG}$(hostname)-$(curl -s -m 3 https://api.ipify.org | tail -c 8)}"
     PUBLIC_IP=$(curl -s -m 5 https://api.ipify.org || echo "unknown")
     # Build curl args — auth header only if API key is set
-    CURL_ARGS=(-s -m 10 -X POST "${SKYNET_API_URL}/nodes/register" -H "Content-Type: application/json")
+    CURL_ARGS=(-s -m 10 -X POST "${SKYNET_API_URL}/v1/nodes/register" -H "Content-Type: application/json")
     [ -n "$SKYNET_API_KEY" ] && CURL_ARGS+=(-H "Authorization: Bearer ${SKYNET_API_KEY}")
     CURL_ARGS+=(-d "{\"name\":\"${NODE_NAME}\",\"host\":\"${PUBLIC_IP}\",\"role\":\"${SKYNET_ROLE:-fullnode}\"}")
     REG_RESPONSE=$(curl "${CURL_ARGS[@]}")
@@ -72,7 +74,7 @@ echo "Starting SkyNet heartbeat loop..." | tee -a /var/log/xdc/dashboard.log
   sleep 10  # quick startup
   while true; do
     # Get metrics from XDC node
-    RPC_URL="${XDC_RPC_URL:-http://localhost:8545}"
+    RPC_URL="${RPC_URL:-${XDC_RPC_URL:-http://localhost:8545}}"
     BLOCK_HEX=$(curl -s -m 5 -X POST "$RPC_URL" -H "Content-Type: application/json" \
       -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' 2>/dev/null | grep -o '"result":"[^"]*"' | cut -d'"' -f4)
     PEER_HEX=$(curl -s -m 5 -X POST "$RPC_URL" -H "Content-Type: application/json" \
@@ -97,9 +99,9 @@ echo "Starting SkyNet heartbeat loop..." | tee -a /var/log/xdc/dashboard.log
     
     # Send heartbeat directly to SkyNet
     if [ -n "$SKYNET_API_URL" ] && [ -n "$SKYNET_NODE_ID" ]; then
-      CURL_ARGS=(-s -m 15 -X POST "${SKYNET_API_URL}/nodes/${SKYNET_NODE_ID}/heartbeat" -H "Content-Type: application/json")
+      CURL_ARGS=(-s -m 15 -X POST "${SKYNET_API_URL}/v1/nodes/${SKYNET_NODE_ID}/heartbeat" -H "Content-Type: application/json")
       [ -n "$SKYNET_API_KEY" ] && CURL_ARGS+=(-H "Authorization: Bearer ${SKYNET_API_KEY}")
-      CURL_ARGS+=(-d "{\"blockHeight\":$BLOCK_NUM,\"peerCount\":$PEER_COUNT,\"isSyncing\":$IS_SYNCING,\"clientType\":\"geth\",\"version\":\"v2.6.8\"}")
+      CURL_ARGS+=(-d "{\"blockHeight\":$BLOCK_NUM,\"peerCount\":$PEER_COUNT,\"isSyncing\":$IS_SYNCING,\"clientType\":\"${CLIENT_TYPE:-geth}\",\"version\":\"${CLIENT_VERSION:-unknown}\"}")
       
       RESPONSE=$(curl "${CURL_ARGS[@]}" 2>&1)
       echo "[$(date '+%Y-%m-%d %H:%M:%S')] heartbeat sent: block=$BLOCK_NUM peers=$PEER_COUNT response=$RESPONSE" | tee -a /var/log/xdc/heartbeat.log
@@ -154,8 +156,6 @@ LFG_CHECK_INTERVAL=${LFG_CHECK_INTERVAL:-600}
   done
 ) &
 
-# Dashboard disabled for now - focus on heartbeats
-echo "Dashboard startup disabled - heartbeat-only mode" | tee -a /var/log/xdc/dashboard.log
-echo "Heartbeat loop running, waiting for signals..." | tee -a /var/log/xdc/heartbeat.log
-# Keep container alive by waiting indefinitely
-wait
+# Start Next.js dashboard
+echo "Starting SkyOne Dashboard on port 3000..." | tee -a /var/log/xdc/dashboard.log
+cd /app && exec npx next start -p 3000

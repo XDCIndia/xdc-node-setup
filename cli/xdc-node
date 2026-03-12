@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Source unified logging library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../scripts/lib/common.sh" 2>/dev/null || source "/root/.openclaw/workspace/XDC-Node-Setup/scripts/lib/common.sh"
 set -euo pipefail
 
 #==============================================================================
@@ -85,25 +88,6 @@ print_header() {
     echo ""
 }
 
-log() { echo -e "${GREEN}✓${NC} $1"; }
-info() { echo -e "${BLUE}ℹ${NC} $1"; }
-warn() { echo -e "${YELLOW}⚠${NC} $1" >&2; }
-error() { echo -e "${RED}✗${NC} $1" >&2; }
-die() { error "$1"; exit 1; }
-
-#==============================================================================
-# RPC Helper Functions
-#==============================================================================
-
-rpc_call() {
-    local method="$1"
-    local params="${2:-[]}"
-    
-    curl -s -m 10 -X POST \
-        -H "Content-Type: application/json" \
-        -d "{\"jsonrpc\":\"2.0\",\"method\":\"$method\",\"params\":$params,\"id\":1}" \
-        "$XDC_RPC_URL" 2>/dev/null || echo '{}'
-}
 
 rpc_get_result() {
     local method="$1"

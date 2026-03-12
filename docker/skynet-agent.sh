@@ -32,7 +32,7 @@ CONF_FILE="${SKYNET_CONF:-/etc/xdc-node/skynet.conf}"
 XDC_STATE_DIR="${XDC_STATE_DIR:-${XDC_DATA:-/root/xdcchain}/.state}"
 STATE_FILE="${SKYNET_STATE:-${XDC_STATE_DIR}/skynet.json}"
 RPC_URL="${XDC_RPC_URL:-http://127.0.0.1:8545}"
-SKYNET_API="${SKYNET_API_URL:-https://net.xdc.network/api/v1}"
+SKYNET_API="${SKYNET_API_URL:-https://net.xdc.network/api}"
 SKYNET_API_KEY="${SKYNET_API_KEY:-}"
 NODE_NAME="${NODE_NAME:-$(hostname)}"
 NODE_ROLE="${NODE_ROLE:-fullnode}"
@@ -370,6 +370,37 @@ collect_metrics() {
     block_hex=$(rpc_call "eth_blockNumber" | jq -r '.result // "0x0"')
     local block_height
     block_height=$(hex_to_dec "$block_hex")
+
+    # Genesis hash verification
+    local genesis_hash=""
+    local genesis_network=""
+    local genesis_mismatch=false
+    local genesis_resp
+    genesis_resp=$(rpc_call "eth_getBlockByNumber" '["0x0", false]')
+    genesis_hash=$(echo "$genesis_resp" | jq -r '.result.hash // ""' 2>/dev/null || echo "")
+    
+    # Known genesis hashes
+    local MAINNET_GENESIS="0x4a9d748bd78a8d0385b67788c2435dcdb914f98a96250b68863a1f8b7642d6b1"
+    local APOTHEM_GENESIS="0xbdea512b4f12ff1135ec92c00dc047ffb93890c2ea1aa0eefe9b013d80640075"
+    
+    if [[ "$genesis_hash" == "$MAINNET_GENESIS" ]]; then
+        genesis_network="mainnet"
+    elif [[ "$genesis_hash" == "$APOTHEM_GENESIS" ]]; then
+        genesis_network="apothem"
+    elif [[ -n "$genesis_hash" ]]; then
+        genesis_network="unknown"
+    fi
+    
+    # Check for mismatch with configured NETWORK env var
+    local expected_network="${NETWORK:-}"
+    if [[ -n "$expected_network" && -n "$genesis_network" && "$genesis_network" != "unknown" ]]; then
+        if [[ "$expected_network" != "$genesis_network" ]]; then
+            genesis_mismatch=true
+            warn "⚠️ GENESIS MISMATCH: configured NETWORK=$expected_network but genesis hash matches $genesis_network ($genesis_hash)"
+        else
+            log "✅ Genesis verified: $genesis_network ($genesis_hash)"
+        fi
+    fi
     
     # Sync status
     local sync_resp
@@ -569,6 +600,11 @@ collect_metrics() {
     "security": $security_json,
     "rpcLatencyMs": $rpc_latency,
     "enode": "$DETECT_ENODE",
+    "genesis": {
+        "hash": "$genesis_hash",
+        "network": "$genesis_network",
+        "mismatch": $genesis_mismatch
+    },
     "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF

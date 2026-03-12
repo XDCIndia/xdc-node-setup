@@ -1,40 +1,50 @@
-# XDC Node Setup - Architecture Overview
+# XDC Node Infrastructure - Architecture Overview
 
-## System Architecture
+**Version:** 1.0  
+**Date:** March 4, 2026  
+**Author:** XDC EVM Expert Agent
+
+---
+
+## Table of Contents
+
+1. [System Overview](#system-overview)
+2. [SkyOne (Node Setup) Architecture](#skyone-node-setup-architecture)
+3. [SkyNet (Dashboard) Architecture](#skynet-dashboard-architecture)
+4. [Multi-Client Support](#multi-client-support)
+5. [XDPoS 2.0 Consensus Integration](#xdpos-20-consensus-integration)
+6. [Security Architecture](#security-architecture)
+7. [Data Flow](#data-flow)
+8. [Deployment Patterns](#deployment-patterns)
+
+---
+
+## System Overview
+
+The XDC Node Infrastructure consists of two complementary systems:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         XDC Node Setup Architecture                      │
+│                     XDC Node Infrastructure                             │
 ├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  ┌─────────────┐    ┌──────────────┐    ┌─────────────┐                 │
-│  │   CLI Tool  │    │  SkyOne UI   │    │  SkyNet API │                 │
-│  │   (xdc)     │◄──►│  (Port 7070) │◄──►│  (Optional) │                 │
-│  └──────┬──────┘    └──────┬───────┘    └─────────────┘                 │
-│         │                  │                                             │
-│         ▼                  ▼                                             │
-│  ┌──────────────────────────────────────────────────┐                   │
-│  │              Docker Compose Stack                 │                   │
-│  ├──────────────────────────────────────────────────┤                   │
-│  │  ┌───────────┐  ┌───────────┐  ┌──────────────┐  │                   │
-│  │  │ XDC Node  │  │  SkyOne   │  │ Prometheus   │  │                   │
-│  │  │  (Geth/   │  │ Dashboard │  │  (Metrics)   │  │                   │
-│  │  │  Erigon)  │  │           │  │              │  │                   │
-│  │  └─────┬─────┘  └───────────┘  └──────────────┘  │                   │
-│  │        │                                         │                   │
-│  │        ▼                                         │                   │
-│  │  ┌───────────┐  ┌───────────┐                   │                   │
-│  │  │  XDC Chain │  │   Data    │                   │                   │
-│  │  │   Data    │  │  Volume   │                   │                   │
-│  │  └───────────┘  └───────────┘                   │                   │
-│  └──────────────────────────────────────────────────┘                   │
-│                          │                                              │
-│                          ▼                                              │
-│  ┌──────────────────────────────────────────────────┐                   │
-│  │              XDC P2P Network                      │                   │
-│  │         (Mainnet / Testnet / Devnet)              │                   │
-│  └──────────────────────────────────────────────────┘                   │
-│                                                                          │
+│                                                                         │
+│  ┌──────────────────────┐          ┌──────────────────────┐            │
+│  │     SkyOne           │          │      SkyNet          │            │
+│  │   (Node Setup)       │◄────────►│    (Dashboard)       │            │
+│  │                      │  Heartbeat│                      │            │
+│  │  • Node Deployment   │          │  • Fleet Monitoring  │            │
+│  │  • Client Management │          │  • Alerting          │            │
+│  │  • Self-Healing      │          │  • Analytics         │            │
+│  │  • Local Dashboard   │          │  • Multi-Client View │            │
+│  └──────────────────────┘          └──────────────────────┘            │
+│           │                                   │                        │
+│           └──────────┬────────────────────────┘                        │
+│                      ▼                                                  │
+│           ┌──────────────────────┐                                     │
+│           │   XDC Network        │                                     │
+│           │   (Mainnet/Testnet)  │                                     │
+│           └──────────────────────┘                                     │
+│                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 

@@ -86,6 +86,14 @@ MAILTO=""
 0 2 * * 0 root WEEKLY_BACKUP=true /opt/xdc-node/scripts/backup.sh >> /var/log/xdc-backup.log 2>&1
 
 #------------------------------------------------------------------------------
+# SkyOne Agent IP Refresh (Multi-Client)
+#------------------------------------------------------------------------------
+
+# Refresh SkyOne agent RPC URLs when node container IPs change (every 5 min)
+# Fixes: Docker bridge DNAT doesn't apply intra-bridge; container IPs change on restart
+*/5 * * * * root /opt/xdc-node/docker/skynet-agent/update-agent-ips.sh >> /var/log/skyone-refresh.log 2>&1
+
+#------------------------------------------------------------------------------
 # Maintenance
 #------------------------------------------------------------------------------
 

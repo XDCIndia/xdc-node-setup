@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
+
+# Source shared logging library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/logging.sh" 2>/dev/null || source "$(dirname "$0")/lib/logging.sh" || { echo "Error: Cannot find lib/logging.sh" >&2; exit 1; }
+
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
+#==============================================================================
 #==============================================================================
 # XDC Node CLI v2.0 - Enhanced Setup Script
 # Interactive wizard, quick deployment, pre-flight checks

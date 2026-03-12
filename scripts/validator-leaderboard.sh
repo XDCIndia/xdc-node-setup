@@ -1,4 +1,9 @@
 #!/bin/bash
+
+# Source common utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source common.sh"; exit 1; }
+# XDC Validator Leaderboard
 # XDC Validator Leaderboard
 # Queries XDCValidator contract for validator rankings
 

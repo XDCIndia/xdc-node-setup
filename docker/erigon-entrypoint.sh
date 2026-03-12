@@ -1,8 +1,20 @@
 #!/bin/bash
-set -e
+# Security Fix (#492 #493 #508): Secure RPC defaults + error handling
+set -euo pipefail
+trap 'echo "Error on line $LINENO" >&2' ERR
 
-NETWORK="${NETWORK:-mainnet}"
-NETWORK_ID="${NETWORK_ID:-50}"
+#==============================================================================
+# XDC Erigon Entrypoint Script
+# Security: RPC binds to 127.0.0.1 by default — set RPC_ADDR=0.0.0.0 for external access
+#==============================================================================
+
+# Security Fix (#492 #493): Secure defaults — localhost only
+: "${NETWORK:=mainnet}"
+: "${NETWORK_ID:=50}"
+: "${RPC_ADDR:=127.0.0.1}"  # Security: localhost only by default
+: "${RPC_VHOSTS:=localhost}"  # Security: no vhosts wildcard
+: "${RPC_ALLOW_ORIGINS:=localhost}"  # Security: no CORS wildcard
+: "${RPC_CORS:=http://localhost:3000}"  # Default CORS for backwards compat
 
 echo "[Erigon] Starting for network: $NETWORK (ID: $NETWORK_ID)"
 
@@ -27,17 +39,17 @@ esac
 echo "[Erigon] Chain: $CHAIN"
 
 # Build erigon command
-# SECURITY FIX (#77): Use localhost-only defaults instead of wildcards
+# Security Fix (#492 #493): Use localhost-only defaults instead of wildcards
 ERIGON_ARGS=(
     "--datadir=/home/erigon/.local/share/erigon"
     "--chain=$CHAIN"
     "--networkid=$NETWORK_ID"
     "--port=30304"
     "--http"
-    "--http.addr=${RPC_ADDR:-127.0.0.1}"  # SECURITY: localhost only by default
+    "--http.addr=${RPC_ADDR}"
     "--http.port=8555"
-    "--http.vhosts=${RPC_VHOSTS:-localhost,127.0.0.1}"  # SECURITY: no wildcard
-    "--http.corsdomain=${RPC_CORS:-http://localhost:3000}"  # SECURITY: no wildcard
+    "--http.vhosts=${RPC_VHOSTS}"
+    "--http.corsdomain=${RPC_ALLOW_ORIGINS}"
     "--http.api=eth,net,web3,txpool,debug,erigon"
     "--ws"
     "--private.api.addr=127.0.0.1:9090"  # SECURITY: localhost only

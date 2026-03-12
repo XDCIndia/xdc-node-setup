@@ -1,5 +1,7 @@
 #!/bin/bash
-set -e
+# Security Fix (#492 #493 #508): Secure RPC defaults + error handling
+set -euo pipefail
+trap 'echo "ERROR at line $LINENO"' ERR
 
 echo "[Reth-XDC] Starting Reth XDC client with external RPC access..."
 

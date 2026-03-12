@@ -617,3 +617,89 @@ nslookup net.xdc.network
 - [Grafana Documentation](https://grafana.com/docs/)
 - [Node Exporter](https://github.com/prometheus/node_exporter)
 - [Telegram Bot API](https://core.telegram.org/bots/api)
+
+## XDPoS 2.0 Consensus Validation
+
+The `scripts/consensus-validation.sh` script provides comprehensive validation of XDPoS 2.0 consensus parameters and health.
+
+### Features
+
+- **Epoch Boundary Detection**: Identifies current epoch and position within 900-block cycles
+- **Gap Block Monitoring**: Detects gap blocks (blocks 450-899) where voting is disabled
+- **Masternode Set Validation**: Verifies quorum requirements (73/108 masternodes)
+- **QC Formation Tracking**: Monitors Quorum Certificate formation and timing
+- **Vote Participation**: Tracks node voting activity in current epoch
+
+### Usage
+
+```bash
+# Basic validation
+./scripts/consensus-validation.sh
+
+# Custom RPC endpoint
+./scripts/consensus-validation.sh --rpc-endpoint http://localhost:8547
+
+# Save to custom log file
+./scripts/consensus-validation.sh --output consensus-check-$(date +%Y%m%d).log
+```
+
+### Interpretation
+
+- **All checks PASSED**: Node is operating normally within consensus
+- **Gap period warnings**: Normal - voting disabled in last 450 blocks of epoch
+- **Method not implemented**: Node client may need upgrade for full XDPoS 2.0 monitoring
+
+---
+
+## Multi-Client Comparison
+
+The `scripts/multi-client-compare.sh` tool validates consensus across multiple XDC client implementations.
+
+### Features
+
+- **Block Hash Comparison**: Ensures all clients agree on block hashes
+- **State Root Validation**: Verifies execution state consistency
+- **Transaction Root Checking**: Validates transaction ordering
+- **Performance Benchmarking**: Measures RPC latency per client
+- **Divergence Detection**: Alerts on any consensus disagreements
+- **Continuous Monitoring**: Optional daemon mode for production
+
+### Usage
+
+```bash
+# One-time comparison check
+./scripts/multi-client-compare.sh
+
+# Continuous monitoring (production)
+./scripts/multi-client-compare.sh --monitor
+
+# Custom RPC endpoints
+./scripts/multi-client-compare.sh \
+  --geth-rpc http://localhost:8545 \
+  --erigon-rpc http://localhost:8547 \
+  --nethermind-rpc http://localhost:8556 \
+  --reth-rpc http://localhost:8588
+
+# Custom confirmation depth
+./scripts/multi-client-compare.sh --depth 20
+```
+
+### Configuration
+
+Default RPC ports:
+- Geth: 8545
+- Erigon: 8547
+- Nethermind: 8556
+- Reth: 8588
+
+Override via environment variables or command-line arguments.
+
+### Alerts
+
+The script will alert on:
+- **Block hash divergence**: Clients disagree on canonical chain
+- **State root mismatch**: Different execution results
+- **Transaction root difference**: Transaction ordering mismatch
+
+Any divergence indicates a critical consensus bug requiring immediate investigation.
+

@@ -1,249 +1,195 @@
 # RPC Security Best Practices
 
-## Overview
-XDC nodes expose JSON-RPC endpoints for blockchain interaction. Improper configuration can expose your node to attacks, fund theft, and resource exhaustion.
+## 🚨 Issue #355 - RPC Security Hardening
 
-## Critical Security Rules
+**Priority:** P0 (Critical)  
+**Status:** FIXED  
+**Date:** 2026-02-28
 
-### 1. Default to Localhost Binding
+### Problem
 
-**❌ UNSAFE (Current Default):**
-```bash
-RPC_ADDR=0.0.0.0  # Exposed to internet
-RPC_CORS_DOMAIN=* # Any website can call your RPC
-```
+Previous default configuration bound RPC endpoints to `0.0.0.0` (all network interfaces), exposing node RPC to potential unauthorized access.
 
-**✅ SAFE (Recommended):**
-```bash
-RPC_ADDR=127.0.0.1  # Only local access
-RPC_CORS_DOMAIN="http://localhost:3000,https://yourdashboard.com"
-WS_ORIGINS="ws://localhost:3000,wss://yourdashboard.com"
-```
+### Fix Applied
 
-### 2. CORS Restriction
-
-If you MUST expose RPC externally, restrict CORS to specific origins:
+All XDC client startup scripts now default to **localhost-only** binding:
 
 ```bash
-# Specific domains only
-RPC_CORS_DOMAIN="https://mydapp.com,https://dashboard.example.com"
+# Before (INSECURE):
+--http.addr 0.0.0.0
 
-# NEVER use wildcards in production
-RPC_CORS_DOMAIN=*  # ❌ DANGEROUS
+# After (SECURE):
+--http.addr 127.0.0.1
 ```
 
-### 3. Nginx Reverse Proxy (Recommended for External Access)
+### Files Modified
 
-Instead of exposing RPC directly, use an nginx reverse proxy with:
-- TLS/SSL encryption
-- Rate limiting
-- Authentication
-- Request logging
+- `docker/geth-pr5/start-gp5.sh`
+- `docker/apothem/start-node.sh`
+- `docker/apothem/start-erigon.sh`
+- `docker/erigon/start-erigon.sh`
+- `docker/nethermind/start-nethermind.sh`
+- `docker/reth/start-reth.sh`
 
-**Example nginx.conf:**
+---
+
+## ✅ Secure Default Configuration
+
+### RPC Binding
+
+```bash
+# Environment variables (docker-compose.yml or .env)
+HTTP_ADDR=127.0.0.1  # Localhost only (DEFAULT - SECURE)
+HTTP_PORT=8545
+HTTP_API=eth,net,web3  # NEVER include: admin,debug,personal
+HTTP_CORS_DOMAIN=http://localhost:3000
+HTTP_VHOSTS=localhost,127.0.0.1
+```
+
+### WebSocket Binding
+
+```bash
+WS_ADDR=127.0.0.1  # Localhost only (DEFAULT - SECURE)
+WS_PORT=8546
+WS_API=eth,net,web3
+WS_ORIGINS=localhost
+```
+
+---
+
+## 🔓 External RPC Access (Advanced)
+
+If you **must** expose RPC externally, use one of these secure methods:
+
+### Option 1: Nginx Reverse Proxy (RECOMMENDED)
+
+**Why:** Adds authentication, rate limiting, SSL/TLS, logging
+
 ```nginx
-# Rate limiting zone
-limit_req_zone $binary_remote_addr zone=rpc_limit:10m rate=10r/s;
+# /etc/nginx/sites-available/xdc-rpc
+upstream xdc_rpc {
+    server 127.0.0.1:8545;
+}
 
 server {
-    listen 8545 ssl http2;
+    listen 443 ssl http2;
     server_name rpc.yourdomain.com;
-    
-    ssl_certificate /etc/ssl/certs/xdc.crt;
-    ssl_certificate_key /etc/ssl/private/xdc.key;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    
+
+    ssl_certificate /etc/ssl/certs/rpc.yourdomain.com.crt;
+    ssl_certificate_key /etc/ssl/private/rpc.yourdomain.com.key;
+
     # Rate limiting
-    limit_req zone=rpc_limit burst=20 nodelay;
-    limit_req_status 429;
-    
-    # Logging
-    access_log /var/log/nginx/rpc-access.log;
-    error_log /var/log/nginx/rpc-error.log;
-    
+    limit_req_zone $binary_remote_addr zone=rpc:10m rate=60r/m;
+    limit_req zone=rpc burst=10 nodelay;
+
+    # JWT Authentication (optional)
+    auth_request /auth;
+
     location / {
-        # Backend node (localhost only)
-        proxy_pass http://127.0.0.1:8545;
-        
-        # CORS headers
-        add_header Access-Control-Allow-Origin "https://trusted-domain.com" always;
-        add_header Access-Control-Allow-Methods "POST, OPTIONS" always;
-        add_header Access-Control-Allow-Headers "Content-Type" always;
-        
-        # Security headers
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-Frame-Options "DENY" always;
-        
-        # Proxy settings
+        proxy_pass http://xdc_rpc/;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # Timeouts
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-    }
-    
-    # OPTIONS preflight
-    if ($request_method = OPTIONS) {
-        add_header Access-Control-Allow-Origin "https://trusted-domain.com";
-        add_header Access-Control-Allow-Methods "POST, OPTIONS";
-        add_header Access-Control-Allow-Headers "Content-Type";
-        add_header Content-Length 0;
-        return 204;
     }
 }
 ```
 
-### 4. API Key Authentication (Advanced)
-
-For production APIs, implement API key authentication in nginx:
-
-```nginx
-location / {
-    # Check API key header
-    if ($http_x_api_key = "") {
-        return 401 "API key required";
-    }
-    
-    # Validate against allowed keys (use Lua or external auth service)
-    auth_request /auth;
-    
-    proxy_pass http://127.0.0.1:8545;
-}
-
-location = /auth {
-    internal;
-    proxy_pass http://auth-service:8080/validate;
-    proxy_pass_request_body off;
-    proxy_set_header Content-Length "";
-    proxy_set_header X-API-Key $http_x_api_key;
-}
-```
-
-### 5. Disable Dangerous RPC Methods
-
-Some RPC methods should NEVER be exposed publicly:
+### Option 2: SSH Tunnel
 
 ```bash
-# Start node with limited API
-./XDC --http.api "eth,net,web3,xdpos" \
-     --http.corsdomain "https://trusted-domain.com" \
-     --http.addr "127.0.0.1"
+# On your local machine:
+ssh -L 8545:127.0.0.1:8545 -p 12141 root@YOUR_NODE_IP
 
-# NEVER expose these APIs publicly:
-# - personal (wallet management)
-# - admin (node admin)
-# - debug (debugging tools)
-# - miner (mining control)
+# Now access RPC via:
+curl http://localhost:8545
 ```
 
-### 6. Monitoring and Alerts
+### Option 3: VPN (Wireguard/OpenVPN)
 
-Monitor for suspicious activity:
+Set up a VPN and connect through the private network.
+
+### Option 4: Firewall + IP Whitelist (LAST RESORT)
 
 ```bash
-# Watch for unusual RPC patterns
-tail -f /var/log/nginx/rpc-access.log | grep -E '(429|401|403)'
-
-# Alert on rate limit hits
-# Alert on failed auth attempts
-# Alert on unusual geographic patterns
+# Only if you understand the risks:
+ufw allow from YOUR_TRUSTED_IP to any port 8545 proto tcp
 ```
 
-### 7. Firewall Configuration
+---
 
-Use UFW or iptables to restrict RPC access at the network level:
+## ⚠️ NEVER DO THIS IN PRODUCTION
 
 ```bash
-# Allow localhost only
-ufw allow from 127.0.0.1 to any port 8545
-
-# Allow specific IPs
-ufw allow from 203.0.113.0/24 to any port 8545
-
-# Deny all others
-ufw deny 8545
+# ❌ DANGER: Exposes RPC to the internet
+HTTP_ADDR=0.0.0.0
+HTTP_API=admin,debug,personal,eth,net,web3  # Includes dangerous APIs
+HTTP_CORS_DOMAIN=*  # Allows any origin
+HTTP_VHOSTS=*  # Allows any virtual host
 ```
 
-## Attack Scenarios
+**Why this is dangerous:**
+- Anyone can query your node
+- `admin` API allows node shutdown
+- `debug` API exposes internal state
+- `personal` API manages accounts/wallets
 
-### Scenario 1: Wallet Fund Theft
-**Attack:** User visits malicious website while node RPC is exposed with unlocked wallet.
-**Impact:** Website JavaScript calls `personal_sendTransaction` to drain funds.
-**Prevention:** Never expose `personal` API, use localhost binding.
+---
 
-### Scenario 2: DoS via RPC Spam
-**Attack:** Attacker floods RPC with expensive queries (e.g., `eth_getLogs` with wide range).
-**Impact:** Node becomes unresponsive, legitimate requests fail.
-**Prevention:** Rate limiting, query complexity limits.
+## 🔒 Firewall Configuration
 
-### Scenario 3: Node Fingerprinting
-**Attack:** Attacker calls `admin_nodeInfo` to identify client type/version for exploit targeting.
-**Impact:** Node becomes target for known vulnerabilities.
-**Prevention:** Disable admin API on public endpoints.
+Even with localhost binding, ensure firewall rules are correct:
 
-## Deployment Checklist
-
-- [ ] RPC bound to `127.0.0.1` by default
-- [ ] CORS restricted to specific domains
-- [ ] Dangerous APIs disabled (`personal`, `admin`, `debug`)
-- [ ] Nginx reverse proxy configured with TLS
-- [ ] Rate limiting enabled (10-100 req/s)
-- [ ] API key authentication (if public)
-- [ ] Firewall rules configured
-- [ ] Monitoring and alerting setup
-- [ ] Regular security audits scheduled
-
-## Testing Your Configuration
-
-### Test 1: Localhost Binding
 ```bash
-# From remote machine (should fail)
-curl -X POST http://YOUR_NODE_IP:8545 \
-     -H "Content-Type: application/json" \
-     -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+# P2P ports (OPEN to internet for node discovery):
+sudo ufw allow 30303/tcp comment 'XDC Geth P2P'
+sudo ufw allow 30303/udp comment 'XDC Geth Discovery'
+sudo ufw allow 30304/tcp comment 'XDC Erigon P2P'
+sudo ufw allow 30304/udp comment 'XDC Erigon Discovery'
+sudo ufw allow 30306/tcp comment 'XDC Nethermind P2P'
+sudo ufw allow 30306/udp comment 'XDC Nethermind Discovery'
+sudo ufw allow 40303/tcp comment 'XDC Reth P2P'
 
-# Expected: Connection refused or timeout
+# RPC ports (BLOCKED from internet):
+# No ufw rules needed - localhost-only binding handles this
+
+# SSH (OPEN to your IP only):
+sudo ufw allow from YOUR_IP to any port 12141 proto tcp comment 'SSH from admin'
 ```
 
-### Test 2: CORS Restriction
-```bash
-# Try from unauthorized origin (should fail)
-curl -X POST http://YOUR_NODE_IP:8545 \
-     -H "Content-Type: application/json" \
-     -H "Origin: https://evil-site.com" \
-     -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+---
 
-# Expected: CORS error
-```
+## 📊 Multi-Client Port Allocation
 
-### Test 3: Rate Limiting
-```bash
-# Rapid requests (should hit rate limit)
-for i in {1..50}; do
-  curl -X POST http://YOUR_NODE_IP:8545 \
-       -H "Content-Type: application/json" \
-       -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' &
-done
-wait
+See [PORT-ALLOCATION.md](./PORT-ALLOCATION.md) for complete port reference.
 
-# Expected: Some requests return 429 Too Many Requests
-```
+| Client | RPC Port | WS Port | P2P Port | Metrics |
+|--------|----------|---------|----------|---------|
+| Geth XDC | 8545 | 8546 | 30303 | 6060 |
+| Erigon XDC | 8547 | 8548 | 30304/30311 | 6061 |
+| Nethermind XDC | 8558 | 8559 | 30306 | 6070 |
+| Reth XDC | 7073 | 7074 | 40303 | 6071 |
 
-## References
+---
 
-- [Ethereum JSON-RPC Security](https://geth.ethereum.org/docs/rpc/server)
-- [OWASP API Security](https://owasp.org/www-project-api-security/)
-- [Nginx Rate Limiting](https://www.nginx.com/blog/rate-limiting-nginx/)
-- [XDC Network Documentation](https://docs.xdc.network)
+## 🛡️ Security Checklist
 
-## Support
+- [ ] RPC bound to `127.0.0.1` (not `0.0.0.0`)
+- [ ] Dangerous APIs disabled (`admin`, `debug`, `personal`)
+- [ ] CORS domain restricted (not `*`)
+- [ ] Virtual hosts restricted (not `*`)
+- [ ] Firewall configured (RPC ports not exposed)
+- [ ] SSH uses non-default port (12141)
+- [ ] SSH key authentication only (no passwords)
+- [ ] Regular security updates applied
+- [ ] Monitoring and alerting enabled
+- [ ] External access via reverse proxy (if needed)
 
-For security issues, contact: security@xdc.network
-For general questions: https://discord.gg/xdc-community
+---
+
+## 📚 References
+
+- [XDC Node Setup Security Guide](./SECURITY.md)
+- [Port Allocation Reference](./PORT-ALLOCATION.md)
+- [Ethereum JSON-RPC Spec](https://ethereum.github.io/execution-apis/api-documentation/)
+- [OWASP API Security Top 10](https://owasp.org/www-project-api-security/)

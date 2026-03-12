@@ -1,6 +1,7 @@
 # XDC Node Setup - Configuration Guide
 
-## Overview
+**Version:** 1.0  
+**Date:** March 4, 2026
 
 This guide covers all configuration options for XDC Node Setup (SkyOne).
 
@@ -77,9 +78,24 @@ Port = 30303
 MaxPeers = 50
 
 [eth]
-SyncMode = "full"
+SyncMode = "snap"
 GCMode = "full"
 Cache = 4096
+
+[eth.txpool]
+PriceLimit = 1
+PriceBump = 10
+AccountSlots = 16
+GlobalSlots = 4096
+AccountQueue = 64
+GlobalQueue = 1024
+
+[rpc]
+HTTPHost = "127.0.0.1"
+HTTPVirtualHosts = ["localhost"]
+HTTPCors = ["localhost"]
+WSHost = "127.0.0.1"
+WSOrigins = ["localhost"]
 
 [metrics]
 Enabled = true
@@ -298,7 +314,7 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
 ```
 
-## Advanced Configuration
+### Nginx Reverse Proxy
 
 ### Custom Data Directory
 

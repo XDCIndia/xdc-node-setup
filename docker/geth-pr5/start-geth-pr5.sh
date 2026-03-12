@@ -111,15 +111,15 @@ ARGS="$ARGS --syncmode $SYNC_MODE"
 ARGS="$ARGS --gcmode $GC_MODE"
 ARGS="$ARGS --verbosity $LOG_LEVEL"
 
-# Miner settings (GP5 / geth 1.17+ uses --miner.* style flags)
-ARGS="$ARGS --miner.gasprice 1"
-ARGS="$ARGS --miner.gaslimit 420000000"
+# Miner settings - use legacy flags for compatibility
+# Try --miner.gasprice first (new), fallback to --gasprice (legacy)
+ARGS="$ARGS --gasprice 1"
+ARGS="$ARGS --targetgaslimit 420000000"
 
 # Wallet unlock for mining
 if [ -n "$wallet" ] && [ -f "$PWD_FILE" ]; then
     ARGS="$ARGS --password $PWD_FILE"
     ARGS="$ARGS --unlock $wallet"
-    ARGS="$ARGS --allow-insecure-unlock"
     ARGS="$ARGS --mine"
 fi
 
@@ -132,20 +132,20 @@ fi
 # Ethstats
 ARGS="$ARGS --ethstats $netstats"
 
-# HTTP/RPC (GP5 / geth 1.17+ uses --http.* style flags)
-ARGS="$ARGS --http"
-ARGS="$ARGS --http.addr=$RPC_ADDR"
-ARGS="$ARGS --http.port=$RPC_PORT"
-ARGS="$ARGS --http.api=$RPC_API"
-ARGS="$ARGS --http.corsdomain=$RPC_CORS_DOMAIN"
-ARGS="$ARGS --http.vhosts=$RPC_VHOSTS"
+# HTTP/RPC (XDC uses old geth-style flags)
+ARGS="$ARGS --rpc"
+ARGS="$ARGS --rpcaddr $RPC_ADDR"
+ARGS="$ARGS --rpcport $RPC_PORT"
+ARGS="$ARGS --rpcapi $RPC_API"
+ARGS="$ARGS --rpccorsdomain $RPC_CORS_DOMAIN"
+ARGS="$ARGS --rpcvhosts $RPC_VHOSTS"
 
-# WebSocket (GP5 / geth 1.17+ uses --ws.* style flags)
+# WebSocket (XDC uses old geth-style flags)
 ARGS="$ARGS --ws"
-ARGS="$ARGS --ws.addr=$WS_ADDR"
-ARGS="$ARGS --ws.port=$WS_PORT"
-ARGS="$ARGS --ws.api=$WS_API"
-ARGS="$ARGS --ws.origins=$WS_ORIGINS"
+ARGS="$ARGS --wsaddr $WS_ADDR"
+ARGS="$ARGS --wsport $WS_PORT"
+ARGS="$ARGS --wsapi $WS_API"
+ARGS="$ARGS --wsorigins $WS_ORIGINS"
 
 # Pass through any extra args
 ARGS="$ARGS $*"

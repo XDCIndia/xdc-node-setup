@@ -1,0 +1,129 @@
+version: '3.8'
+
+# APO (Apothem) Multi-Client - All 5 XDC Clients + 5 SkyNet Agents + Peer Connector
+# Server: 185.180.220.183, SSH port 52316
+# Network: root_xdc-apothem (bridge), host network for NM/Reth
+#
+# Usage: docker compose -f docker-compose.apo-multiclient.yml up -d
+# Agents: docker compose -f docker-compose.apo-multiclient.yml up -d agent-stable agent-gp5 agent-erigon agent-nm agent-reth
+# Peer connector: docker compose -f docker-compose.apo-multiclient.yml up -d peer-connector
+
+x-apothem-bootnodes: &apothem-bootnodes >-
+  enode://ee1e11e3f56b015b2b391eb9c45292159713583b4adfe29d24675238f73d33e6ec0a62397847823e2bca622c91892075c517fc383c9355d43a89bb7532e834a0@157.173.120.219:30312,
+  enode://729d763db071595bacbbf33037a8e7639d8e9a97bfcfcda3afe963435d919cb95634f27375f0aadf6494dad47e506c888bf15cb5633d5f81dbb793b05b27e676@207.90.192.100:30312,
+  enode://49c7586c221250cac7070df41c1b6c77180c5d9051e20d1d2b77dfa0dc80b8dc48a8e3c7ca068ac757429223530d6445a06a32ab4af20819cfaa1d47282a0401@80.243.180.121:30312
+
+x-skynet-common: &skynet-common
+  image: anilchinchawale/xdc-agent:latest
+  restart: unless-stopped
+  network_mode: host
+  volumes:
+    # Security (#499): docker.sock required for xdc-agent container monitoring — see docs/SECURITY.md
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+  environment: &skynet-env
+    SKYNET_API_KEY: ${SKYNET_API_KEY:-xdc-netown-key-2026-prod}
+    SKYNET_MASTER_KEY: ${SKYNET_MASTER_KEY:-xdc-netown-key-2026-prod}
+    SKYNET_API_URL: https://net.xdc.network/api
+    HOST_IP: "185.180.220.183"
+    NETWORK: apothem
+    HEARTBEAT_INTERVAL: "60"
+
+services:
+
+  # ==================== PEER CONNECTOR ====================
+  # Runs every 120s, cross-peers all geth-compatible clients
+  peer-connector:
+    image: alpine/curl:latest
+    container_name: peer-connector-apo
+    restart: unless-stopped
+    network_mode: host
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache jq > /dev/null 2>&1
+        echo "[PeerConnector] Starting APO cross-peer connector..."
+        add_peer() {
+          local port=$1 enode=$2 label=$3
+          local r=$(curl -sf -m5 -X POST http://127.0.0.1:$port -H "Content-Type:application/json" \
+            -d "{\"jsonrpc\":\"2.0\",\"method\":\"admin_addTrustedPeer\",\"params\":[\"$enode\"],\"id\":1}" 2>/dev/null \
+            | jq -r '.result // .error.message // "error"' 2>/dev/null)
+          echo "[PC] $label :$port -> $r"
+        }
+        while true; do
+          echo "[PC] === $(date '+%H:%M:%S') Cross-peering ==="
+          STABLE=$(curl -sf -m5 -X POST http://127.0.0.1:8545 -H "Content-Type:application/json" \
+            -d '{"jsonrpc":"2.0","method":"admin_nodeInfo","params":[],"id":1}' 2>/dev/null \
+            | jq -r '.result.enode' 2>/dev/null | sed 's/@\[::\]/@172.18.0.2/')
+          GP5=$(curl -sf -m5 -X POST http://127.0.0.1:8555 -H "Content-Type:application/json" \
+            -d '{"jsonrpc":"2.0","method":"admin_nodeInfo","params":[],"id":1}' 2>/dev/null \
+            | jq -r '.result.enode' 2>/dev/null | sed 's/@127\.0\.0\.1/@172.18.0.3/')
+          NM=$(curl -sf -m5 -X POST http://127.0.0.1:8558 -H "Content-Type:application/json" \
+            -d '{"jsonrpc":"2.0","method":"admin_nodeInfo","params":[],"id":1}' 2>/dev/null \
+            | jq -r '.result.enode' 2>/dev/null | sed 's/@\[::\]/@185.180.220.183/')
+          [ -n "$STABLE" ] && add_peer 8555 "$STABLE" "gp5<-stable"
+          [ -n "$STABLE" ] && add_peer 8558 "$STABLE" "nm<-stable"
+          [ -n "$GP5" ]    && add_peer 8545 "$GP5"    "stable<-gp5"
+          [ -n "$GP5" ]    && add_peer 8558 "$GP5"    "nm<-gp5"
+          [ -n "$NM" ]     && add_peer 8545 "$NM"     "stable<-nm"
+          [ -n "$NM" ]     && add_peer 8555 "$NM"     "gp5<-nm"
+          echo "[PC] Done. Sleep 120s"
+          sleep 120
+        done
+
+  # ==================== 5 SKYONE AGENTS ====================
+
+  agent-stable:
+    <<: *skynet-common
+    container_name: agent-stable-apo
+    environment:
+      <<: *skynet-env
+      SKYNET_NODE_ID: f708698c-fbdb-439f-882a-c6e9db6e5870
+      SKYNET_NODE_NAME: apo-stable-183
+      RPC_URL: http://127.0.0.1:8545
+      NODE_RPC_PORT: "8545"
+      CLIENT_TYPE: geth
+
+  agent-gp5:
+    <<: *skynet-common
+    container_name: agent-gp5-apo
+    environment:
+      <<: *skynet-env
+      SKYNET_NODE_ID: 2ffab63b-926a-4343-a3c9-96e90eb2c973
+      SKYNET_NODE_NAME: apo-gp5-183
+      RPC_URL: http://127.0.0.1:8555
+      NODE_RPC_PORT: "8555"
+      CLIENT_TYPE: geth-pr5
+
+  agent-erigon:
+    <<: *skynet-common
+    container_name: agent-erigon-apo
+    environment:
+      <<: *skynet-env
+      SKYNET_NODE_ID: 40259a1d-26e2-47a1-b44b-1e9858a27dc1
+      SKYNET_NODE_NAME: apo-erigon-183
+      RPC_URL: http://127.0.0.1:8547
+      NODE_RPC_PORT: "8547"
+      CLIENT_TYPE: erigon
+
+  agent-nm:
+    <<: *skynet-common
+    container_name: agent-nm-apo
+    environment:
+      <<: *skynet-env
+      SKYNET_NODE_ID: 2beb3132-c268-43d1-b67f-9b9ea1ae014b
+      SKYNET_NODE_NAME: apo-nm-183
+      RPC_URL: http://127.0.0.1:8557
+      NODE_RPC_PORT: "8557"
+      CLIENT_TYPE: nethermind
+
+  agent-reth:
+    <<: *skynet-common
+    container_name: agent-reth-apo
+    environment:
+      <<: *skynet-env
+      SKYNET_NODE_ID: 3755a126-c335-4028-bbf6-87c517b99000
+      SKYNET_NODE_NAME: apo-reth-183
+      RPC_URL: http://127.0.0.1:8588
+      NODE_RPC_PORT: "8588"
+      CLIENT_TYPE: reth
+      NETWORK: apothem

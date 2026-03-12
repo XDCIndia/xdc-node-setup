@@ -54,9 +54,26 @@ rpc_call() {
     local params="${2:-[]}"
     local rpc_url="${RPC_URL:-http://127.0.0.1:8545}"
     
-    curl -sf -m 10 -X POST "$rpc_url" \
+    if ! curl -sf -m "$timeout" "$endpoint" \
+         -X POST \
+         -H "Content-Type: application/json" \
+         --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
+         >/dev/null 2>&1; then
+        return 1
+    fi
+    return 0
+}
+
+json_rpc() {
+    local endpoint="$1"
+    local method="$2"
+    local params="${3:-[]}"
+    
+    curl -sf "$endpoint" \
+        -X POST \
         -H "Content-Type: application/json" \
-        -d "{\"jsonrpc\":\"2.0\",\"method\":\"$method\",\"params\":$params,\"id\":1}"
+        --data "{\"jsonrpc\":\"2.0\",\"method\":\"$method\",\"params\":$params,\"id\":1}" \
+        | jq -r '.result // empty'
 }
 
 xrpc_call() {
@@ -132,17 +149,59 @@ command_exists() {
 }
 
 check_prerequisites() {
-    local required_cmds=("$@")
     local missing=()
     
-    for cmd in "${required_cmds[@]}"; do
-        if ! command_exists "$cmd"; then
-            missing+=("$cmd")
+    command -v docker >/dev/null 2>&1 || missing+=("docker")
+    command -v curl >/dev/null 2>&1 || missing+=("curl")
+    command -v jq >/dev/null 2>&1 || missing+=("jq")
+    
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        log_error "Missing prerequisites: ${missing[*]}"
+        log_error "Install with: apt-get install -y ${missing[*]}"
+        return 1
+    fi
+    
+    return 0
+}
+
+# ============================================
+# Directory Management
+# ============================================
+
+ensure_directories() {
+    local dirs=("$@")
+    
+    for dir in "${dirs[@]}"; do
+        if [[ ! -d "$dir" ]]; then
+            mkdir -p "$dir" || {
+                log_error "Failed to create directory: $dir"
+                return 1
+            }
         fi
     done
     
-    if [ ${#missing[@]} -gt 0 ]; then
-        die "Missing required commands: ${missing[*]}"
+    return 0
+}
+
+# ============================================
+# Formatting Utilities
+# ============================================
+
+format_duration() {
+    local seconds="$1"
+    local days=$((seconds / 86400))
+    local hours=$(( (seconds % 86400) / 3600 ))
+    local minutes=$(( (seconds % 3600) / 60 ))
+    local secs=$((seconds % 60))
+    
+    if [[ $days -gt 0 ]]; then
+        printf "%dd %dh %dm %ds" "$days" "$hours" "$minutes" "$secs"
+    elif [[ $hours -gt 0 ]]; then
+        printf "%dh %dm %ds" "$hours" "$minutes" "$secs"
+    elif [[ $minutes -gt 0 ]]; then
+        printf "%dm %ds" "$minutes" "$secs"
+    else
+        printf "%ds" "$secs"
     fi
 }
 
