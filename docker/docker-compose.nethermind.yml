@@ -11,8 +11,8 @@ services:
     container_name: xdc-node-nethermind
     restart: always
     ports:
-      - "${NETHERMIND_P2P_PORT:-30306}:30303"
-      - "${NETHERMIND_P2P_PORT:-30306}:30303/udp"
+      - "0.0.0.0:${NETHERMIND_P2P_PORT:-30306}:30303"
+      - "0.0.0.0:${NETHERMIND_P2P_PORT:-30306}:30303/udp"
       - "127.0.0.1:${NETHERMIND_RPC_PORT:-8556}:8545"
     volumes:
       - ../${NETWORK:-mainnet}/nethermind-db:/nethermind/data
