@@ -26,12 +26,29 @@ source "$(dirname "$0")/lib/logging.sh"
 # Categories: filesystem, services, network, logging, auth, permissions
 #===============================================================================
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
+# Source shared logging library to avoid duplicate functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/logging.sh" 2>/dev/null || {
+    # Fallback if logging.sh not available
+    LOG_COLORS=true
+}
+
+# Colors for output (use logging.sh colors if available, otherwise define)
+if [[ -z "${COLOR_ERROR:-}" ]]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    CYAN='\033[0;36m'
+    NC='\033[0m'
+else
+    RED="${COLOR_ERROR}"
+    GREEN="${COLOR_INFO}"
+    YELLOW="${COLOR_WARN}"
+    BLUE="${COLOR_DEBUG}"
+    CYAN="${COLOR_DEBUG}"
+    NC="${COLOR_RESET}"
+fi
 NC='\033[0m' # No Color
 
 # Counters
@@ -128,7 +145,6 @@ log_skip() {
     [[ "$QUIET" == "false" ]] && echo -e "${YELLOW}[SKIP]${NC} $check_id: $description ($reason)"
     RESULTS+=("{\"id\":\"$check_id\",\"description\":\"$description\",\"status\":\"SKIP\",\"reason\":\"$reason\"}")
 }
-
 
 log_section() {
     [[ "$QUIET" == "false" ]] && echo -e "\n${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"

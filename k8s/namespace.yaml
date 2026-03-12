@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: xdc-network
+  labels:
+    app.kubernetes.io/name: xdc-node
+    app.kubernetes.io/part-of: xdc-network
+    app.kubernetes.io/managed-by: kubectl

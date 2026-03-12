@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xdc-node-config
+  namespace: xdc-network
+data:
+  NETWORK: "mainnet"
+  SYNC_MODE: "full"
+  RPC_PORT: "8545"
+  P2P_PORT: "30303"
+  WS_PORT: "8546"
+  METRICS_PORT: "6060"
+  # XDPoS 2.0 settings
+  XDPOS_VOTE_TIMEOUT: "5000"
+  XDPOS_QC_TIMEOUT: "10000"
+  # Performance tuning
+  XDC_CACHE: "4096"
+  XDC_MAX_PEERS: "50"

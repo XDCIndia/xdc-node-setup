@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: xdc-node-pdb
+  namespace: xdc-network
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: xdc-node

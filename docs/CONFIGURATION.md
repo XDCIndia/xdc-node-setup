@@ -3,117 +3,75 @@
 **Version:** 1.0  
 **Date:** March 4, 2026
 
----
+This guide covers all configuration options for XDC Node Setup (SkyOne).
 
-## Table of Contents
+## Configuration Files
 
-1. [Configuration Overview](#configuration-overview)
-2. [Environment Variables](#environment-variables)
-3. [Config.toml Reference](#configtoml-reference)
-4. [Network Configuration](#network-configuration)
-5. [Client-Specific Configuration](#client-specific-configuration)
-6. [Security Configuration](#security-configuration)
-7. [Monitoring Configuration](#monitoring-configuration)
-8. [Troubleshooting](#troubleshooting)
+### 1. `.env` - Environment Variables
 
----
+Location: `mainnet/.xdc-node/.env` (or `testnet/.xdc-node/.env`)
 
-## Configuration Overview
+```bash
+# Node Identity
+INSTANCE_NAME=XDC_Node
+CONTACT_DETAILS=admin@example.com
 
-XDC Node Setup uses a hierarchical configuration system:
+# Network Configuration
+NETWORK=mainnet
+NETWORK_ID=50
 
-1. **Environment Variables** - Highest priority, runtime overrides
-2. **config.toml** - Node-specific configuration
-3. **Docker Compose** - Container orchestration settings
-4. **Default Values** - Fallback configuration
+# Sync Configuration
+SYNC_MODE=full
+GC_MODE=full
 
-### Configuration Files Location
+# RPC Configuration
+ENABLE_RPC=true
+ENABLE_WS=true
+RPC_ADDR=127.0.0.1
+RPC_PORT=8545
+RPC_API=admin,eth,net,web3,XDPoS
+RPC_CORS_DOMAIN=http://localhost:7070
+RPC_VHOSTS=localhost,127.0.0.1
 
+# WebSocket Configuration
+WS_ADDR=127.0.0.1
+WS_PORT=8546
+WS_API=admin,eth,net,web3,XDPoS
+WS_ORIGINS=localhost,127.0.0.1
+
+# P2P Configuration
+P2P_PORT=30303
+
+# Dashboard Configuration
+DASHBOARD_PORT=7070
+
+# Erigon-Specific Ports (Multi-Client Mode)
+ERIGON_RPC_PORT=8547
+ERIGON_AUTHRPC_PORT=8561
+ERIGON_P2P_PORT=30304
+ERIGON_P2P_PORT_68=30311
+ERIGON_DASHBOARD_PORT=7071
+
+# Nethermind-Specific Ports (Multi-Client Mode)
+NETHERMIND_RPC_PORT=8556
+NETHERMIND_P2P_PORT=30306
+NETHERMIND_DASHBOARD_PORT=7072
+
+# Private Key (for masternodes)
+PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000000
+
+# Logging
+LOG_LEVEL=2
 ```
-XDC-Node-Setup/
-├── mainnet/
-│   ├── .xdc-node/
-│   │   ├── config.toml      # Node configuration
-│   │   ├── node.env         # Environment variables
-│   │   └── client.conf      # Client selection
-│   └── xdcchain/            # Blockchain data
-├── testnet/
-│   └── ...
-└── docker/
-    └── docker-compose.yml   # Container configuration
-```
 
----
+### 2. `config.toml` - Node Configuration
 
-## Environment Variables
-
-### Core Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NETWORK` | mainnet | Network: mainnet, testnet, devnet, apothem |
-| `NODE_TYPE` | full | Node type: full, archive, rpc, masternode |
-| `CLIENT` | stable | Client: stable, geth-pr5, erigon, nethermind, reth |
-| `SYNC_MODE` | snap | Sync mode: full, snap, fast |
-
-### Port Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RPC_PORT` | 8545 | JSON-RPC HTTP port |
-| `WS_PORT` | 8546 | WebSocket port |
-| `P2P_PORT` | 30303 | P2P networking port |
-| `DASHBOARD_PORT` | 7070 | SkyOne dashboard port |
-| `METRICS_PORT` | 6060 | Prometheus metrics port |
-
-### Erigon-Specific Ports
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ERIGON_RPC_PORT` | 8547 | Erigon RPC port |
-| `ERIGON_AUTHRPC_PORT` | 8561 | Erigon authenticated RPC |
-| `ERIGON_P2P_PORT` | 30304 | Erigon P2P (eth/63) |
-| `ERIGON_P2P_PORT_68` | 30311 | Erigon P2P (eth/68) |
-
-### Data Directories
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATA_DIR` | ./mainnet/xdcchain | Blockchain data directory |
-| `STATE_DIR` | ./mainnet/.xdc-node | Node state directory |
-| `CONFIG_DIR` | ./configs | Configuration templates |
-
-### Feature Flags
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ENABLE_MONITORING` | false | Enable Prometheus/Grafana |
-| `ENABLE_SKYNET` | false | Enable SkyNet fleet monitoring |
-| `ENABLE_SECURITY` | true | Enable security hardening |
-| `ENABLE_UPDATES` | true | Enable auto-updates |
-
-### Security Settings
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RPC_CORS` | localhost | CORS allowed origins |
-| `RPC_VHOSTS` | localhost | Virtual hosts whitelist |
-| `WS_ORIGINS` | localhost | WebSocket allowed origins |
-| `RPC_ADDR` | 127.0.0.1 | RPC bind address |
-
----
-
-## Config.toml Reference
-
-### Example Configuration
+Location: `mainnet/.xdc-node/config.toml`
 
 ```toml
-# XDC Node Configuration
-# Network: mainnet (Chain ID: 50)
-
 [node]
 NetworkId = 50
-DataDir = "/xdcchain"
+DataDir = "/work/xdcchain"
 HTTPPort = 8545
 WSPort = 8546
 Port = 30303
@@ -143,85 +101,34 @@ WSOrigins = ["localhost"]
 Enabled = true
 Port = 6060
 
-[xdpos]
-Epoch = 900
-Gap = 450
+[rpc]
+Enabled = true
+API = ["admin", "eth", "net", "web3", "XDPoS"]
+CorsDomain = ["*"]
+Vhosts = ["*"]
 ```
 
-### Configuration Sections
+### 3. `skynet.conf` - SkyNet Integration
 
-#### [node] Section
+Location: `mainnet/.xdc-node/skynet.conf`
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| NetworkId | int | 50 | Network identifier |
-| DataDir | string | /xdcchain | Data directory path |
-| HTTPPort | int | 8545 | RPC HTTP port |
-| WSPort | int | 8546 | WebSocket port |
-| Port | int | 30303 | P2P port |
-| MaxPeers | int | 50 | Maximum peer connections |
+```bash
+# SkyNet API Configuration
+SKYNET_API_URL=https://net.xdc.network/api/v1
+SKYNET_API_KEY=your-api-key-here
 
-#### [eth] Section
+# Node Identity
+SKYNET_NODE_ID=550e8400-e29b-41d4-a716-446655440000
+SKYNET_NODE_NAME=xdc-node-01
+SKYNET_ROLE=fullnode
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| SyncMode | string | snap | Sync mode: full, snap, fast |
-| GCMode | string | full | Garbage collection mode |
-| Cache | int | 4096 | Memory cache in MB |
-
-#### [rpc] Section
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| HTTPHost | string | 127.0.0.1 | HTTP bind address |
-| HTTPVirtualHosts | []string | ["localhost"] | Virtual hosts |
-| HTTPCors | []string | ["localhost"] | CORS origins |
-| WSHost | string | 127.0.0.1 | WebSocket bind address |
-| WSOrigins | []string | ["localhost"] | WS allowed origins |
-
----
-
-## Network Configuration
-
-### Mainnet (Chain ID: 50)
-
-```toml
-[node]
-NetworkId = 50
-
-# Bootnodes
-BootstrapNodes = [
-  "enode://9a977b1ac4320fa2c862dcaf536aaaea3a8f8f7cd14e3bcde32e5a1c0152bd17bd18bfdc3c2ca8c4a0f3da153c62935fea1dc040cc1e66d2c07d6b4c91e2ed42@bootnode.xinfin.network:30303"
-]
+# Heartbeat Configuration
+HEARTBEAT_INTERVAL=30
 ```
-
-### Testnet/Apothem (Chain ID: 51)
-
-```toml
-[node]
-NetworkId = 51
-
-# Bootnodes
-BootstrapNodes = [
-  "enode://91e59fa1b034ae35e9f4e8a99cc6621f09d74e76a6220abb6c93b29ed41a9e1fc4e5b70e2c5fc43f883cffbdcd6f4f6cbc1d23af077f28c2aecc22403355d4b1@bootnodes.apothem.network:30312"
-]
-```
-
-### Devnet (Chain ID: 551)
-
-```toml
-[node]
-NetworkId = 551
-
-# Local bootnodes - configure as needed
-BootstrapNodes = []
-```
-
----
 
 ## Client-Specific Configuration
 
-### Geth Stable
+### Geth-XDC (Stable)
 
 ```yaml
 # docker-compose.yml
@@ -229,10 +136,10 @@ services:
   xdc-node:
     image: xinfinorg/xdposchain:v2.6.8
     ports:
-      - "8545:8545"      # RPC
-      - "8546:8546"      # WebSocket
-      - "30303:30303"    # P2P
-      - "6060:6060"      # Metrics
+      - "127.0.0.1:8545:8545"  # RPC
+      - "127.0.0.1:8546:8546"  # WebSocket
+      - "30303:30303"          # P2P
+      - "30303:30303/udp"      # P2P UDP
 ```
 
 ### Erigon-XDC
@@ -243,30 +150,24 @@ services:
   xdc-erigon:
     image: anilchinchawale/erix:latest
     ports:
-      - "8547:8547"      # RPC
-      - "8561:8561"      # Auth RPC
-      - "30304:30304"    # P2P (eth/63)
-      - "30311:30311"    # P2P (eth/68)
-      - "9091:9091"      # Private API
-    environment:
-      - ERIGON_CHAIN=xdc
+      - "127.0.0.1:8547:8547"  # RPC (different from Geth)
+      - "127.0.0.1:8561:8561"  # Auth RPC
+      - "30304:30304"          # P2P (eth/63 - XDC compatible)
+      - "30311:30311"          # P2P (eth/68 - NOT XDC compatible)
 ```
+
+**Important:** Erigon uses port 30304 for XDC-compatible peers (eth/63) and port 30311 for standard Ethereum peers (eth/68). Only use port 30304 for XDC Network connections.
 
 ### Nethermind-XDC
 
 ```yaml
 # docker-compose.nethermind.yml
 services:
-  xdc-nethermind:
+  xdc-node:
     image: anilchinchawale/nmx:latest
     ports:
-      - "8558:8558"      # RPC
-      - "30306:30306"    # P2P
-    environment:
-      - NETHERMIND_CONFIG=xdc
-      - NETHERMIND_JSONRPCCONFIG_ENABLED=true
-      - NETHERMIND_JSONRPCCONFIG_HOST=0.0.0.0
-      - NETHERMIND_JSONRPCCONFIG_PORT=8558
+      - "127.0.0.1:8556:8545"  # RPC
+      - "30306:30303"          # P2P
 ```
 
 ### Reth-XDC
@@ -275,96 +176,121 @@ services:
 # docker-compose.reth.yml
 services:
   xdc-reth:
-    image: xdc/reth:latest
+    image: anilchinchawale/reth-xdc:latest
     ports:
-      - "7073:7073"      # RPC
-      - "40303:40303"    # P2P
-      - "40304:40304"    # Discovery
+      - "127.0.0.1:7073:8545"  # RPC
+      - "40303:30303"          # P2P
 ```
 
----
+## Network Configuration
+
+### Mainnet (Chain ID: 50)
+
+```bash
+NETWORK=mainnet
+NETWORK_ID=50
+BOOTNODES=enode://9a977b1ac4320fa2c862dcaf536aaaea3a8f8f7cd14e3bcde32e5a1c0152bd17bd18bfdc3c2ca8c4a0f3da153c62935fea1dc040cc1e66d2c07d6b4c91e2ed42@bootnode.xinfin.network:30303
+```
+
+### Testnet/Apothem (Chain ID: 51)
+
+```bash
+NETWORK=apothem
+NETWORK_ID=51
+APOTHEM_FLAG=--apothem
+BOOTNODES=enode://91e59fa1b034ae35e9f4e8a99cc6621f09d74e76a6220abb6c93b29ed41a9e1fc4e5b70e2c5fc43f883cffbdcd6f4f6cbc1d23af077f28c2aecc22403355d4b1@bootnodes.apothem.network:30312
+```
+
+### Devnet (Chain ID: 551)
+
+```bash
+NETWORK=devnet
+NETWORK_ID=551
+```
+
+## Sync Modes
+
+### Full Sync
+
+```bash
+SYNC_MODE=full
+```
+
+- Downloads and verifies all blocks
+- Highest security
+- Slowest sync
+- Required for masternodes
+
+### Snap Sync
+
+```bash
+SYNC_MODE=snap
+```
+
+- Downloads recent state snapshots
+- Faster initial sync
+- Lower resource usage
+- Not suitable for masternodes
 
 ## Security Configuration
 
-### Secure RPC Configuration
+### SSH Hardening
 
 ```bash
-# .env
-# Bind to localhost only
-RPC_ADDR=127.0.0.1
-WS_ADDR=127.0.0.1
-
-# Restrict CORS
-RPC_CORS=localhost
-RPC_VHOSTS=localhost
-WS_ORIGINS=localhost
-
-# Enable authentication (if supported)
-RPC_API=eth,net,web3
-# Remove admin, personal from public API
+# /etc/ssh/sshd_config
+Port 2222                          # Non-default port
+PermitRootLogin no                 # Disable root login
+PasswordAuthentication no          # Use keys only
+MaxAuthTries 3
 ```
 
-### Firewall Configuration
+### Firewall (UFW)
 
 ```bash
-# UFW rules
+# Default deny
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 
-# Allow SSH (restrict to your IP)
-sudo ufw allow from YOUR_IP to any port 22
+# Allow SSH (custom port)
+sudo ufw allow 2222/tcp
 
-# Allow P2P
+# Allow XDC P2P
 sudo ufw allow 30303/tcp
 sudo ufw allow 30303/udp
 
-# Allow additional client P2P ports (if multi-client)
-sudo ufw allow 30304/tcp  # Erigon
-sudo ufw allow 30306/tcp  # Nethermind
-
-# Dashboard (optional, restrict if possible)
-sudo ufw allow 7070/tcp
+# Allow monitoring (if enabled)
+sudo ufw allow 9090/tcp  # Prometheus
+sudo ufw allow 3000/tcp  # Grafana
 
 # Enable firewall
 sudo ufw enable
 ```
 
-### Nginx Reverse Proxy
+### Docker Security
 
-```nginx
-# /etc/nginx/sites-available/xdc-rpc
-server {
-    listen 443 ssl http2;
-    server_name rpc.yourdomain.com;
-
-    ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
-
-    location / {
-        # Rate limiting
-        limit_req zone=rpc burst=20 nodelay;
-        
-        # Proxy to local RPC
-        proxy_pass http://127.0.0.1:8545;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        
-        # Authentication
-        auth_basic "XDC RPC";
-        auth_basic_user_file /etc/nginx/.htpasswd;
-    }
-}
+```yaml
+# docker-compose.yml
+services:
+  xdc-node:
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    read_only: true
+    tmpfs:
+      - /tmp:nosuid,size=100m
 ```
-
----
 
 ## Monitoring Configuration
 
-### Prometheus Configuration
+### Prometheus
 
 ```yaml
-# prometheus.yml
+# docker/prometheus.yml
 global:
   scrape_interval: 15s
 
@@ -373,97 +299,103 @@ scrape_configs:
     static_configs:
       - targets: ['xdc-node:6060']
     metrics_path: /debug/metrics/prometheus
-  
-  - job_name: 'erigon-node'
-    static_configs:
-      - targets: ['xdc-erigon:6071']
 ```
 
-### Alertmanager Configuration
+### Grafana
 
 ```yaml
-# alertmanager.yml
-global:
-  smtp_smarthost: 'localhost:587'
-  smtp_from: 'alerts@yourdomain.com'
-
-route:
-  receiver: 'default'
-  routes:
-    - match:
-        severity: critical
-      receiver: 'pagerduty'
-    - match:
-        severity: warning
-      receiver: 'email'
-
-receivers:
-  - name: 'default'
-    email_configs:
-      - to: 'admin@yourdomain.com'
-  
-  - name: 'pagerduty'
-    pagerduty_configs:
-      - service_key: 'your-key'
+# docker-compose.monitoring.yml
+services:
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=secure-password
+      - GF_USERS_ALLOW_SIGN_UP=false
 ```
 
-### SkyNet Integration
+### Nginx Reverse Proxy
+
+### Custom Data Directory
 
 ```bash
-# Enable SkyNet monitoring
-export ENABLE_SKYNET=true
-export SKYNET_API_URL=https://net.xdc.network
-export SKYNET_API_KEY=your-api-key
-
-# Node will auto-register on first start
+# .env
+DATA_DIR=/mnt/xdc-data/xdcchain
 ```
 
----
-
-## Troubleshooting
-
-### Configuration Not Applied
+### Memory Limits
 
 ```bash
-# Check config file location
+# .env
+CACHE_SIZE=8192  # 8GB cache
+```
+
+### Peer Configuration
+
+```bash
+# .env
+MAX_PEERS=50
+```
+
+### Bootnodes
+
+Create `mainnet/bootnodes.list`:
+
+```
+enode://9a977b1ac4320fa2c862dcaf536aaaea3a8f8f7cd14e3bcde32e5a1c0152bd17bd18bfdc3c2ca8c4a0f3da153c62935fea1dc040cc1e66d2c07d6b4c91e2ed42@bootnode.xinfin.network:30303
+```
+
+## Environment Variables Reference
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NODE_TYPE` | `full` | Node type: full, archive, masternode |
+| `NETWORK` | `mainnet` | Network: mainnet, testnet, devnet |
+| `CLIENT` | `stable` | Client: stable, geth-pr5, erigon, nethermind, reth |
+| `SYNC_MODE` | `full` | Sync mode: full, snap |
+| `RPC_PORT` | `8545` | RPC port |
+| `P2P_PORT` | `30303` | P2P port |
+| `DATA_DIR` | `mainnet/xdcchain` | Data directory |
+| `ENABLE_MONITORING` | `false` | Enable Prometheus/Grafana |
+| `ENABLE_SKYNET` | `false` | Enable SkyNet integration |
+| `ENABLE_SECURITY` | `true` | Enable security hardening |
+
+## Troubleshooting Configuration
+
+### Reset Configuration
+
+```bash
+# Stop node
+xdc stop
+
+# Remove configuration
+rm -rf mainnet/.xdc-node/
+
+# Re-run setup
+./setup.sh
+```
+
+### View Current Configuration
+
+```bash
+# View all config
 xdc config list
 
-# Verify file permissions
-ls -la mainnet/.xdc-node/config.toml
+# View specific value
+xdc config get rpc_port
 
-# Restart node to apply changes
-xdc restart
+# Set value
+xdc config set rpc_port 8546
 ```
 
-### Port Conflicts
+### Validate Configuration
 
 ```bash
-# Check port usage
-sudo ss -tlnp | grep -E '8545|30303|7070'
-
-# Find free ports
-xdc config set RPC_PORT 8546
-xdc config set P2P_PORT 30304
-```
-
-### Client Not Starting
-
-```bash
-# Check client configuration
-cat mainnet/.xdc-node/client.conf
-
-# Verify Docker image
-docker pull xinfinorg/xdposchain:v2.6.8
-
-# Check logs
-xdc logs --follow
+# Check for errors
+xdc health --full
 ```
 
 ---
 
-## Related Documentation
-
-- [Architecture Overview](ARCHITECTURE.md)
-- [API Reference](API.md)
-- [Troubleshooting Guide](TROUBLESHOOTING.md)
-- [Security Audit](SECURITY_AUDIT.md)
+**Document Version:** 1.0.0  
+**Last Updated:** February 27, 2026

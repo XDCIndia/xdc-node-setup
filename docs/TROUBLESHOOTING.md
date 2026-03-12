@@ -1,148 +1,102 @@
 # XDC Node Setup - Troubleshooting Guide
 
-**Version:** 1.0  
-**Date:** March 4, 2026
-
----
-
-## Table of Contents
-
-1. [Quick Diagnostics](#quick-diagnostics)
-2. [Installation Issues](#installation-issues)
-3. [Sync Issues](#sync-issues)
-4. [Connection Issues](#connection-issues)
-5. [Performance Issues](#performance-issues)
-6. [Client-Specific Issues](#client-specific-issues)
-7. [Security Issues](#security-issues)
-8. [Advanced Debugging](#advanced-debugging)
-
----
-
 ## Quick Diagnostics
 
-### Status Check
+### Check Node Status
 
 ```bash
-# Check node status
 xdc status
-
-# Full system info
-xdc info
-
-# Check sync progress
-xdc sync
-
-# List connected peers
-xdc peers
 ```
 
-### Health Check
+Expected output:
+```
+✓ XDC Node Status
+==================
+Status: Running
+Client: Geth/v2.6.8-stable
+Block Height: 89,234,567
+Sync Status: 100% (synced)
+Peers: 25 connected
+Uptime: 3d 12h 45m
+```
+
+### Full Health Check
 
 ```bash
-# Run comprehensive health check
 xdc health --full
-
-# Check specific components
-xdc health --rpc
-xdc health --p2p
-xdc health --disk
 ```
 
----
+## Common Issues
 
-## Installation Issues
+### 1. Node Won't Start
 
-### Docker Not Found
-
-**Error:**
+#### Symptom
 ```
-ERROR: Docker is not installed
+✗ XDC Node is not running
 ```
 
-**Solution:**
+#### Diagnosis
 ```bash
-# Install Docker
-sudo apt-get update
-sudo apt-get install -y docker.io docker-compose-plugin
+# Check Docker is running
+sudo systemctl status docker
 
-# Add user to docker group
-sudo usermod -aG docker $USER
-newgrp docker
+# Check port conflicts
+sudo ss -tlnp | grep -E '8545|30303|7070'
 
-# Verify installation
-docker --version
-docker compose version
+# View logs
+xdc logs --follow
 ```
 
-### Permission Denied
+#### Solutions
 
-**Error:**
-```
-Permission denied: /var/lib/xdc
-```
-
-**Solution:**
+**Docker Not Running:**
 ```bash
-# Use configurable state directory
-export XDC_STATE_DIR=$HOME/.xdc-node
-
-# Or fix permissions
-sudo chown -R $USER:$USER /var/lib/xdc
+sudo systemctl start docker
+sudo systemctl enable docker
 ```
 
-### Port Already in Use
-
-**Error:**
-```
-Bind for 0.0.0.0:8545 failed: port is already allocated
-```
-
-**Solution:**
+**Port Conflicts:**
 ```bash
 # Find process using port
 sudo lsof -i :8545
 
-# Kill process or use different port
-xdc config set RPC_PORT 8546
-xdc restart
+# Kill process or change port in .env
+sed -i 's/RPC_PORT=8545/RPC_PORT=8546/' mainnet/.xdc-node/.env
 ```
 
----
-
-## Sync Issues
-
-### Node Won't Sync
-
-**Symptoms:**
-- Block height not increasing
-- Peer count is 0 or very low
-- Sync progress stuck
-
-**Diagnostics:**
+**Corrupted Data:**
 ```bash
-# Check peer count
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}'
-
-# Check sync status
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"eth_syncing","params":[],"id":1}'
-```
-
-**Solutions:**
-
-1. **Reset peer discovery:**
-```bash
+# Reset chain data (WARNING: Requires re-sync)
 xdc stop
-rm -rf mainnet/.xdc-node/geth/nodes
+sudo rm -rf mainnet/xdcchain/XDC/chaindata
 xdc start
 ```
 
-2. **Add bootnodes manually:**
+### 2. Node Won't Sync
+
+#### Symptom
+```
+Sync Status: 0%
+Peers: 0 connected
+```
+
+#### Diagnosis
 ```bash
-# Get current bootnodes
+# Check peer count
+xdc peers
+
+# Check sync status
+xdc sync
+
+# View network logs
+xdc logs | grep -i "peer\|sync"
+```
+
+#### Solutions
+
+**No Peers:**
+```bash
+# Add bootnodes manually
 curl -X POST http://localhost:8545 \
   -H "Content-Type: application/json" \
   -d '{
@@ -151,525 +105,372 @@ curl -X POST http://localhost:8545 \
     "params": ["enode://..."],
     "id": 1
   }'
-```
 
-3. **Download snapshot for fast sync:**
-```bash
-xdc snapshot download --network mainnet
-xdc snapshot apply
-xdc start
-```
-
-### Sync Stalled at Specific Block
-
-**Symptoms:**
-- Block height stuck at specific number
-- Error messages about "BAD BLOCK"
-
-**Solution:**
-```bash
-# Check for bad block
-xdc logs | grep -i "bad block"
-
-# If bad block detected, resync from snapshot
+# Or restart with fresh peer discovery
 xdc stop
-rm -rf mainnet/xdcchain/XDC/chaindata
-xdc snapshot download --network mainnet
-xdc snapshot apply
+rm -rf mainnet/.xdc-node/geth/nodes
 xdc start
 ```
 
-### Slow Sync Speed
-
-**Symptoms:**
-- Very slow block import rate
-- High CPU/disk usage
-
-**Solutions:**
-
-1. **Increase cache size:**
+**Slow Sync:**
 ```bash
-xdc config set cache 8192  # Increase to 8GB
-xdc restart
+# Download snapshot for fast sync
+xdc snapshot download --network mainnet
+xdc snapshot apply
 ```
 
-2. **Check disk performance:**
+**Firewall Blocking:**
 ```bash
-# Test disk I/O
-fio --name=randread --ioengine=libaio --iodepth=32 --rw=randread --bs=4k --direct=1 --size=1G
-
-# If using HDD, consider SSD upgrade
-```
-
-3. **Use snap sync mode:**
-```bash
-xdc config set SYNC_MODE snap
-xdc restart
-```
-
----
-
-## Connection Issues
-
-### RPC Connection Refused
-
-**Error:**
-```
-Connection refused: localhost:8545
-```
-
-**Diagnostics:**
-```bash
-# Check if RPC is enabled
-xdc config get rpc_enabled
-
-# Check if port is listening
-netstat -tlnp | grep 8545
-
-# Check Docker port mapping
-docker ps | grep xdc
-```
-
-**Solutions:**
-
-1. **Enable RPC:**
-```bash
-xdc config set rpc_enabled true
-xdc restart
-```
-
-2. **Check firewall:**
-```bash
-sudo ufw status
-sudo ufw allow 8545/tcp
-```
-
-3. **Verify Docker network:**
-```bash
-docker network ls
-docker network inspect xdc-network
-```
-
-### WebSocket Connection Issues
-
-**Error:**
-```
-WebSocket connection failed
-```
-
-**Solution:**
-```bash
-# Check WebSocket configuration
-xdc config get ws_enabled
-xdc config get ws_port
-
-# Test WebSocket
-curl -i -N \
-  -H "Connection: Upgrade" \
-  -H "Upgrade: websocket" \
-  -H "Host: localhost:8546" \
-  http://localhost:8546
-```
-
-### Peer Connection Issues
-
-**Symptoms:**
-- Low peer count
-- "p2p dial timeout" errors
-
-**Solutions:**
-
-1. **Check P2P port:**
-```bash
-# Verify port is open
+# Allow P2P ports
 sudo ufw allow 30303/tcp
 sudo ufw allow 30303/udp
-
-# Check port forwarding (if behind NAT)
 ```
 
-2. **Add trusted peers:**
-```bash
-# Get peer enode from another node
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "admin_addTrustedPeer",
-    "params": ["enode://..."],
-    "id": 1
-  }'
+### 3. High Resource Usage
+
+#### Symptom
+```
+CPU: 95%
+Memory: 14GB/16GB
 ```
 
-3. **Check network connectivity:**
+#### Diagnosis
 ```bash
-# Test connectivity to bootnodes
-telnet bootnode.xinfin.network 30303
+# Check resource usage
+xdc info
 
-# Check NAT traversal
-curl ifconfig.me
+# Monitor in real-time
+htop
 ```
 
----
+#### Solutions
 
-## Performance Issues
-
-### High CPU Usage
-
-**Symptoms:**
-- CPU usage consistently above 80%
-- Slow response times
-
-**Solutions:**
-
-1. **Check sync status:**
+**Reduce Memory Cache:**
 ```bash
-# High CPU during sync is normal
-xdc sync
-```
-
-2. **Reduce cache size:**
-```bash
+# Edit config
 xdc config set cache 2048
 xdc restart
 ```
 
-3. **Limit peers:**
-```bash
-xdc config set max_peers 25
-xdc restart
-```
-
-### High Memory Usage
-
-**Symptoms:**
-- Out of memory errors
-- System swapping
-
-**Solutions:**
-
-1. **Check current usage:**
-```bash
-free -h
-xdc info | grep memory
-```
-
-2. **Reduce memory cache:**
-```bash
-xdc config set cache 1024
-xdc restart
-```
-
-3. **Enable swap (if not already):**
-```bash
-sudo fallocate -l 4G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-```
-
-### Disk Space Issues
-
-**Symptoms:**
-- "No space left on device" errors
-- Disk usage > 90%
-
-**Solutions:**
-
-1. **Check disk usage:**
-```bash
-df -h
-xdc info | grep disk
-```
-
-2. **Enable pruning:**
+**Enable Pruning:**
 ```bash
 xdc config set prune_mode full
 xdc restart
 ```
 
-3. **Clean up old logs:**
+**Check Disk Space:**
 ```bash
-# Rotate logs
-sudo logrotate -f /etc/logrotate.d/xdc
-
-# Clean Docker logs
-docker system prune -a
+df -h
+# If low, clean up logs
+xdc logs --clean
 ```
 
-4. **Move data to larger disk:**
-```bash
-# Mount new disk
-sudo mount /dev/sdb1 /mnt/xdc-data
+### 4. Dashboard Not Accessible
 
-# Move data
-xdc stop
-sudo rsync -av mainnet/xdcchain/ /mnt/xdc-data/
-
-# Update configuration
-xdc config set DATA_DIR /mnt/xdc-data
-xdc start
+#### Symptom
+```
+http://localhost:7070 - Connection refused
 ```
 
----
+#### Diagnosis
+```bash
+# Check if dashboard is running
+docker ps | grep dashboard
 
-## Client-Specific Issues
+# Check logs
+docker logs xdc-agent
+```
 
-### Erigon-XDC Issues
+#### Solutions
 
-#### Build Fails
+**Dashboard Not Running:**
+```bash
+# Start dashboard
+xdc monitor start
+
+# Or restart all services
+xdc restart
+```
+
+**Port Not Open:**
+```bash
+# Allow dashboard port
+sudo ufw allow 7070/tcp
+```
+
+**Check Configuration:**
+```bash
+# Verify dashboard port
+grep DASHBOARD_PORT mainnet/.xdc-node/.env
+```
+
+### 5. RPC Connection Refused
+
+#### Symptom
+```
+curl: (7) Failed to connect to localhost port 8545
+```
+
+#### Diagnosis
+```bash
+# Check RPC is enabled
+grep ENABLE_RPC mainnet/.xdc-node/.env
+
+# Check RPC binding
+sudo ss -tlnp | grep 8545
+```
+
+#### Solutions
+
+**RPC Not Enabled:**
+```bash
+# Enable RPC
+echo "ENABLE_RPC=true" >> mainnet/.xdc-node/.env
+xdc restart
+```
+
+**RPC Bound to Wrong Interface:**
+```bash
+# Check binding
+grep RPC_ADDR mainnet/.xdc-node/.env
+
+# Should be 127.0.0.1 or 0.0.0.0
+# Edit if needed
+sed -i 's/RPC_ADDR=.*/RPC_ADDR=127.0.0.1/' mainnet/.xdc-node/.env
+xdc restart
+```
+
+### 6. SkyNet Integration Issues
+
+#### Symptom
+```
+SkyNet: Disconnected
+Last Heartbeat: Never
+```
+
+#### Diagnosis
+```bash
+# Check SkyNet configuration
+cat mainnet/.xdc-node/skynet.conf
+
+# Test SkyNet connection
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  https://net.xdc.network/api/v1/nodes/status
+```
+
+#### Solutions
+
+**Missing API Key:**
+```bash
+# Register with SkyNet
+cd docker
+./skynet-agent.sh --register
+```
+
+**Check Agent Logs:**
+```bash
+docker logs xdc-monitoring
+```
+
+**Re-register:**
+```bash
+# Force re-registration
+rm mainnet/.xdc-node/skynet.json
+cd docker
+./skynet-agent.sh --register
+```
+
+### 7. Multi-Client Issues
+
+#### Erigon P2P Issues
+
+**Symptom:** Erigon not connecting to XDC peers
 
 **Solution:**
 ```bash
-# Clean and rebuild
-cd docker/erigon
-docker build --no-cache -t erigon-xdc:latest .
+# Ensure using correct port
+# Erigon uses port 30304 (eth/63) for XDC peers
+# Port 30311 (eth/68) is NOT compatible with XDC
 
-# Check build logs
-docker build -t erigon-xdc:latest . 2>&1 | tee build.log
-```
-
-#### Port Conflicts
-
-**Solution:**
-```bash
-# Check port usage
-sudo ss -tlnp | grep -E '30304|30311|8547'
-
-# Use different ports
-export ERIGON_P2P_PORT=30305
-export ERIGON_RPC_PORT=8548
-xdc start --client erigon
-```
-
-#### Peer Connection Issues
-
-**Important:** Always use port 30304 (eth/63) for XDC peers, NOT 30311 (eth/68).
-
-```bash
-# Check peer count
+# Check peer connections
 curl -X POST http://localhost:8547 \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}'
-
-# Add trusted peer on correct port
-curl -X POST http://localhost:8547 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "admin_addTrustedPeer",
-    "params": ["enode://...:30304"],
-    "id": 1
-  }'
 ```
 
-### Nethermind-XDC Issues
+#### Nethermind Sync Issues
 
-#### High Memory Usage
+**Symptom:** Nethermind stuck at block 0
 
 **Solution:**
 ```bash
-# Nethermind requires more memory
-# Minimum 12GB recommended
-# Reduce pruning cache
-export NETHERMIND_PRUNINGCONFIG_CACHEMB=1024
+# Check network ID in config
+grep NETWORK mainnet/.xdc-node/.env
+
+# For testnet, ensure APOTHEM_FLAG is set
+echo "APOTHEM_FLAG=--apothem" >> mainnet/.xdc-node/.env
+xdc restart --client nethermind
 ```
 
-#### Sync Issues
+## Error Messages
+
+### "BAD BLOCK" Error
+
+**Cause:** Database corruption or consensus fork
 
 **Solution:**
 ```bash
-# Check Nethermind-specific logs
-docker logs xdc-nethermind
+# Stop node
+xdc stop
 
-# Reset sync
-docker exec xdc-nethermind rm -rf /xdcchain/nethermind_db
+# Remove chain data (keep keystore!)
+sudo rm -rf mainnet/xdcchain/XDC/chaindata
+
+# Restart (will re-sync)
+xdc start
 ```
 
-### Reth-XDC Issues
+### "Insufficient peers"
 
-#### Requires debug.tip
+**Cause:** Network connectivity or firewall issues
 
 **Solution:**
 ```bash
-# Get latest block hash from explorer
-# Add to startup flags
-xdc start --client reth -- --debug.tip 0x...
-```
-
-#### Alpha Status Limitations
-
-**Note:** Reth-XDC is in early alpha. Known issues:
-- Requires more memory (16GB+)
-- Manual sync tip hash required
-- Limited XDPoS method support
-
----
-
-## Security Issues
-
-### Unauthorized RPC Access
-
-**Symptoms:**
-- Unknown transactions
-- Configuration changes
-
-**Solution:**
-```bash
-# Check current RPC settings
-xdc config get rpc_addr
-xdc config get rpc_cors
-
-# Secure RPC
-xdc config set rpc_addr 127.0.0.1
-xdc config set rpc_cors localhost
-xdc restart
+# Add static peers
+xdc peers add <enode-url>
 
 # Check firewall
 sudo ufw status
-sudo ufw deny 8545/tcp  # Block external access
-```
 
-### Failed SSH Login Attempts
-
-**Solution:**
-```bash
-# Check fail2ban status
-sudo fail2ban-client status
-
-# Review logs
-sudo tail -f /var/log/fail2ban.log
-
-# Add IP to whitelist (if needed)
-sudo fail2ban-client set sshd addignoreip YOUR_IP
-```
-
-### Suspicious Container Activity
-
-**Solution:**
-```bash
-# Check running containers
-docker ps
-
-# Inspect container
-docker inspect xdc-node
-
-# Check container logs
-docker logs xdc-node
-
-# Remove and recreate if compromised
+# Restart with peer discovery
 xdc stop
-xdc remove
-curl -fsSL https://raw.githubusercontent.com/AnilChinchawale/XDC-Node-Setup/main/install.sh | sudo bash
+rm -rf mainnet/.xdc-node/geth/nodes
+xdc start
 ```
 
----
+### "Disk full"
 
-## Advanced Debugging
+**Cause:** Insufficient disk space
 
-### Enable Debug Logging
-
+**Solution:**
 ```bash
-# Set log level
-xdc config set log_level 5  # Debug
+# Check disk usage
+df -h
+
+# Clean up logs
+xdc logs --clean
+
+# Prune database
+xdc config set prune_mode full
 xdc restart
-
-# View debug logs
-xdc logs --follow | grep -i debug
 ```
 
-### RPC Debugging
+## Performance Tuning
+
+### Optimize for Low Memory (< 8GB)
 
 ```bash
-# Test RPC with verbose output
-curl -v -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "eth_blockNumber",
-    "params": [],
-    "id": 1
-  }'
+# Reduce cache
+xdc config set cache 1024
+
+# Reduce max peers
+xdc config set max_peers 25
+
+# Enable pruning
+xdc config set prune_mode full
+xdc restart
 ```
 
-### Network Debugging
+### Optimize for Fast Sync
 
 ```bash
-# Capture P2P traffic
-sudo tcpdump -i any port 30303 -w xdc-p2p.pcap
+# Use snap sync
+xdc config set sync_mode snap
 
-# Analyze with Wireshark
-# Filter: eth.protocol
-
-# Check network connections
-sudo netstat -tulpn | grep xdc
+# Download snapshot
+xdc snapshot download
+xdc snapshot apply
 ```
 
-### Database Debugging
+### Optimize for Masternode
 
 ```bash
-# Check chaindata integrity
-docker exec xdc-node ls -la /xdcchain/XDC/chaindata
+# Use full sync
+xdc config set sync_mode full
 
-# Get database stats
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "debug_chaindbProperty",
-    "params": ["leveldb.stats"],
-    "id": 1
-  }'
+# Increase cache
+xdc config set cache 8192
+
+# Increase peers
+xdc config set max_peers 50
+
+# Enable all APIs
+xdc config set rpc_api "admin,eth,net,web3,XDPoS,debug"
 ```
 
-### Performance Profiling
+## Log Analysis
+
+### View Recent Errors
 
 ```bash
-# Enable pprof
-curl http://localhost:6060/debug/pprof/goroutine?debug=1
-
-# Get heap profile
-curl http://localhost:6060/debug/pprof/heap > heap.prof
-
-# Analyze with go tool
-go tool pprof heap.prof
+xdc logs | grep -i "error\|fatal\|panic"
 ```
 
----
+### Monitor Specific Component
+
+```bash
+# P2P logs
+xdc logs | grep -i "peer\|p2p\|dial"
+
+# Sync logs
+xdc logs | grep -i "sync\|import\|download"
+
+# Consensus logs
+xdc logs | grep -i "consensus\|vote\|qc"
+```
+
+### Export Logs
+
+```bash
+# Export last 1000 lines
+xdc logs --tail 1000 > xdc-logs-$(date +%Y%m%d).txt
+
+# Export all logs
+docker logs xdc-node > xdc-all-logs.txt
+```
 
 ## Getting Help
 
+### Collect Diagnostics
+
+```bash
+# Generate diagnostic report
+xdc report > diagnostic-report.txt
+
+# Include:
+# - Node status
+# - Configuration
+# - Recent logs
+# - System info
+```
+
 ### Community Resources
 
-- [GitHub Issues](https://github.com/AnilChinchawale/xdc-node-setup/issues)
-- [XDC Community Discord](https://discord.gg/xdc)
-- [XDC Network Docs](https://docs.xdc.community/)
+- **GitHub Issues:** https://github.com/AnilChinchawale/xdc-node-setup/issues
+- **XDC Documentation:** https://docs.xdc.network
+- **XDC Community Discord:** https://discord.gg/xdc
 
-### Diagnostic Information to Include
+### Reporting Issues
 
 When reporting issues, include:
 
-```bash
-# System info
-xdc info > diagnostic.txt
-
-# Recent logs
-xdc logs --tail 100 >> diagnostic.txt
-
-# Docker info
-docker ps >> diagnostic.txt
-docker logs xdc-node --tail 50 >> diagnostic.txt
-
-# System resources
-free -h >> diagnostic.txt
-df -h >> diagnostic.txt
-```
+1. **Node Status:** `xdc status`
+2. **Configuration:** `xdc config list`
+3. **Logs:** `xdc logs --tail 100`
+4. **System Info:** `xdc info`
+5. **Error Messages:** Full error text
 
 ---
 
-## Related Documentation
-
-- [Architecture Overview](ARCHITECTURE.md)
-- [Configuration Guide](CONFIGURATION.md)
-- [API Reference](API.md)
-- [Security Audit](SECURITY_AUDIT.md)
+**Document Version:** 1.0.0  
+**Last Updated:** February 27, 2026

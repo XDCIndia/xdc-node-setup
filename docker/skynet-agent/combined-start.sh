@@ -447,8 +447,21 @@ inject_healthy_peers() {
       ;;
     
     nethermind)
-      # Log for manual config update (Nethermind uses static nodes file)
-      echo "[Phase2-PeerMgmt] ℹ️  Nethermind detected, recommend updating static-nodes.json"
+      # Nethermind supports admin_addPeer RPC (same as Geth)
+      while IFS= read -r enode; do
+        [ -z "$enode" ] && continue
+        local add_result=$(curl -s -m 5 -X POST "$rpc_url" \
+          -H "Content-Type: application/json" \
+          -d "{\"jsonrpc\":\"2.0\",\"method\":\"admin_addPeer\",\"params\":[\"$enode\"],\"id\":1}" 2>/dev/null)
+        
+        if echo "$add_result" | jq -e '.result' >/dev/null 2>&1; then
+          injected=$((injected + 1))
+          echo "[Phase2-PeerMgmt] ✅ Injected peer (Nethermind): ${enode:0:30}..."
+        fi
+        
+        # Limit to 3 peers per injection
+        [ $injected -ge 3 ] && break
+      done <<< "$peer_enodes"
       ;;
   esac
   

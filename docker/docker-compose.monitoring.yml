@@ -133,8 +133,7 @@ services:
       - "127.0.0.1:3000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      # Security Fix (#498): Use env var with default placeholder — change in production!
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin_change_me}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Error: GRAFANA_ADMIN_PASSWORD must be set}
       - GF_SECURITY_SECRET_KEY=${GRAFANA_SECRET_KEY:-xdc-grafana-secret}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_USERS_AUTO_ASSIGN_ORG=true
