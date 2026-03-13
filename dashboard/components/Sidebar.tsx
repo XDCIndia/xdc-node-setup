@@ -18,6 +18,7 @@ import {
   Sun,
   Moon,
   Monitor,
+  LineChart,
 } from 'lucide-react';
 
 interface NavItem {
@@ -31,6 +32,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: '/', section: 'Overview' },
   { id: 'nodes', label: 'SkyNet Nodes', icon: <Radio className="w-5 h-5" />, path: '/nodes', section: 'Overview' },
+  { id: 'cross-chain', label: 'Cross-Chain Analytics', icon: <LineChart className="w-5 h-5" />, path: '/cross-chain-analytics', section: 'Analytics' },
   { id: 'network', label: 'Network', icon: <BarChart3 className="w-5 h-5" />, path: '/network', section: 'Monitoring' },
   { id: 'peers', label: 'Peers', icon: <Globe className="w-5 h-5" />, path: '/peers', section: 'Monitoring' },
   { id: 'alerts', label: 'Alerts', icon: <Bell className="w-5 h-5" />, path: '/alerts', section: 'Monitoring' },
