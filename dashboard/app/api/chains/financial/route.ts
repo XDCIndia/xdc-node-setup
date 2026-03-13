@@ -268,48 +268,8 @@ const chainsData: ChainFinancialData[] = [
   },
 ];
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const timeRange = searchParams.get('timeRange') || '24h';
-  const chainIds = searchParams.get('chains')?.split(',') || [];
-
-  let filteredData = [...chainsData];
-
-  // Filter by chain IDs if specified
-  if (chainIds.length > 0 && chainIds[0] !== '') {
-    filteredData = filteredData.filter(chain => chainIds.includes(chain.id));
-  }
-
-  // Apply time range adjustments (simulate historical data)
-  const adjustedData = filteredData.map(chain => {
-    const multiplier = getTimeRangeMultiplier(timeRange);
-    return {
-      ...chain,
-      volume: chain.volume24h * multiplier,
-      transactions: chain.transactions24h * multiplier,
-      activeUsers: Math.round(chain.activeUsers24h * multiplier),
-    };
-  });
-
-  // Calculate aggregate metrics
-  const totalVolume = adjustedData.reduce((sum, chain) => sum + chain.volume24h, 0);
-  const totalTransactions = adjustedData.reduce((sum, chain) => sum + chain.transactions24h, 0);
-  const totalRevenue = adjustedData.reduce((sum, chain) => sum + chain.revenue24h, 0);
-  const avgConfirmationTime = adjustedData.reduce((sum, chain) => sum + chain.avgConfirmationTime, 0) / adjustedData.length;
-
-  return NextResponse.json({
-    chains: adjustedData,
-    aggregates: {
-      totalVolume,
-      totalTransactions,
-      totalRevenue,
-      activeChainsCount: adjustedData.length,
-      avgConfirmationTime: Math.round(avgConfirmationTime * 100) / 100,
-    },
-    timeRange,
-    timestamp: new Date().toISOString(),
-  });
-}
+const VALID_TIME_RANGES = ['24h', '7d', '30d', '90d', '1y'] as const;
+type TimeRange = typeof VALID_TIME_RANGES[number];
 
 function getTimeRangeMultiplier(timeRange: string): number {
   switch (timeRange) {
@@ -319,5 +279,84 @@ function getTimeRangeMultiplier(timeRange: string): number {
     case '90d': return 90;
     case '1y': return 365;
     default: return 1;
+  }
+}
+
+function isValidTimeRange(range: string): range is TimeRange {
+  return VALID_TIME_RANGES.includes(range as TimeRange);
+}
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const timeRange = searchParams.get('timeRange') || '24h';
+    const chainIds = searchParams.get('chains')?.split(',').filter(Boolean) || [];
+
+    // Validate timeRange parameter
+    if (!isValidTimeRange(timeRange)) {
+      return NextResponse.json(
+        { 
+          error: 'Invalid timeRange parameter', 
+          validValues: Array.from(VALID_TIME_RANGES),
+          provided: timeRange 
+        },
+        { status: 400 }
+      );
+    }
+
+    let filteredData = [...chainsData];
+
+    // Filter by chain IDs if specified
+    if (chainIds.length > 0) {
+      filteredData = filteredData.filter(chain => chainIds.includes(chain.id));
+      if (filteredData.length === 0) {
+        return NextResponse.json(
+          { 
+            error: 'No chains found matching the provided IDs', 
+            validChains: chainsData.map(c => ({ id: c.id, name: c.name, symbol: c.symbol })) 
+          },
+          { status: 404 }
+        );
+      }
+    }
+
+    // Apply time range adjustments (simulate historical data)
+    const multiplier = getTimeRangeMultiplier(timeRange);
+    const adjustedData = filteredData.map(chain => ({
+      ...chain,
+      volume: chain.volume24h * multiplier,
+      transactions: chain.transactions24h * multiplier,
+      activeUsers: Math.round(chain.activeUsers24h * multiplier),
+    }));
+
+    // Calculate aggregate metrics
+    const totalVolume = adjustedData.reduce((sum, chain) => sum + chain.volume24h, 0);
+    const totalTransactions = adjustedData.reduce((sum, chain) => sum + chain.transactions24h, 0);
+    const totalRevenue = adjustedData.reduce((sum, chain) => sum + chain.revenue24h, 0);
+    const avgConfirmationTime = adjustedData.length > 0 
+      ? adjustedData.reduce((sum, chain) => sum + chain.avgConfirmationTime, 0) / adjustedData.length 
+      : 0;
+
+    return NextResponse.json({
+      chains: adjustedData,
+      aggregates: {
+        totalVolume,
+        totalTransactions,
+        totalRevenue,
+        activeChainsCount: adjustedData.length,
+        avgConfirmationTime: Math.round(avgConfirmationTime * 100) / 100,
+      },
+      timeRange,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Error in /api/chains/financial:', error);
+    return NextResponse.json(
+      { 
+        error: 'Internal server error', 
+        message: error instanceof Error ? error.message : 'Unknown error' 
+      },
+      { status: 500 }
+    );
   }
 }
