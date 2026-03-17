@@ -67,6 +67,60 @@ if [ ! -f "$DATADIR/.node-identity" ]; then
   echo "[SkyNet] Generated identity seed (coinbase will be read from RPC after start)"
 fi
 
+# Issue #557: Ensure KZG trusted setup file exists
+# Nethermind requires kzg_trusted_setup.txt for EIP-4844 (blob transactions)
+KZG_FILE="/nethermind/kzg_trusted_setup.txt"
+if [[ ! -f "$KZG_FILE" ]]; then
+    echo "⚠ Warning: kzg_trusted_setup.txt not found at $KZG_FILE"
+    echo "Attempting to copy from embedded resources..."
+    
+    # Try to copy from Nethermind binary resources
+    if [[ -f "/nethermind/Data/kzg_trusted_setup.txt" ]]; then
+        cp "/nethermind/Data/kzg_trusted_setup.txt" "$KZG_FILE"
+        echo "✓ Copied KZG setup from /nethermind/Data/"
+    elif [[ -f "/nethermind/data/kzg_trusted_setup.txt" ]]; then
+        cp "/nethermind/data/kzg_trusted_setup.txt" "$KZG_FILE"
+        echo "✓ Copied KZG setup from /nethermind/data/"
+    else
+        # Download from official Ethereum KZG ceremony
+        echo "Downloading KZG trusted setup from Ethereum Foundation..."
+        if command -v curl >/dev/null 2>&1; then
+            curl -fsSL -o "$KZG_FILE" \
+                "https://raw.githubusercontent.com/ethereum/c-kzg-4844/main/src/trusted_setup.txt" 2>/dev/null || \
+            curl -fsSL -o "$KZG_FILE" \
+                "https://github.com/ethereum/consensus-specs/raw/dev/presets/mainnet/trusted_setups/trusted_setup.txt" 2>/dev/null || \
+            echo "ERROR: Failed to download KZG trusted setup"
+        elif command -v wget >/dev/null 2>&1; then
+            wget -q -O "$KZG_FILE" \
+                "https://raw.githubusercontent.com/ethereum/c-kzg-4844/main/src/trusted_setup.txt" 2>/dev/null || \
+            wget -q -O "$KZG_FILE" \
+                "https://github.com/ethereum/consensus-specs/raw/dev/presets/mainnet/trusted_setups/trusted_setup.txt" 2>/dev/null || \
+            echo "ERROR: Failed to download KZG trusted setup"
+        fi
+        
+        if [[ -f "$KZG_FILE" && -s "$KZG_FILE" ]]; then
+            echo "✓ Downloaded KZG trusted setup ($(wc -c < "$KZG_FILE") bytes)"
+        else
+            echo "ERROR: KZG trusted setup file is missing or empty"
+            echo "Nethermind may crash with 'SetupKeyStore' or 'KZG' errors"
+            echo ""
+            echo "Manual fix: Copy kzg_trusted_setup.txt to docker volume:"
+            echo "  docker cp kzg_trusted_setup.txt <container>:/nethermind/kzg_trusted_setup.txt"
+            # Don't exit - let Nethermind try to start anyway (may work on older versions)
+        fi
+    fi
+else
+    echo "✓ KZG trusted setup file exists ($(wc -c < "$KZG_FILE") bytes)"
+fi
+
+# Issue #557: Ensure keystore directory exists
+KEYSTORE_DIR="/nethermind/keystore"
+if [[ ! -d "$KEYSTORE_DIR" ]]; then
+    echo "Creating keystore directory: $KEYSTORE_DIR"
+    mkdir -p "$KEYSTORE_DIR"
+    chmod 700 "$KEYSTORE_DIR"
+fi
+
 # Check if chainspec exists
 if [[ ! -f /nethermind/chainspec/xdc.json ]]; then
     echo "ERROR: Chainspec file not found at /nethermind/chainspec/xdc.json"

@@ -42,6 +42,35 @@ echo "Datadir: $DATADIR"
 echo "Config: $CONFIG_FILE"
 
 # ============================================================
+# Issue #547 & #552: Pre-flight checks for config files
+# ============================================================
+echo "Pre-flight: checking config file integrity..."
+
+# Ensure bootnodes.list exists and is a file, not a directory
+if [[ -d "$BOOTNODES_FILE" ]]; then
+    echo "ERROR: $BOOTNODES_FILE is a directory (Docker mount error)"
+    echo "Removing directory and creating empty file..."
+    rm -rf "$BOOTNODES_FILE"
+    touch "$BOOTNODES_FILE"
+fi
+
+if [[ ! -f "$BOOTNODES_FILE" ]]; then
+    echo "Warning: bootnodes.list not found, creating empty file"
+    touch "$BOOTNODES_FILE"
+fi
+
+# Ensure static-nodes.json is not a directory
+STATIC_NODES="/static-nodes.json"
+if [[ -d "$STATIC_NODES" ]]; then
+    echo "ERROR: static-nodes.json is a directory (Docker mount error)"
+    echo "Removing directory and creating empty file..."
+    rm -rf "$STATIC_NODES"
+    echo "[]" > "$STATIC_NODES"
+fi
+
+echo "✓ Pre-flight checks complete"
+
+# ============================================================
 # Load config.toml - section-aware TOML parser
 # ============================================================
 load_config() {
