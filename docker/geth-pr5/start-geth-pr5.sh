@@ -18,6 +18,12 @@ echo "=============================================="
 echo "Starting XDC Geth PR5 node..."
 echo "Datadir: $DATADIR"
 echo "=============================================="
+# Issue #550: Peer compatibility warning
+echo ""
+echo "⚠️  PEER WARNING: GP5 nodes should ONLY peer with GP5 nodes."
+echo "   Cross-client peering (GP5<->Erigon) causes 'invalid ancestor' errors."
+echo "   Run: scripts/generate-static-nodes.sh gp5"
+echo ""
 
 # ============================================================
 # Defaults

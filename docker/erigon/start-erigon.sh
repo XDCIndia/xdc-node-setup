@@ -40,6 +40,12 @@ XDC_MAINNET_BOOTNODES=(
 echo "Starting Erigon-XDC node..."
 echo "Datadir: $DATADIR"
 echo "Config: $CONFIG_FILE"
+# Issue #550: Peer compatibility warning
+echo ""
+echo "⚠️  PEER WARNING: Erigon nodes should ONLY peer with Erigon nodes."
+echo "   Cross-client peering (Erigon<->GP5) causes 'invalid ancestor' errors."
+echo "   Run: scripts/generate-static-nodes.sh erigon"
+echo ""
 
 # ============================================================
 # Issue #547 & #552: Pre-flight checks for config files
