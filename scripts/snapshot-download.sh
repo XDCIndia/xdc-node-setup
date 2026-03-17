@@ -1,107 +1,102 @@
-#!/bin/bash
-# Automated snapshot download with verification and resume support
-
+#!/usr/bin/env bash
+#==============================================================================
+# Automated Snapshot Download with Resume (Issue #489, #473)
+# Downloads and verifies XDC chain snapshots for fast sync
+#==============================================================================
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/lib/utils.sh"
+SNAPSHOT_BASE_URL="${SNAPSHOT_URL:-https://download.xinfin.network/snapshots}"
+NETWORK="${1:-mainnet}"
+CLIENT="${2:-gp5}"
+DATADIR="${3:-/mnt/data/${NETWORK}/${CLIENT}/xdcchain}"
 
-# Configuration
-SNAPSHOT_URL="${SNAPSHOT_URL:-https://download.xinfin.network/xdcchain-testnet.tar}"
-SNAPSHOT_CHECKSUM_URL="${SNAPSHOT_CHECKSUM_URL:-https://download.xinfin.network/xdcchain-testnet.tar.sha256}"
-SNAPSHOT_DIR="${SNAPSHOT_DIR:-/tmp/xdc-snapshot}"
-DATA_DIR="${DATA_DIR:-/xdcchain}"
-MAX_RETRIES=3
+echo "📥 XDC Snapshot Downloader"
+echo "Network: $NETWORK | Client: $CLIENT"
+echo "Datadir: $DATADIR"
+echo ""
 
-info "XDC Snapshot Download Tool"
-info "==========================="
+# Determine snapshot URL
+SNAPSHOT_FILE="${NETWORK}-${CLIENT}-latest.tar.gz"
+SNAPSHOT_URL="${SNAPSHOT_BASE_URL}/${SNAPSHOT_FILE}"
+CHECKSUM_URL="${SNAPSHOT_URL}.sha256"
 
-# Create directories
-mkdir -p "$SNAPSHOT_DIR"
+# Download location
+DOWNLOAD_DIR="/tmp/xdc-snapshots"
+mkdir -p "$DOWNLOAD_DIR"
+DOWNLOAD_FILE="$DOWNLOAD_DIR/$SNAPSHOT_FILE"
 
-download_with_resume() {
-    local url=$1
-    local output=$2
-    local retry_count=0
-    
-    while [[ $retry_count -lt $MAX_RETRIES ]]; do
-        info "Downloading $(basename "$output") (attempt $((retry_count + 1))/$MAX_RETRIES)..."
-        
-        if wget -c -O "$output" "$url" --progress=bar:force 2>&1; then
-            info "Download complete: $output"
-            return 0
-        else
-            warn "Download failed (attempt $((retry_count + 1)))"
-            retry_count=$((retry_count + 1))
-            sleep 5
-        fi
-    done
-    
-    error "Failed to download after $MAX_RETRIES attempts"
-    return 1
-}
+# Check disk space
+REQUIRED_GB=500  # Approximate
+AVAILABLE_GB=$(df -BG "$DOWNLOAD_DIR" 2>/dev/null | awk 'NR==2{print $4}' | tr -d 'G')
+if [[ "${AVAILABLE_GB:-0}" -lt "$REQUIRED_GB" ]]; then
+    echo "⚠️  Warning: Only ${AVAILABLE_GB}GB free (recommended: ${REQUIRED_GB}GB)"
+    read -p "Continue? [y/N] " -n 1 -r
+    echo
+    [[ $REPLY =~ ^[Yy]$ ]] || exit 1
+fi
 
-verify_checksum() {
-    local file=$1
-    local checksum_file=$2
-    
-    if [[ ! -f "$checksum_file" ]]; then
-        warn "Checksum file not found, skipping verification"
-        return 0
-    fi
-    
-    info "Verifying checksum..."
-    if (cd "$(dirname "$file")" && sha256sum -c "$checksum_file"); then
-        info "✓ Checksum verification passed"
-        return 0
+# Download with resume support
+echo "Downloading snapshot..."
+if command -v aria2c >/dev/null 2>&1; then
+    # Prefer aria2c for multi-connection download
+    aria2c -x 16 -s 16 --continue=true \
+        --max-tries=10 --retry-wait=30 \
+        -d "$DOWNLOAD_DIR" -o "$SNAPSHOT_FILE" \
+        "$SNAPSHOT_URL"
+elif command -v wget >/dev/null 2>&1; then
+    wget --continue --progress=bar:force \
+        --tries=10 --retry-connrefused \
+        -O "$DOWNLOAD_FILE" "$SNAPSHOT_URL"
+else
+    curl -fL --retry 10 --retry-delay 30 \
+        -C - -o "$DOWNLOAD_FILE" "$SNAPSHOT_URL"
+fi
+
+# Issue #473: Verify checksum
+echo ""
+echo "🔍 Verifying snapshot integrity..."
+EXPECTED_HASH=$(curl -sf "$CHECKSUM_URL" 2>/dev/null | awk '{print $1}')
+
+if [[ -n "$EXPECTED_HASH" ]]; then
+    ACTUAL_HASH=$(sha256sum "$DOWNLOAD_FILE" | awk '{print $1}')
+    if [[ "$ACTUAL_HASH" == "$EXPECTED_HASH" ]]; then
+        echo "✅ Checksum verified"
     else
-        error "✗ Checksum verification failed!"
-        return 1
-    fi
-}
-
-extract_snapshot() {
-    local snapshot_file=$1
-    local target_dir=$2
-    
-    info "Extracting snapshot to $target_dir..."
-    mkdir -p "$target_dir"
-    
-    if tar -xvf "$snapshot_file" -C "$target_dir" --strip-components=1; then
-        info "✓ Extraction complete"
-        return 0
-    else
-        error "✗ Extraction failed"
-        return 1
-    fi
-}
-
-main() {
-    local snapshot_file="$SNAPSHOT_DIR/$(basename "$SNAPSHOT_URL")"
-    local checksum_file="$SNAPSHOT_DIR/$(basename "$SNAPSHOT_CHECKSUM_URL")"
-    
-    # Download checksum
-    if [[ -n "$SNAPSHOT_CHECKSUM_URL" ]]; then
-        download_with_resume "$SNAPSHOT_CHECKSUM_URL" "$checksum_file" || {
-            warn "Checksum download failed, proceeding without verification"
-        }
-    fi
-    
-    # Download snapshot with resume support
-    download_with_resume "$SNAPSHOT_URL" "$snapshot_file" || exit 1
-    
-    # Verify checksum
-    verify_checksum "$snapshot_file" "$checksum_file" || {
-        error "Checksum mismatch - snapshot may be corrupted"
+        echo "❌ Checksum MISMATCH!"
+        echo "  Expected: $EXPECTED_HASH"
+        echo "  Got:      $ACTUAL_HASH"
+        echo "  Snapshot may be corrupted. Re-download?"
         exit 1
-    }
-    
-    # Extract snapshot
-    extract_snapshot "$snapshot_file" "$DATA_DIR" || exit 1
-    
-    info "==========================="
-    info "Snapshot installation complete!"
-    info "Data directory: $DATA_DIR"
-}
+    fi
+else
+    echo "⚠️  No checksum available, performing basic integrity check..."
+    # Issue #473: Basic corruption detection
+    if ! tar tzf "$DOWNLOAD_FILE" >/dev/null 2>&1; then
+        echo "❌ Archive is corrupted (tar integrity check failed)"
+        exit 1
+    fi
+    echo "✅ Archive integrity OK"
+fi
 
-main "$@"
+# Extract
+echo ""
+echo "📦 Extracting snapshot to $DATADIR..."
+mkdir -p "$DATADIR"
+
+# Stop node if running
+if docker ps --format '{{.Names}}' | grep -q "xdc-${NETWORK}-${CLIENT}"; then
+    echo "Stopping node before extraction..."
+    docker stop "xdc-${NETWORK}-${CLIENT}" 2>/dev/null || true
+fi
+
+tar xzf "$DOWNLOAD_FILE" -C "$DATADIR" --strip-components=1
+
+echo ""
+echo "✅ Snapshot extracted successfully"
+echo "   Datadir: $DATADIR"
+echo "   Start your node to begin syncing from the snapshot"
+
+# Cleanup option
+read -p "Delete downloaded snapshot to free space? [Y/n] " -n 1 -r
+echo
+[[ ! $REPLY =~ ^[Nn]$ ]] && rm -f "$DOWNLOAD_FILE"
