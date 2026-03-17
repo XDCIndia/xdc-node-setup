@@ -71,15 +71,19 @@ init_logging() {
     chmod 640 "$LOG_FILE" 2>/dev/null || true
 }
 
-# Ensure path is a file, not a directory (Docker creates dirs for missing volume mounts)
+# Issue #547 & #552: Ensure path is a file, not a directory
+# Docker creates directories for missing volume mount sources
 ensure_file_path() {
     local f="$1"
     if [[ -d "$f" ]]; then
+        echo "  Removing directory: $f (Docker will mount this as file)"
         rm -rf "$f"
     fi
     mkdir -p "$(dirname "$f")"
     # Actually create the file to prevent Docker from creating it as a directory
-    touch "$f"
+    if [[ ! -f "$f" ]]; then
+        touch "$f"
+    fi
 }
 
 log() {
@@ -1577,22 +1581,84 @@ start_services() {
         fi
     done
     
-    # Verify critical files exist and are actual files (not directories)
-    for f in mainnet/start-node.sh mainnet/genesis.json mainnet/.pwd; do
+    # Issue #547 & #552: Verify critical files exist and are actual files (not directories)
+    # Docker creates directories when volume mount source is missing
+    log "Pre-flight check: ensuring config files are files, not directories..."
+    
+    # Network-specific files to check
+    local config_files=(
+        "${NETWORK}/start-node.sh"
+        "${NETWORK}/genesis.json"
+        "${NETWORK}/.pwd"
+        "${NETWORK}/bootnodes.list"
+    )
+    
+    # Additional config files that Docker might create as directories
+    local state_config_files=(
+        "../${NETWORK}/.xdc-node/skynet.conf"
+        "../${NETWORK}/.xdc-node/config.toml"
+        "../${NETWORK}/.xdc-node/.env"
+    )
+    
+    for f in "${config_files[@]}"; do
         local fpath="$PROJECT_ROOT/docker/$f"
         if [[ -d "$fpath" ]]; then
             warn "$f was created as a directory (Docker artifact). Removing and recreating..."
             rm -rf "$fpath"
         fi
-        if [[ ! -f "$fpath" || ! -s "$fpath" ]]; then
-            warn "$f is missing or empty. Re-downloading..."
-            local base_url="https://raw.githubusercontent.com/XinFinOrg/XinFin-Node/master/mainnet"
-            local fname=$(basename "$f")
-            curl -fsSL "$base_url/$fname" -o "$fpath" 2>/dev/null || warn "Failed to download $fname"
-            [[ "$fname" == "start-node.sh" ]] && chmod +x "$fpath" 2>/dev/null || true
-            [[ "$fname" == ".pwd" ]] && { touch "$fpath"; chmod 600 "$fpath"; }
+        
+        # Ensure parent directory exists
+        mkdir -p "$(dirname "$fpath")"
+        
+        if [[ ! -f "$fpath" ]]; then
+            case "$(basename "$f")" in
+                start-node.sh|genesis.json|bootnodes.list)
+                    warn "$f is missing. Attempting to download..."
+                    local base_url="https://raw.githubusercontent.com/XinFinOrg/XinFin-Node/master/${NETWORK}"
+                    local fname=$(basename "$f")
+                    if ! curl -fsSL --connect-timeout 10 "$base_url/$fname" -o "$fpath" 2>/dev/null || [[ ! -s "$fpath" ]]; then
+                        # Fallback: try mainnet if network-specific file not found
+                        [[ "$NETWORK" != "mainnet" ]] && curl -fsSL --connect-timeout 10 \
+                            "https://raw.githubusercontent.com/XinFinOrg/XinFin-Node/master/mainnet/$fname" \
+                            -o "$fpath" 2>/dev/null || true
+                    fi
+                    [[ "$fname" == "start-node.sh" ]] && chmod +x "$fpath" 2>/dev/null || true
+                    ;;
+                .pwd)
+                    touch "$fpath"
+                    chmod 600 "$fpath"
+                    log "Created empty password file: $f"
+                    ;;
+            esac
+        fi
+        
+        # Final check: if still directory or doesn't exist, create empty file
+        if [[ -d "$fpath" ]]; then
+            rm -rf "$fpath"
+            touch "$fpath"
+            warn "Force-created $f as empty file (was directory)"
+        elif [[ ! -f "$fpath" ]]; then
+            touch "$fpath"
+            info "Created placeholder for: $f"
         fi
     done
+    
+    # Check state config files (relative to docker dir)
+    for f in "${state_config_files[@]}"; do
+        local fpath="$PROJECT_ROOT/docker/$f"
+        if [[ -d "$fpath" ]]; then
+            warn "$(basename "$fpath") was created as directory. Removing..."
+            rm -rf "$fpath"
+        fi
+        # These are created by other setup functions, just ensure they're not directories
+        if [[ ! -f "$fpath" ]]; then
+            mkdir -p "$(dirname "$fpath")"
+            touch "$fpath"
+            info "Pre-created: $(basename "$fpath")"
+        fi
+    done
+    
+    log "✓ Config file pre-flight check complete"
     
     # Also remove any Docker-created directories in the data volume
     local container_name="xdc-node"

@@ -42,6 +42,24 @@ echo "Config: sync=$SYNC_MODE gc=$GC_MODE network=$NETWORK_ID"
 # ============================================================
 # Init genesis if needed
 # ============================================================
+
+# Issue #548: Pre-flight check for genesis.json
+if [ ! -f "$GENESIS_FILE" ]; then
+    echo "=============================================="
+    echo "ERROR: Genesis file not found!"
+    echo "=============================================="
+    echo "Expected location: $GENESIS_FILE"
+    echo ""
+    echo "This file is required to initialize the blockchain."
+    echo "Without it, the node will sync to Ethereum mainnet instead of XDC Network."
+    echo ""
+    echo "Please ensure genesis.json is mounted correctly in docker-compose.yml:"
+    echo "  volumes:"
+    echo "    - ./mainnet/genesis.json:/work/genesis.json:ro"
+    echo "=============================================="
+    exit 1
+fi
+
 if [ ! -d "$DATADIR/XDC/chaindata" ]; then
     echo "No existing chaindata found, initializing..."
     
@@ -54,13 +72,56 @@ if [ ! -d "$DATADIR/XDC/chaindata" ]; then
     fi
     
     # Initialize genesis
-    if [ -f "$GENESIS_FILE" ]; then
-        echo "Initializing Genesis Block..."
-        XDC init --datadir "$DATADIR" "$GENESIS_FILE"
-        echo "Genesis initialized successfully"
+    echo "Initializing Genesis Block..."
+    XDC init --datadir "$DATADIR" "$GENESIS_FILE"
+    echo "Genesis initialized successfully"
+    
+    # Issue #548: Verify genesis hash after initialization
+    echo "Verifying genesis block hash..."
+    sleep 2
+    
+    # Query block 0 to get genesis hash
+    # Start XDC in background temporarily to query genesis
+    XDC --datadir "$DATADIR" --networkid ${NETWORK_ID:-50} --port 0 --nodiscover --maxpeers 0 \
+        --http --http.addr 127.0.0.1 --http.port 18545 --http.api eth &
+    XDC_PID=$!
+    
+    # Wait for RPC to become available
+    for i in $(seq 1 10); do
+        if curl -sf -X POST http://127.0.0.1:18545 \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","method":"net_version","params":[],"id":1}' >/dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+    done
+    
+    # Get genesis block hash
+    GENESIS_HASH=$(curl -sf -X POST http://127.0.0.1:18545 \
+        -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","method":"eth_getBlockByNumber","params":["0x0",false],"id":1}' 2>/dev/null \
+        | grep -o '"hash":"0x[^"]*"' | cut -d'"' -f4 | sed 's/^0x//')
+    
+    # Stop temporary XDC instance
+    kill $XDC_PID 2>/dev/null || true
+    wait $XDC_PID 2>/dev/null || true
+    
+    # Expected XDC mainnet genesis hash
+    EXPECTED_GENESIS="4a9d748bd78a8d0385b67788c2435dcdb914f98a96250b68863a1f8b7642d6b1"
+    
+    if [ -n "$GENESIS_HASH" ]; then
+        echo "Genesis hash: 0x$GENESIS_HASH"
+        if [ "$GENESIS_HASH" = "$EXPECTED_GENESIS" ]; then
+            echo "✓ Genesis hash verified (XDC mainnet)"
+        else
+            echo "⚠ Warning: Genesis hash does not match XDC mainnet"
+            echo "  Got:      0x$GENESIS_HASH"
+            echo "  Expected: 0x$EXPECTED_GENESIS"
+            echo "  Proceeding anyway (may be testnet/devnet)..."
+        fi
     else
-        echo "ERROR: No genesis file at $GENESIS_FILE"
-        exit 1
+        echo "⚠ Warning: Could not verify genesis hash (RPC unavailable)"
+        echo "  Node will start but please verify network after sync"
     fi
 else
     echo "Existing chaindata found at $DATADIR/XDC/chaindata"
