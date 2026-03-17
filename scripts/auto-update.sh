@@ -219,15 +219,16 @@ cleanup_old_backups() {
 # Update Functions
 #==============================================================================
 
+# Issue #553: Handle docker commands gracefully with set -euo pipefail
 stop_node() {
     log INFO "Stopping XDC node..."
     
     cd "$XDC_NODE_HOME"
     
     if command -v docker-compose &> /dev/null; then
-        docker-compose stop xdc-node
+        docker-compose stop xdc-node 2>/dev/null || log WARN "Container may not be running"
     else
-        docker compose stop xdc-node
+        docker compose stop xdc-node 2>/dev/null || log WARN "Container may not be running"
     fi
     
     sleep 5
@@ -240,9 +241,19 @@ start_node() {
     cd "$XDC_NODE_HOME"
     
     if command -v docker-compose &> /dev/null; then
-        docker-compose up -d xdc-node
+        docker-compose up -d xdc-node 2>/dev/null || {
+            log WARN "Start failed (port conflict?), attempting recovery..."
+            docker-compose stop xdc-node 2>/dev/null
+            sleep 2
+            docker-compose up -d xdc-node || { log ERROR "Failed to start"; exit 1; }
+        }
     else
-        docker compose up -d xdc-node
+        docker compose up -d xdc-node 2>/dev/null || {
+            log WARN "Start failed (port conflict?), attempting recovery..."
+            docker compose stop xdc-node 2>/dev/null
+            sleep 2
+            docker compose up -d xdc-node || { log ERROR "Failed to start"; exit 1; }
+        }
     fi
     
     sleep 10

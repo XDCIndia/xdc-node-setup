@@ -21,9 +21,11 @@ if [[ "$confirm" != "yes" ]]; then
     exit 1
 fi
 
-# Stop node
+# Stop node (Issue #553: Handle gracefully with set -euo pipefail)
 echo "⏹️  Stopping XDC node..."
-docker-compose stop xdc-node-geth-pr5
+docker-compose stop xdc-node-geth-pr5 2>/dev/null || {
+    echo "⚠️  Warning: Container may not be running"
+}
 
 # Backup current data
 echo "💾 Backing up current chaindata..."
@@ -36,9 +38,18 @@ echo "📥 Downloading latest mainnet snapshot..."
 wget -O snapshot.tar https://download.xinfin.network/xdcchain-snapshot-latest.tar
 tar -xvf snapshot.tar -C /xdcchain/
 
-# Restart node
+# Restart node (Issue #553: Handle port conflicts gracefully)
 echo "🚀 Restarting node..."
-docker-compose up -d xdc-node-geth-pr5
+docker-compose up -d xdc-node-geth-pr5 2>/dev/null || {
+    echo "⚠️  Warning: Container failed to start (port conflict?)"
+    echo "🔧 Attempting recovery..."
+    docker-compose stop xdc-node-geth-pr5 2>/dev/null
+    sleep 2
+    docker-compose up -d xdc-node-geth-pr5 || {
+        echo "❌ Failed to start. Check: docker logs xdc-node-geth-pr5"
+        exit 1
+    }
+}
 
 echo "✅ Fix applied. Monitor sync with: docker logs -f xdc-node-geth-pr5"
 echo "Expected sync time: 4-6 hours"

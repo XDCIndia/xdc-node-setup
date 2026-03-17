@@ -53,6 +53,11 @@ echo "Network: $NETWORK_NAME (Chain ID: $CHAIN_ID)"
 echo "RPC Port: $RPC_PORT"
 echo "P2P Port: $P2P_PORT"
 echo "Instance: $INSTANCE_NAME"
+# Issue #550: Peer compatibility warning
+echo ""
+echo "⚠️  PEER WARNING: Nethermind nodes should ONLY peer with Nethermind nodes."
+echo "   Cross-client peering can cause consensus errors."
+echo "   Run: scripts/generate-static-nodes.sh nethermind"
 echo ""
 
 # Issue #71: Generate deterministic identity on first boot
