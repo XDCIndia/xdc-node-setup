@@ -1,125 +1,84 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #==============================================================================
-# XDC Client-Aware Static Nodes Generator
-# Fixes Issue #550: GP5 syncing from Erigon gets 'invalid ancestor' error
+# Generate Static Nodes by Client Type (Issue #550)
+# Prevents cross-client peering that causes "invalid ancestor" errors
 #==============================================================================
-# Usage: ./generate-static-nodes.sh [gp5|erigon|nethermind]
-#
-# This script separates peer lists by client type to prevent cross-client
-# consensus incompatibilities. GP5 should ONLY peer with GP5, Erigon with
-# Erigon, etc.
-#==============================================================================
-
 set -euo pipefail
 
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly NETWORK_DIR="${SCRIPT_DIR}/../docker/mainnet"
+CLIENT_FILTER="${1:-all}"  # gp5, erigon, nm, reth, all
 
-# Known client-specific peers (examples - update with real enodes)
-readonly GP5_PEERS=(
-    "enode://EXAMPLE_GP5_PEER_1@ip:port"
-    "enode://EXAMPLE_GP5_PEER_2@ip:port"
+echo "🔗 Generating static-nodes.json for client: $CLIENT_FILTER"
+echo ""
+
+# Known fleet peers by client type
+declare -A GP5_PEERS=(
+    ["xdc08"]="enode://28645e5d8421f0bba710094648b5d558f4d44df87f4e23aeb5d8f14a1243d651c0ee5644da3e70991f18a419b5e57dda638b84f7a633413d37f038e3f0c57b83@65.21.27.213:30303"
+    ["test"]="enode://e1744061a9b2400c56bd6d346b889adaf72a5318df12a6cd04866bbb3b26738fe599e297c32d56c75859ffea0abcc83c166c539464f64387e187afb655d8499e@95.217.56.168:30303"
 )
 
-readonly ERIGON_PEERS=(
-    "enode://EXAMPLE_ERIGON_PEER_1@ip:port"
-    "enode://EXAMPLE_ERIGON_PEER_2@ip:port"
+declare -A ERIGON_PEERS=(
+    ["xdc08"]="enode://ERIGON_KEY@65.21.27.213:30304"
 )
 
-readonly NETHERMIND_PEERS=(
-    "enode://EXAMPLE_NETHERMIND_PEER_1@ip:port"
-    "enode://EXAMPLE_NETHERMIND_PEER_2@ip:port"
+# XDC mainnet public bootnodes (GP5 compatible ONLY)
+MAINNET_BOOTNODES=(
+    "enode://e1a69a7d766576e694adc3fc78d801a8a66926cbe8f4fe95b85f3b481444700a5d1b6d440b2715b5bb7cf4824df6a6702740afc8c52b20c72bc8c16f1ccde1f3@149.102.140.32:30303"
+    "enode://874589626a2b4fd7c57202533315885815eba51dbc434db88bbbebcec9b22cf2a01eafad2fd61651306fe85321669a30b3f41112eca230137ded24b86e064ba8@5.189.144.192:30303"
+    "enode://ccdef92053c8b9622180d02a63edffb3e143e7627737ea812b930eacea6c51f0c93a5da3397f59408c3d3d1a9a381f7e0b07440eae47314685b649a03408cfdd@37.60.243.5:30303"
 )
 
-# Colors
-readonly RED='\033[0;31m'
-readonly YELLOW='\033[1;33m'
-readonly GREEN='\033[0;32m'
-readonly NC='\033[0m'
+output_file="${2:-static-nodes.json}"
 
-usage() {
-    cat << EOF
-Usage: $0 [CLIENT_TYPE]
+echo "[" > "$output_file"
+first=true
 
-CLIENT_TYPE:
-    gp5         - Generate static-nodes.json for Geth-PR5 (GP5) client
-    erigon      - Generate static-nodes.json for Erigon client
-    nethermind  - Generate static-nodes.json for Nethermind client
-
-Examples:
-    $0 gp5
-    $0 erigon
-
-WARNING: Cross-client peering can cause consensus errors like 'invalid ancestor'.
-Always use client-specific peer lists!
-EOF
-    exit 1
-}
-
-generate_static_nodes() {
-    local client=$1
-    local output_file="${NETWORK_DIR}/static-nodes.${client}.json"
-    local peers_ref="${client^^}_PEERS[@]"
-    
-    echo -e "${YELLOW}⚠️  WARNING: Cross-client peering detected!${NC}"
-    echo -e "   GP5 nodes syncing from Erigon may encounter 'invalid ancestor' errors."
-    echo -e "   Generating client-specific static-nodes for: ${GREEN}${client}${NC}"
-    echo ""
-    
-    # Create JSON array
-    local json_content="[\n"
-    local peers=("${!peers_ref}")
-    
-    if [ ${#peers[@]} -eq 0 ]; then
-        echo -e "${RED}ERROR: No peers defined for ${client}${NC}"
-        echo "Please update this script with real enode URLs for your network."
-        exit 1
+add_peer() {
+    local enode="$1"
+    if [[ "$first" == "true" ]]; then
+        echo "  \"$enode\"" >> "$output_file"
+        first=false
+    else
+        echo "  ,\"$enode\"" >> "$output_file"
     fi
-    
-    for i in "${!peers[@]}"; do
-        json_content+="  \"${peers[$i]}\""
-        if [ $i -lt $((${#peers[@]} - 1)) ]; then
-            json_content+=","
-        fi
-        json_content+="\n"
-    done
-    
-    json_content+="]"
-    
-    # Write to file
-    echo -e "$json_content" > "$output_file"
-    
-    echo -e "${GREEN}✓ Generated: ${output_file}${NC}"
-    echo "  Peer count: ${#peers[@]}"
-    echo ""
-    echo "Next steps:"
-    echo "  1. Review and edit $output_file with real enode URLs"
-    echo "  2. Copy to your node's data directory:"
-    echo "     cp $output_file /path/to/xdcchain/static-nodes.json"
-    echo "  3. Restart your $client node"
-    echo ""
-    echo -e "${YELLOW}IMPORTANT:${NC} Only use peers running the SAME client type!"
 }
 
-# Main
-if [ $# -eq 0 ]; then
-    usage
-fi
-
-CLIENT_TYPE="${1,,}"  # Convert to lowercase
-
-case "$CLIENT_TYPE" in
-    gp5|geth-pr5)
-        generate_static_nodes "gp5"
+case "$CLIENT_FILTER" in
+    gp5|geth)
+        echo "⚠️  GP5 nodes should ONLY peer with GP5 nodes"
+        echo "   Cross-client peering causes 'invalid ancestor' errors"
+        for key in "${!GP5_PEERS[@]}"; do
+            add_peer "${GP5_PEERS[$key]}"
+        done
+        for bn in "${MAINNET_BOOTNODES[@]}"; do
+            add_peer "$bn"
+        done
         ;;
     erigon)
-        generate_static_nodes "erigon"
+        echo "ℹ️  Erigon nodes peer with both Erigon and GP5 (eth/62,63,100)"
+        for key in "${!ERIGON_PEERS[@]}"; do
+            add_peer "${ERIGON_PEERS[$key]}"
+        done
+        for key in "${!GP5_PEERS[@]}"; do
+            add_peer "${GP5_PEERS[$key]}"
+        done
         ;;
-    nethermind)
-        generate_static_nodes "nethermind"
+    all)
+        for key in "${!GP5_PEERS[@]}"; do
+            add_peer "${GP5_PEERS[$key]}"
+        done
+        for bn in "${MAINNET_BOOTNODES[@]}"; do
+            add_peer "$bn"
+        done
         ;;
     *)
-        echo -e "${RED}ERROR: Unknown client type: $CLIENT_TYPE${NC}"
-        usage
+        echo "Usage: $0 [gp5|erigon|nm|reth|all] [output-file]"
+        exit 1
         ;;
 esac
+
+echo "]" >> "$output_file"
+
+peer_count=$(grep -c 'enode://' "$output_file")
+echo ""
+echo "✅ Generated $output_file with $peer_count peers"
+echo "   Copy to your node's datadir: cp $output_file /path/to/xdcchain/XDC/"
