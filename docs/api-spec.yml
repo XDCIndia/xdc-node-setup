@@ -1,0 +1,57 @@
+openapi: 3.0.3
+info:
+  title: XDC Node Setup Dashboard API
+  description: API for managing XDC nodes via the dashboard
+  version: 1.0.0
+  contact:
+    name: XDC Network
+    url: https://xdc.network
+
+servers:
+  - url: http://localhost:7070/api
+    description: Local dashboard
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Node is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "healthy" }
+                  block: { type: integer, example: 12345678 }
+                  peers: { type: integer, example: 25 }
+                  syncing: { type: boolean, example: false }
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      responses:
+        '200':
+          description: Prometheus-format metrics
+          content:
+            text/plain:
+              example: |
+                xdc_block_height{client="gp5"} 12345678
+                xdc_peer_count{client="gp5"} 25
+  /node/status:
+    get:
+      summary: Node status
+      responses:
+        '200':
+          description: Detailed node status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  client: { type: string }
+                  network: { type: string }
+                  block_height: { type: integer }
+                  peer_count: { type: integer }
+                  sync_progress: { type: number }
+                  uptime_seconds: { type: integer }
