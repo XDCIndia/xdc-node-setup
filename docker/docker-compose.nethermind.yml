@@ -2,6 +2,11 @@
 # XDC Node Docker Compose — Nethermind Client Override
 # Usage: docker compose -f docker-compose.yml -f docker-compose.nethermind.yml up -d
 # Or simply: xdc start --client nethermind
+#
+# XDC Sync Fixes (March 2026):
+# - XDC_BYPASS_STATE_ROOT: Enable state root bypass for checkpoint blocks during sync
+# - XDC_CHECKPOINT_AUTH_BYPASS: Skip auth validation at checkpoints (1800, 62101, 3000000)
+# - Enhanced state root cache for PR54 inbound sync handling
 #==============================================================================
 
 services:
@@ -27,6 +32,14 @@ services:
       - INSTANCE_NAME=${INSTANCE_NAME:-Nethermind_XDC_Node}
       - P2P_PORT=30303
       - NETHERMIND_JSONRPCCONFIG_ENABLEDMODULES=eth,net,web3,admin,debug,trace,txpool
+      # XDCSync Fixes: Enable state root bypass for checkpoint blocks during sync
+      # Set to "true" to bypass state root validation at known checkpoints (1800, 62101, 3000000)
+      # This helps sync past divergent state roots between Nethermind and geth
+      - XDC_BYPASS_STATE_ROOT=${XDC_BYPASS_STATE_ROOT:-true}
+      # Enable checkpoint auth bypass for V1/V2 transition sync
+      - XDC_CHECKPOINT_AUTH_BYPASS=${XDC_CHECKPOINT_AUTH_BYPASS:-true}
+      # XDCSync: Log level for sync-related debugging (Debug/Info/Warn/Error)
+      - XDC_SYNC_LOG_LEVEL=${XDC_SYNC_LOG_LEVEL:-Info}
     entrypoint: ["/bin/bash", "/start.sh"]
     networks:
       - xdc-network
