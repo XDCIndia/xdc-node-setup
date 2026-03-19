@@ -1,0 +1,281 @@
+version: '3.8'
+
+# XDC Multi-Client Docker Compose
+# Supports all 4 clients: GP5 (Geth-PR5), Erigon, Nethermind, Reth
+# All clients auto-register with SkyNet via SkyOne agents
+
+services:
+  # ==========================================
+  # Geth-PR5 (Primary Client)
+  # ==========================================
+  gp5:
+    image: anilchinchawale/gx:latest
+    container_name: xdc-${NETWORK}-gp5
+    restart: unless-stopped
+    volumes:
+      - ./data/gp5:/work/xdcchain
+      - ./genesis.json:/work/genesis.json:ro
+      - ./scripts/start-node.sh:/usr/local/bin/start-node.sh:ro
+      - ./scripts/genesis-guard.sh:/usr/local/bin/genesis-guard.sh:ro
+    environment:
+      - NETWORK=${NETWORK:-mainnet}
+      - SYNC_MODE=full
+      - RPC_PORT=8545
+      - WS_PORT=8556
+      - P2P_PORT=30303
+    ports:
+      - "8545:8545"   # RPC
+      - "8556:8556"   # WS
+      - "30303:30303/tcp"  # P2P
+      - "30303:30303/udp"  # P2P UDP
+    command: ["/usr/local/bin/start-node.sh"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - xdc-network
+
+  # ==========================================
+  # Erigon (Archive Node)
+  # ==========================================
+  erigon:
+    image: anilchinchawale/erigon-xdc:xdc-mainnet-v2
+    container_name: xdc-${NETWORK}-erigon
+    restart: unless-stopped
+    volumes:
+      - ./data/erigon:/data
+      - ./genesis.json:/genesis.json:ro
+    environment:
+      - XDC_BYPASS_STATE_ROOT=1
+      - XDC_TIP_SIGNING_BYPASS=1
+    ports:
+      - "8546:8545"     # RPC
+      - "8557:8557"     # WS  
+      - "30304:30303/tcp"   # P2P
+      - "30304:30303/udp"   # P2P UDP
+      - "9090:9090"     # Private API
+      - "6061:6061"     # Metrics
+    command: 
+      - "--chain=xdc-${NETWORK}"
+      - "--datadir=/data"
+      - "--http.addr=0.0.0.0"
+      - "--http.port=8545"
+      - "--http.api=eth,erigon,web3,net,debug,trace,admin"
+      - "--http.vhosts=*"
+      - "--http.corsdomain=*"
+      - "--ws"
+      - "--private.api.addr=0.0.0.0:9090"
+      - "--metrics"
+      - "--metrics.addr=0.0.0.0"
+      - "--metrics.port=6061"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - xdc-network
+    depends_on:
+      - gp5  # Erigon needs GP5 for trusted peers
+
+  # ==========================================
+  # Nethermind
+  # ==========================================
+  nethermind:
+    image: anilchinchawale/nmx:latest
+    container_name: xdc-${NETWORK}-nm
+    restart: unless-stopped
+    volumes:
+      - ./data/nm:/data/nethermind
+      - ./genesis.json:/genesis.json:ro
+    environment:
+      - XDC_BYPASS_STATE_ROOT=1
+      - XDC_CHECKPOINT_AUTH_BYPASS=1
+      - NETHERMIND_CONFIG=${NETWORK}
+      - NETHERMIND_JSONRPCCONFIG_ENABLED=true
+      - NETHERMIND_JSONRPCCONFIG_HOST=0.0.0.0
+      - NETHERMIND_JSONRPCCONFIG_PORT=8545
+      - NETHERMIND_NETWORKCONFIG_P2PPORT=30303
+    ports:
+      - "8547:8545"     # RPC
+      - "8558:8558"     # WS
+      - "30305:30303/tcp"   # P2P
+      - "30305:30303/udp"   # P2P UDP
+      - "6062:6062"     # Metrics
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - xdc-network
+
+  # ==========================================
+  # Reth (Experimental)
+  # ==========================================
+  reth:
+    image: anilchinchawale/rethx:latest
+    container_name: xdc-${NETWORK}-reth
+    restart: unless-stopped
+    volumes:
+      - ./data/reth:/data
+      - ./genesis.json:/genesis.json:ro
+    environment:
+      - NETWORK=${NETWORK}
+      - XDC_ECIES_BYPASS=1  # Until ECIES fix is complete
+    ports:
+      - "8548:8545"     # RPC
+      - "8559:8559"     # WS
+      - "30306:30303/tcp"   # P2P
+      - "30306:30303/udp"   # P2P UDP
+      - "8551:8551"     # Auth RPC
+      - "6063:6063"     # Metrics
+    command:
+      - "node"
+      - "--datadir=/data"
+      - "--chain=xdc-${NETWORK}"
+      - "--http"
+      - "--http.addr=0.0.0.0"
+      - "--http.port=8545"
+      - "--http.api=eth,web3,net,debug"
+      - "--authrpc.addr=0.0.0.0"
+      - "--authrpc.port=8551"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - xdc-network
+    depends_on:
+      - erigon  # Reth needs Erigon for peer bridge
+
+  # ==========================================
+  # SkyOne Agent (for GP5)
+  # ==========================================
+  skyone-gp5:
+    image: anilchinchawale/xdc-skyone:latest
+    container_name: xdc-skyone-gp5
+    restart: unless-stopped
+    environment:
+      - SKYNET_API_URL=https://net.xdc.network/api
+      - SKYNET_NODE_ID=${SKYNET_GP5_NODE_ID}
+      - RPC_URL=http://gp5:8545
+      - NODE_NAME=xdc-${NETWORK}-gp5
+      - CLIENT_TYPE=gp5
+      - NETWORK=${NETWORK}
+    depends_on:
+      - gp5
+    networks:
+      - xdc-network
+
+  # ==========================================
+  # SkyOne Agent (for Erigon)
+  # ==========================================
+  skyone-erigon:
+    image: anilchinchawale/xdc-skyone:latest
+    container_name: xdc-skyone-erigon
+    restart: unless-stopped
+    environment:
+      - SKYNET_API_URL=https://net.xdc.network/api
+      - SKYNET_NODE_ID=${SKYNET_ERIGON_NODE_ID}
+      - RPC_URL=http://erigon:8545
+      - NODE_NAME=xdc-${NETWORK}-erigon
+      - CLIENT_TYPE=erigon
+      - NETWORK=${NETWORK}
+    depends_on:
+      - erigon
+    networks:
+      - xdc-network
+
+  # ==========================================
+  # SkyOne Agent (for Nethermind)
+  # ==========================================
+  skyone-nm:
+    image: anilchinchawale/xdc-skyone:latest
+    container_name: xdc-skyone-nm
+    restart: unless-stopped
+    environment:
+      - SKYNET_API_URL=https://net.xdc.network/api
+      - SKYNET_NODE_ID=${SKYNET_NM_NODE_ID}
+      - RPC_URL=http://nethermind:8545
+      - NODE_NAME=xdc-${NETWORK}-nm
+      - CLIENT_TYPE=nethermind
+      - NETWORK=${NETWORK}
+    depends_on:
+      - nethermind
+    networks:
+      - xdc-network
+
+  # ==========================================
+  # SkyOne Agent (for Reth)
+  # ==========================================
+  skyone-reth:
+    image: anilchinchawale/xdc-skyone:latest
+    container_name: xdc-skyone-reth
+    restart: unless-stopped
+    environment:
+      - SKYNET_API_URL=https://net.xdc.network/api
+      - SKYNET_NODE_ID=${SKYNET_RETH_NODE_ID}
+      - RPC_URL=http://reth:8545
+      - NODE_NAME=xdc-${NETWORK}-reth
+      - CLIENT_TYPE=reth
+      - NETWORK=${NETWORK}
+    depends_on:
+      - reth
+    networks:
+      - xdc-network
+
+  # ==========================================
+  # Peer Bridge Service (Erigon ↔ GP5)
+  # ==========================================
+  peer-bridge:
+    image: alpine:latest
+    container_name: xdc-peer-bridge
+    restart: unless-stopped
+    volumes:
+      - ./scripts/erigon-peer-bridge.sh:/erigon-peer-bridge.sh:ro
+    command: >
+      sh -c "apk add --no-cache curl jq && 
+             while true; do 
+               /erigon-peer-bridge.sh || true; 
+               sleep 300; 
+             done"
+    depends_on:
+      - gp5
+      - erigon
+    networks:
+      - xdc-network
+
+  # ==========================================
+  # Reth FCU Feeder (until ECIES fix)
+  # ==========================================
+  reth-fcu-feeder:
+    image: python:3.11-alpine
+    container_name: xdc-reth-fcu-feeder
+    restart: unless-stopped
+    volumes:
+      - ./scripts/reth-fcu-feeder.py:/reth-fcu-feeder.py:ro
+    command: >
+      sh -c "pip install requests && 
+             python3 /reth-fcu-feeder.py"
+    environment:
+      - RETH_RPC=http://reth:8545
+      - SOURCE_RPC=http://erigon:8545
+      - NETWORK=${NETWORK}
+    depends_on:
+      - reth
+      - erigon
+    networks:
+      - xdc-network
+    profiles:
+      - reth  # Only start when using Reth
+
+networks:
+  xdc-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

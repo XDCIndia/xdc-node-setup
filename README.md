@@ -140,6 +140,50 @@ docker-compose -f docker-compose.apothem-geth.yml up -d
 
 ### Multi-Client Setup
 
+Run all 4 XDC clients simultaneously using XDCSync infrastructure:
+
+```bash
+# 1. Initialize genesis for all clients
+./scripts/init-genesis.sh --network mainnet
+
+# 2. Start all clients with docker-compose
+docker-compose -f docker-compose.multi-client.yml up -d
+
+# 3. Check status of all clients
+./scripts/skyone-register.sh status
+
+# 4. View logs
+docker-compose -f docker-compose.multi-client.yml logs -f
+```
+
+**Multi-Client Port Allocation:**
+
+| Client | RPC HTTP | RPC WS | P2P | Metrics |
+|--------|----------|--------|-----|---------|
+| GP5 (Geth PR5) | 7070 | 7071 | 30303 | 6070 |
+| Erigon | 7072 | 7073 | 30304 | 6071 |
+| Nethermind | 7074 | 7075 | 30306 | 6072 |
+| Reth | 8588 | 8589 | 40303 | 6073 |
+
+**SkyOne Auto-Registration:**
+All clients automatically register with SkyNet when `SKYNET_ENABLED=true`.
+
+```bash
+# Enable SkyNet monitoring
+export SKYNET_ENABLED=true
+export SKYNET_API_KEY=your-api-key  # Optional
+docker-compose -f docker-compose.multi-client.yml up -d
+```
+
+**Genesis Guard:**
+The start scripts include Genesis Guard to validate chainId on startup:
+- Prevents network mismatch (mainnet vs apothem)
+- Auto-wipes chaindata on network switch (when `GENESIS_GUARD_AUTO_WIPE=true`)
+
+See [docs/TROUBLESHOOTING-MULTI-CLIENT.md](docs/TROUBLESHOOTING-MULTI-CLIENT.md) for common issues.
+
+### Single Client Setup
+
 ```bash
 # Start with different clients
 xdc start --client stable      # XDC Stable (v2.6.8)
