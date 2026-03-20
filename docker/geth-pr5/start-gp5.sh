@@ -23,12 +23,14 @@ SYNC_MODE="${SYNC_MODE:-full}"
 GC_MODE="${GC_MODE:-full}"
 LOG_LEVEL="${LEVEL:-3}"
 INSTANCE_NAME="${INSTANCE_NAME:-XDC_GP5}"
-RPC_ADDR="${HTTP_ADDR:-${ADDR:-127.0.0.1}}"  # Changed from 0.0.0.0 - SECURITY FIX #355
+# RPC/HTTP settings - use 0.0.0.0 in Docker for port mapping to work
+# Set HTTP_ADDR=127.0.0.1 for bare-metal installs where security matters
+RPC_ADDR="${HTTP_ADDR:-${ADDR:-0.0.0.0}}"
 RPC_PORT="${HTTP_PORT:-${PORT:-8545}}"
 RPC_API="${HTTP_API:-admin,eth,net,web3}"
 RPC_CORS_DOMAIN="${HTTP_CORS_DOMAIN:-*}"
-RPC_VHOSTS="${HTTP_VHOSTS:-localhost,127.0.0.1}"  # Restricted from * - SECURITY FIX #355
-WS_ADDR="${WS_ADDR:-127.0.0.1}"  # Changed from 0.0.0.0 - SECURITY FIX #355
+RPC_VHOSTS="${HTTP_VHOSTS:-*}"  # Allow all vhosts for Docker; restrict in production
+WS_ADDR="${WS_ADDR:-0.0.0.0}"
 WS_PORT="${WS_PORT:-8546}"
 WS_API="${WS_API:-eth,net,web3}"
 WS_ORIGINS="${WS_ORIGINS:-*}"
