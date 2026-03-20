@@ -495,6 +495,21 @@ run_setup() {
     
     log "Setup files copied to $INSTALL_TARGET"
     
+    # Install xdc CLI to PATH
+    if [ -f "$INSTALL_TARGET/cli/xdc" ]; then
+        chmod +x "$INSTALL_TARGET/cli/xdc"
+        if [ -w /usr/local/bin ]; then
+            ln -sf "$INSTALL_TARGET/cli/xdc" /usr/local/bin/xdc
+            log "xdc CLI installed to /usr/local/bin/xdc"
+        elif [ -d "$HOME/.local/bin" ]; then
+            mkdir -p "$HOME/.local/bin"
+            ln -sf "$INSTALL_TARGET/cli/xdc" "$HOME/.local/bin/xdc"
+            log "xdc CLI installed to ~/.local/bin/xdc (add to PATH if needed)"
+        else
+            warn "Could not install xdc CLI to PATH. Run: ln -sf $INSTALL_TARGET/cli/xdc /usr/local/bin/xdc"
+        fi
+    fi
+    
     # Cleanup temp directory
     rm -rf "$temp_dir"
     
