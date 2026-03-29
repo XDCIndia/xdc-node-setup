@@ -809,9 +809,9 @@ auto_register_identity() {
   local host_ip
   host_ip=$(curl -4 -s -m 5 https://ifconfig.me 2>/dev/null || curl -4 -s -m 5 https://api.ipify.org 2>/dev/null || echo "unknown")
   
-  # Fingerprint includes client_type to prevent collision when multiple
-  # nodes share the same IP (e.g. reth + geth on the same host, both coinbase=null)
-  local fingerprint="${coinbase}@${host_ip}:${client_type}"
+  # Fingerprint includes client_type AND network to prevent collision when multiple
+  # nodes share the same IP (e.g. mainnet + apothem on the same host, both coinbase=null)
+  local fingerprint="${coinbase}@${host_ip}:${client_type}:${network_name}"
 
   # Generate smart node name
   local smart_name
@@ -1536,6 +1536,18 @@ monitor_container_logs() {
         CLIENT_TYPE="geth" ;;
     esac
     
+    # === DOCKER IMAGE DETECTION ===
+    # Detect docker image of the XDC node container
+    DOCKER_IMAGE=""
+    XDC_CONTAINER="${XDC_CONTAINER_NAME:-}"
+    if [ -n "$XDC_CONTAINER" ]; then
+      DOCKER_IMAGE=$(docker inspect "$XDC_CONTAINER" --format '{{.Config.Image}}' 2>/dev/null || echo "")
+    fi
+    # Fallback: try CONTAINER_NAME env
+    if [ -z "$DOCKER_IMAGE" ] && [ -n "${CONTAINER_NAME:-}" ]; then
+      DOCKER_IMAGE=$(docker inspect "$CONTAINER_NAME" --format '{{.Config.Image}}' 2>/dev/null || echo "")
+    fi
+
     # === PHASE 2: BLOCK PROGRESS TRACKING ===
     # Update block window (rolling 30-entry window = 15 min at 30s interval)
     block_window=$(cat "$BLOCK_WINDOW_FILE" 2>/dev/null || echo '{"blocks":[]}')
@@ -1765,7 +1777,8 @@ EOF
     "score": $SECURITY_SCORE,
     "issues": $SECURITY_ISSUES
   },
-  "storageType": "$STORAGE_TYPE"
+  "storageType": "$STORAGE_TYPE",
+  "dockerImage": "$DOCKER_IMAGE"
 }
 EOF
 )

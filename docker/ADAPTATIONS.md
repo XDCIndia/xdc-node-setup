@@ -59,7 +59,7 @@ COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/XDC
 |--------|----------|----------------|
 | .NET Version | 10.0 SDK / 10.0 ASP.NET | 9.0 SDK / 9.0 ASP.NET (XDC fork) |
 | Base Image | Ubuntu Noble | Alpine (smaller footprint) |
-| Clone Source | NethermindEth/nethermind | Anilchinchawale/nethermind (build/xdc-net9-stable) |
+| Clone Source | NethermindEth/nethermind | Anilchinchawale/nethermind (build/xdc-unified) |
 | Runtime | Ubuntu Noble | Alpine (security + size) |
 | Additional Packages | - | curl + jq |
 
@@ -81,7 +81,7 @@ RUN arch=$([ "$TARGETARCH" = "amd64" ] && echo "x64" || echo "$TARGETARCH") && \
   dotnet publish -c $BUILD_CONFIG -a $arch -o /publish --no-restore --no-self-contained
 
 # XDC adaptation:
-RUN git clone -b build/xdc-net9-stable https://github.com/AnilChinchawale/nethermind.git .
+RUN git clone -b build/xdc-unified https://github.com/AnilChinchawale/nethermind.git .
 RUN arch=$([ "$TARGETARCH" = "amd64" ] && echo "x64" || echo "$TARGETARCH") && \
   dotnet restore --locked-mode && \
   dotnet publish -c $BUILD_CONFIG -a $arch -o /publish --no-restore --no-self-contained
@@ -221,7 +221,7 @@ docker inspect anilchinchawale/gx:stable --format='{{.Os}}/{{.Architecture}}'
 
 ### XDC Fork Repositories
 - Geth: https://github.com/AnilChinchawale/go-ethereum/tree/feature/xdpos-consensus
-- Nethermind: https://github.com/AnilChinchawale/nethermind/tree/build/xdc-net9-stable
+- Nethermind: https://github.com/AnilChinchawale/nethermind/tree/build/xdc-unified
 - Erigon: https://github.com/AnilChinchawale/erigon-xdc/tree/feature/xdc-network
 
 ---

@@ -600,6 +600,9 @@ collect_metrics() {
     "security": $security_json,
     "rpcLatencyMs": $rpc_latency,
     "enode": "$DETECT_ENODE",
+    "stateScheme": "$(detect_state_scheme)",
+    "dockerImage": "${DOCKER_IMAGE:-}",
+    "startupParams": "$(detect_startup_params)",
     "genesis": {
         "hash": "$genesis_hash",
         "network": "$genesis_network",
@@ -608,6 +611,39 @@ collect_metrics() {
     "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
+}
+
+#==============================================================================
+# Detect State Scheme (PBSS=path, HBSS=hash)
+#==============================================================================
+detect_state_scheme() {
+    local scheme="hash"  # default HBSS
+    # Check container args for --state.scheme path
+    if [[ -n "$XDC_CONTAINER_NAME" ]]; then
+        local args
+        args=$(docker inspect "$XDC_CONTAINER_NAME" --format '{{join .Config.Cmd " "}}' 2>/dev/null || true)
+        if echo "$args" | grep -q "state.scheme.*path\|state\.scheme=path"; then
+            scheme="path"
+        elif echo "$args" | grep -q "state.scheme.*hash\|state\.scheme=hash"; then
+            scheme="hash"
+        fi
+        # Also check if container logs mention path scheme
+        if [[ "$scheme" == "hash" ]]; then
+            local log_scheme
+            log_scheme=$(docker logs "$XDC_CONTAINER_NAME" 2>&1 | grep -oE "scheme=(path|hash)" | tail -1 | cut -d= -f2)
+            [[ -n "$log_scheme" ]] && scheme="$log_scheme"
+        fi
+    fi
+    echo "$scheme"
+}
+
+#==============================================================================
+# Detect Docker Image
+#==============================================================================
+detect_startup_params() {
+    if [[ -n "$XDC_CONTAINER_NAME" ]]; then
+        docker inspect "$XDC_CONTAINER_NAME" --format '{{join .Config.Cmd " "}}' 2>/dev/null | head -c 500 || true
+    fi
 }
 
 #==============================================================================

@@ -29,7 +29,7 @@ Read references/system-prompt.md
 |--------|------|--------|----------|
 | Geth-XDC (GP5) | `AnilChinchawale/go-ethereum` | `feature/xdpos-consensus` | Go |
 | Erigon-XDC | `AnilChinchawale/erigon-xdc` | `feature/xdc-network` | Go |
-| Nethermind-XDC | `AnilChinchawale/nethermind` | `build/xdc-net9-stable` | C#/.NET 9 |
+| Nethermind-XDC | `AnilChinchawale/nethermind` | `build/xdc-unified` | C#/.NET 9 |
 | Reth-XDC | `AnilChinchawale/reth` | `xdcnetwork-rebase` | Rust |
 
 ## XDC Consensus Quick Reference

@@ -9,7 +9,7 @@ These Dockerfiles are adapted from official client implementations:
 | Client | Official Image | Our Image | Source Repository |
 |--------|----------------|-----------|-------------------|
 | **Geth** | `ethereum/client-go` | `anilchinchawale/gx` | https://github.com/AnilChinchawale/go-ethereum/tree/feature/xdpos-consensus |
-| **Nethermind** | `nethermind/nethermind` | `anilchinchawale/nmx` | https://github.com/AnilChinchawale/nethermind/tree/build/xdc-net9-stable |
+| **Nethermind** | `nethermind/nethermind` | `anilchinchawale/nmx` | https://github.com/AnilChinchawale/nethermind/tree/build/xdc-unified |
 | **Erigon** | `erigontech/erigon` | `anilchinchawale/erix` | https://github.com/AnilChinchawale/erigon-xdc/tree/feature/xdc-network |
 
 ## Adaptations from Official Images
@@ -188,7 +188,7 @@ Each Dockerfile accepts build arguments for flexibility:
 
 | Argument | Description | Default |
 |----------|-------------|---------|
-| `GIT_BRANCH` | Git branch to clone | `feature/xdpos-consensus` (gx), `build/xdc-net9-stable` (nmx), `feature/xdc-network` (erix) |
+| `GIT_BRANCH` | Git branch to clone | `feature/xdpos-consensus` (gx), `build/xdc-unified` (nmx), `feature/xdc-network` (erix) |
 | `GIT_REPO` | Git repository URL | XDC fork URLs |
 | `TARGETARCH` | Target architecture | Auto-detected |
 | `UID_ERIGON` / `GID_ERIGON` | User/Group IDs | 1000 |
