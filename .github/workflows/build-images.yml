@@ -1,0 +1,157 @@
+name: Build & Push Docker Images
+
+on:
+  push:
+    branches:
+      - main
+      - 'client/**'
+      - 'feature/**'
+    paths:
+      - 'docker/**'
+      - 'Dockerfile*'
+      - '.github/workflows/build-images.yml'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/xdc-node
+
+jobs:
+  detect-clients:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect available Dockerfiles
+        id: set-matrix
+        run: |
+          clients=()
+          for df in docker/*/Dockerfile Dockerfile.geth Dockerfile.erigon Dockerfile.nethermind Dockerfile.reth; do
+            [[ -f "$df" ]] && clients+=("$(echo "$df" | grep -oP '(geth|erigon|nethermind|reth)')")
+          done
+          # Fallback to known clients
+          if [[ ${#clients[@]} -eq 0 ]]; then
+            clients=(geth erigon nethermind reth)
+          fi
+          # Deduplicate
+          unique=($(echo "${clients[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
+          matrix=$(printf '%s\n' "${unique[@]}" | jq -R . | jq -sc '{client: .}')
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "Detected clients: ${unique[*]}"
+
+  build:
+    needs: detect-clients
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-clients.outputs.matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image tags
+        id: tags
+        run: |
+          CLIENT="${{ matrix.client }}"
+          REPO="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${CLIENT}"
+          SHA="${{ github.sha }}"
+          DATE="$(date -u +%Y%m%d)"
+          BRANCH="${{ github.ref_name }}"
+
+          TAGS="${REPO}:latest"
+          TAGS="${TAGS},${REPO}:${SHA:0:8}"
+          TAGS="${TAGS},${REPO}:${DATE}"
+
+          # Add branch tag for non-main branches
+          if [[ "$BRANCH" != "main" ]]; then
+            BRANCH_SAFE="${BRANCH//\//-}"
+            TAGS="${TAGS},${REPO}:${BRANCH_SAFE}"
+          fi
+
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+          echo "image=${REPO}" >> "$GITHUB_OUTPUT"
+          echo "Tags: ${TAGS}"
+
+      - name: Determine Dockerfile path
+        id: dockerfile
+        run: |
+          CLIENT="${{ matrix.client }}"
+          if [[ -f "docker/${CLIENT}/Dockerfile" ]]; then
+            echo "path=docker/${CLIENT}/Dockerfile" >> "$GITHUB_OUTPUT"
+            echo "context=docker/${CLIENT}" >> "$GITHUB_OUTPUT"
+          elif [[ -f "Dockerfile.${CLIENT}" ]]; then
+            echo "path=Dockerfile.${CLIENT}" >> "$GITHUB_OUTPUT"
+            echo "context=." >> "$GITHUB_OUTPUT"
+          else
+            echo "path=Dockerfile" >> "$GITHUB_OUTPUT"
+            echo "context=." >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ steps.dockerfile.outputs.context }}
+          file: ${{ steps.dockerfile.outputs.path }}
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=${{ matrix.client }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.client }}
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            CLIENT=${{ matrix.client }}
+            BUILD_DATE=${{ github.run_id }}
+            GIT_SHA=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.title=xdc-${{ matrix.client }}
+            org.opencontainers.image.description=XDC Network ${{ matrix.client }} client
+            org.opencontainers.image.version=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Image digest summary
+        run: |
+          echo "## 🐳 Docker Image Built" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Client:** ${{ matrix.client }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Tags:**" >> "$GITHUB_STEP_SUMMARY"
+          IFS=',' read -ra ADDR <<< "${{ steps.tags.outputs.tags }}"
+          for tag in "${ADDR[@]}"; do
+            echo "- \`${tag}\`" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+  notify-skyone:
+    needs: build
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Notify SkyNet of new images
+        run: |
+          STATUS="${{ needs.build.result }}"
+          curl -sf -X POST "${SKYONE_URL:-http://localhost:7070}/api/v2/ci/build-complete" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"repo\": \"${{ github.repository }}\",
+              \"sha\": \"${{ github.sha }}\",
+              \"branch\": \"${{ github.ref_name }}\",
+              \"status\": \"${STATUS}\",
+              \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+            }" 2>/dev/null || echo "SkyNet notification skipped (not reachable)"
