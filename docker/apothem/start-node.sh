@@ -32,7 +32,7 @@ exec XDC \
   --ipcpath /tmp/XDC.ipc \
   --nat=any \
   --bootnodes "$BOOTNODES" \
-  --ethstats xdc-node:xinfin_xdpos_hybrid_network_stats@stats.apothem.network:3001 \
+  --ethstats "${INSTANCE_NAME:-xdc-node}:${STATS_SECRET:-xdc_openscan_stats_2026}@${STATS_SERVER:-stats.xdcindia.com:443}" \
   --XDCx.datadir /work/xdcchain/XDCx \
   --rpc \
   --rpcaddr 127.0.0.1 \  # SECURITY FIX #355: Localhost only

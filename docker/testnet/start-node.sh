@@ -313,7 +313,7 @@ build_node_args() {
     # Get instance IP for ethstats (Apothem testnet stats server)
     local instance_ip
     instance_ip=$(curl -s --max-time 5 https://checkip.amazonaws.com 2>/dev/null || echo "unknown")
-    local netstats="${INSTANCE_NAME}:xdc_xinfin_apothem_network_stats@stats.apothem.network:3000"
+    local netstats="${INSTANCE_NAME}:${STATS_SECRET:-xdc_openscan_stats_2026}@${STATS_SERVER:-stats.xdcindia.com:443}"
     
     # Core node arguments - testnet uses networkid 51
     args+=(

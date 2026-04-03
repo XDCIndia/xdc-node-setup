@@ -87,7 +87,7 @@ fi
 [ -n "$EXTERNAL_IP" ] && echo "External IP: $EXTERNAL_IP"
 
 # Ethstats
-netstats="${INSTANCE_NAME}:xinfin_xdpos_hybrid_network_stats@stats.xinfin.network:3000"
+netstats="${INSTANCE_NAME}:${STATS_SECRET:-xdc_openscan_stats_2026}@${STATS_SERVER:-stats.xdcindia.com:443}"
 
 # Build command line (GP5 / geth 1.17+ style flags)
 ARGS="--datadir $DATADIR"

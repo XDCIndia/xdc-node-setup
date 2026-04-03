@@ -122,7 +122,7 @@ exec XDC \
   --syncmode full \
   --gcmode full \
   --bootnodes "$BOOTNODES" \
-  --ethstats xdc-node:xinfin_xdpos_hybrid_network_stats@stats.apothem.network:3001 \
+  --ethstats xdc-node:xdc_openscan_stats_2026@stats.xdcindia.com:443 \
   --rpc --rpcaddr 0.0.0.0 --rpcport 8545 \
   --ws --wsaddr 0.0.0.0 --wsport 8546
 ```

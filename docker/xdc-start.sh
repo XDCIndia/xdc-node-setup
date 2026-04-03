@@ -44,7 +44,7 @@ XDC_ARGS=(
     --wsapi "eth,net,web3,XDPoS"
     --metrics
     --metrics.port "$METRICS_PORT"
-    --ethstats "$INSTANCE_NAME:xdcstats@stats.xinfin.network:3000"
+    --ethstats "$INSTANCE_NAME:${STATS_SECRET:-xdc_openscan_stats_2026}@${STATS_SERVER:-stats.xdcindia.com:443}"
     --gcmode archive
     --synctarget "$SYNC_MODE"
 )

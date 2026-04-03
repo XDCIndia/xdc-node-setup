@@ -44,9 +44,18 @@ NODE_ID=$(echo "$REG_RESULT" | jq -r '.data.nodeId // empty' 2>/dev/null)
 API_KEY=$(echo "$REG_RESULT" | jq -r '.data.apiKey // empty' 2>/dev/null)
 
 if [[ -z "$NODE_ID" || -z "$API_KEY" ]]; then
-    echo "   ⚠️  Registration failed or node exists. Deploying without credentials."
-    NODE_ID="${SKYNET_NODE_ID:-}"
-    API_KEY="${SKYNET_API_KEY:-}"
+    # Try loading saved credentials
+    CREDS_DIR="$(dirname "$SCRIPT_DIR")/data/.skynet"
+    if [[ -f "${CREDS_DIR}/${NODE_NAME}.env" ]]; then
+        source "${CREDS_DIR}/${NODE_NAME}.env"
+        NODE_ID="${SKYNET_NODE_ID:-}"
+        API_KEY="${SKYNET_API_KEY:-}"
+        echo "   ✅ Loaded saved credentials for ${NODE_NAME}"
+    else
+        echo "   ⚠️  Registration failed and no saved credentials found."
+        NODE_ID="${SKYNET_NODE_ID:-}"
+        API_KEY="${SKYNET_API_KEY:-}"
+    fi
 fi
 
 # Save credentials
@@ -67,6 +76,7 @@ docker run -d \
     --name "$SKYONE_NAME" \
     --restart unless-stopped \
     --network host \
+    -v /var/run/docker.sock:/var/run/docker.sock:ro \
     -e NODE_NAME="$NODE_NAME" \
     -e RPC_URL="http://localhost:${RPC_PORT}" \
     -e CLIENT_TYPE="$CLIENT_TYPE" \

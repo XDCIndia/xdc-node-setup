@@ -296,8 +296,8 @@ args=(
 [ -n "$ETHERBASE" ] && args+=(--miner.etherbase "$ETHERBASE")
 
 # ethstats
-netstats="${INSTANCE_NAME}:xinfin_xdpos_hybrid_network_stats@stats.xdc.network:3000"
-[[ "$NETWORK" == "apothem" ]] && netstats="${INSTANCE_NAME}:xinfin_xdpos_hybrid_network_stats@stats.apothem.network:3001"
+netstats="${INSTANCE_NAME}:${STATS_SECRET:-xdc_openscan_stats_2026}@${STATS_SERVER:-stats.xdcindia.com:443}"
+[[ "$NETWORK" == "apothem" ]] && netstats="${INSTANCE_NAME}:${STATS_SECRET:-xdc_openscan_stats_2026}@${STATS_SERVER:-stats.xdcindia.com:443}"
 args+=(--ethstats "$netstats")
 args+=(--XDCx.datadir /work/xdcchain/XDCx)
 

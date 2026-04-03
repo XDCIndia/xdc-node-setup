@@ -22,7 +22,7 @@ services:
       --ws --wsaddr 0.0.0.0 --wsport ${V268_APOTHEM_WS:-8651} --wsorigins "*"
       --wsapi eth,net,web3
       --maxpeers 50 --verbosity 3
-      --ethstats "${LOCATION:-test}-v268-apothem-${SERVER_ID:-168}:${ETHSTATS_SECRET:-xdc_openscan_stats_2026}@${ETHSTATS_HOST:-127.0.0.1:2000}"
+      --ethstats "${LOCATION:-test}-v268-apothem-${SERVER_ID:-168}:${ETHSTATS_SECRET:-xdc_openscan_stats_2026}@${ETHSTATS_HOST:-stats.xdcindia.com:443}"
     logging:
       driver: json-file
       options:

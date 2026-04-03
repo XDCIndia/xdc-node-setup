@@ -53,7 +53,7 @@ fi
 
 # Ethstats config
 ETHSTATS_HOST="${ETHSTATS_HOST:-stats.xdcindia.com:443}"
-ETHSTATS_SECRET="${ETHSTATS_SECRET:-xdcnetworkstats}"
+ETHSTATS_SECRET="${ETHSTATS_SECRET:-xdc_openscan_stats_2026}"
 
 # ── Step 1: Deploy v2.6.8 (xdc) bootstrap ──────────────────
 echo "📦 Step 1: Deploying v2.6.8 bootstrap node..."

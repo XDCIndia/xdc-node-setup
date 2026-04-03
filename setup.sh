@@ -908,7 +908,7 @@ exec XDC --datadir /work/xdcchain --networkid \${NETWORK_ID:-50} --port 30303 --
     --verbosity "\$LOG_LEVEL" --password /work/.pwd --mine --gasprice 1 --targetgaslimit 420000000 \\
     \${wallet:+--unlock "\$wallet"} \${bootnodes:+--bootnodes "\$bootnodes"} \\
     \${APOTHEM_FLAG:-} \\
-    \${ETHSTATS_FLAG:---ethstats "\${INSTANCE_NAME:-XDC_Node}:xinfin_xdpos_hybrid_network_stats@stats.xinfin.network:3000"} \\
+    \${ETHSTATS_FLAG:---ethstats "\${INSTANCE_NAME:-XDC_Node}:\${STATS_SECRET:-xdc_openscan_stats_2026}@\${STATS_SERVER:-stats.xdcindia.com:443}"} \\
     --XDCx.datadir /work/xdcchain/XDCx \$RPC_FLAGS "\$@" 2>&1 | tee -a /work/xdcchain/xdc.log
 STARTEOF
                     fi
