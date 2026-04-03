@@ -1,0 +1,56 @@
+# Cursor Rules — xdc-node-setup
+
+## Project Context
+
+This is the operational toolkit for XDC Network multi-client node infrastructure.
+Clients: geth/XDC (go-ethereum fork), Erigon, Nethermind, Reth.
+Networks: Mainnet (chain 50), Apothem testnet (chain 51).
+Consensus: XDPoS v2 (HotStuff BFT, 108 validators, 900-block epochs).
+
+## Coding Standards
+
+- All scripts: `#!/usr/bin/env bash` + `set -euo pipefail`
+- Variables: `readonly UPPER_SNAKE_CASE` for constants, allow env override with `${VAR:-default}`
+- Functions: `lower_snake_case`, always `local` variables
+- Logging: `[$(date -u +%Y-%m-%dT%H:%M:%SZ)] message` format
+- Always add `--dry-run` support to scripts that modify state
+- Source shared libs: `source "${LIB_DIR}/common.sh"` when available
+
+## Port Reference (Mainnet)
+
+| Client     | RPC  | WS   | P2P   |
+|------------|------|------|-------|
+| geth       | 8545 | 8549 | 30303 |
+| erigon     | 8547 | 8548 | 30305 |
+| nethermind | 8548 | 8553 | 30304 |
+| reth       | 8588 | —    | 30306 |
+
+## Key Files
+
+- `.agent/CONTEXT.md` — ports, clients, quirks (read first)
+- `.agent/CONVENTIONS.md` — full coding standards
+- `configs/ports.env` — all port definitions
+- `scripts/lib/` — shared bash libraries
+- `agents/` — AI agent personas
+
+## Commit Format
+
+`<type>(<scope>): <description>`
+Types: feat, fix, docs, refactor, test, chore, ci
+
+## When Writing Scripts
+
+1. Add header block with Usage and Issue link
+2. Define config vars at top with env overrides
+3. Support `--dry-run` for destructive operations
+4. Log to stdout with timestamp prefix
+5. Output structured JSON to `data/` subdirectories
+6. `chmod +x` all scripts
+
+## Don't Do
+
+- Don't hardcode ports (use variables referencing configs/ports.env values)
+- Don't expose RPC to 0.0.0.0 without auth
+- Don't commit secrets or API keys
+- Don't use `rm -rf` without confirmation
+- Don't break `set -euo pipefail` semantics (quote variables, check return codes)
