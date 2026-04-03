@@ -20,7 +20,7 @@
 
 set -euo pipefail
 
-SKYNET_API_URL="${SKYNET_API_URL:-https://net.xdc.network/api}"
+SKYNET_API_URL="${SKYNET_API_URL:-https://skynet.xdcindia.com/api}"
 CONF_DIR="${CONF_DIR:-/mnt/data/mainnet/.xdc-node}"
 IMAGE="${IMAGE:-anilchinchawale/xdc-skyone:latest}"
 

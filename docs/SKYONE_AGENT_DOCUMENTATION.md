@@ -92,7 +92,7 @@ services:
       - SYNC_MODE=snap
       - INSTANCE_NAME=MyXDCNode
       # SkyNet Configuration
-      - SKYNET_API_URL=https://net.xdc.network/api
+      - SKYNET_API_URL=https://skynet.xdcindia.com/api
       - SKYNET_API_KEY=${SKYNET_API_KEY}
       - SKYNET_NODE_NAME=my-xdc-node
       - SKYNET_ROLE=fullnode
@@ -138,7 +138,7 @@ networks:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SKYNET_ENABLED` | `true` | Enable SkyNet agent |
-| `SKYNET_API_URL` | `https://net.xdc.network/api` | SkyNet API endpoint |
+| `SKYNET_API_URL` | `https://skynet.xdcindia.com/api` | SkyNet API endpoint |
 | `SKYNET_API_KEY` | - | Your SkyNet API key (required) |
 | `SKYNET_NODE_ID` | - | Persistent node ID (auto-generated) |
 | `SKYNET_NODE_NAME` | `hostname` | Node name in SkyNet |
@@ -281,7 +281,7 @@ docker exec xdc-skyone curl -s http://localhost:7070/api/health
 docker exec xdc-skyone cat /etc/xdc-node/skynet.conf
 
 # Test SkyNet connectivity
-docker exec xdc-skyone curl -s https://net.xdc.network/api/health
+docker exec xdc-skyone curl -s https://skynet.xdcindia.com/api/health
 ```
 
 ### XDC Node Not Syncing
@@ -354,7 +354,7 @@ MIT License - See LICENSE file for details.
 - 📖 Documentation: https://docs.xdc.network
 - 💬 Discord: https://discord.gg/xdc
 - 🐛 Issues: https://github.com/AnilChinchawale/xdc-node-setup/issues
-- 🌐 SkyNet: https://net.xdc.network
+- 🌐 SkyNet: https://skynet.xdcindia.com
 
 ---
 

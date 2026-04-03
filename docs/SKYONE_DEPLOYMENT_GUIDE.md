@@ -27,7 +27,7 @@
 
 - Docker 20.10+ 
 - Docker Compose 2.0+
-- (Optional) SkyNet API Key from [net.xdc.network](https://net.xdc.network)
+- (Optional) SkyNet API Key from [skynet.xdcindia.com](https://skynet.xdcindia.com)
 
 ---
 
@@ -173,14 +173,14 @@ services:
 | `SKYNET_NODE_NAME` | No | Display name in SkyNet |
 | `SKYNET_ROLE` | No | fullnode, validator, rpc |
 
-*Required for SkyNet features. Get key at [net.xdc.network](https://net.xdc.network)
+*Required for SkyNet features. Get key at [skynet.xdcindia.com](https://skynet.xdcindia.com)
 
 ### Configuration File
 
 Create `skynet.conf`:
 
 ```bash
-SKYNET_API_URL=https://net.xdc.network/api
+SKYNET_API_URL=https://skynet.xdcindia.com/api
 SKYNET_API_KEY=xdc_your_api_key_here
 SKYNET_NODE_NAME=my-xdc-node
 SKYNET_ROLE=fullnode
@@ -221,7 +221,7 @@ xdc_uptime_seconds       - Node uptime
 
 ### SkyNet Integration
 
-View your node at: [net.xdc.network](https://net.xdc.network)
+View your node at: [skynet.xdcindia.com](https://skynet.xdcindia.com)
 
 **Features:**
 - Fleet-wide node visibility
@@ -265,7 +265,7 @@ docker logs xdc-skyone | grep -i "xdc\|geth"
 docker exec xdc-skyone cat /etc/xdc-node/skynet.conf
 
 # Test SkyNet connectivity
-docker exec xdc-skyone curl -s https://net.xdc.network/api/health
+docker exec xdc-skyone curl -s https://skynet.xdcindia.com/api/health
 
 # Check SkyNet agent logs
 docker logs xdc-skyone | grep -i skynet
@@ -355,4 +355,4 @@ docker-compose up -d
 - 📖 [Full Documentation](SKYONE_AGENT_DOCUMENTATION.md)
 - 💬 [Discord](https://discord.gg/xdc)
 - 🐛 [GitHub Issues](https://github.com/AnilChinchawale/xdc-node-setup/issues)
-- 🌐 [SkyNet Platform](https://net.xdc.network)
+- 🌐 [SkyNet Platform](https://skynet.xdcindia.com)

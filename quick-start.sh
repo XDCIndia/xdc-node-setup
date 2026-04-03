@@ -58,7 +58,7 @@ if [ ! -f "$NETWORK/.xdc-node/skynet.conf" ]; then
     cat > "$NETWORK/.xdc-node/skynet.conf" << 'EOF'
 # SkyNet Node Monitoring Configuration
 SKYNET_ENABLED=false
-SKYNET_API_URL=https://net.xdc.network/api/v1
+SKYNET_API_URL=https://skynet.xdcindia.com/api/v1
 SKYNET_API_KEY=
 SKYNET_NODE_ID=
 EOF

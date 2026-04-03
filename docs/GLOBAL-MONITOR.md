@@ -202,7 +202,7 @@ MAINNET_RPC=https://erpc.xinfin.network
 TESTNET_RPC=https://erpc.apothem.network
 
 # SkyNet API
-SKYNET_API=https://net.xdc.network/api/v1
+SKYNET_API=https://skynet.xdcindia.com/api/v1
 SKYNET_TOKEN=your_api_token
 
 # Database
@@ -352,4 +352,4 @@ Contributions are welcome! Areas for contribution:
 - [XDC Network Documentation](https://docs.xdc.network)
 - [devp2p Protocol](https://github.com/ethereum/devp2p)
 - [XDCValidator Contract](https://github.com/XinFinOrg/XDCScan)
-- [SkyNet Dashboard](https://net.xdc.network)
+- [SkyNet Dashboard](https://skynet.xdcindia.com)

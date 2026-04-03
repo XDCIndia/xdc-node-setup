@@ -179,7 +179,7 @@ MAX_PEERS=25
 RPC_ADDR=127.0.0.1
 
 # Restrict CORS to specific origins
-RPC_CORS_DOMAIN=http://localhost:7070,https://net.xdc.network
+RPC_CORS_DOMAIN=http://localhost:7070,https://skynet.xdcindia.com
 
 # Enable only necessary APIs
 RPC_API=eth,net,web3,XDPoS
@@ -450,7 +450,7 @@ ENABLE_SKYNET=true
 LOG_LEVEL=2
 ENABLE_RPC=true
 RPC_ADDR=127.0.0.1
-RPC_CORS_DOMAIN=https://net.xdc.network
+RPC_CORS_DOMAIN=https://skynet.xdcindia.com
 METRICS=true
 PPROF=false
 ENABLE_SKYNET=true

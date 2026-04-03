@@ -7,7 +7,7 @@ source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source
 # XDC Network Node Crawler
 # Discovers XDC nodes via P2P protocol and builds a network map
 
-SKYNET_API="https://net.xdc.network/api/v1"
+SKYNET_API="https://skynet.xdcindia.com/api/v1"
 OUTPUT="/tmp/xdc-network-map.json"
 
 # 1. Get known nodes from SkyNet

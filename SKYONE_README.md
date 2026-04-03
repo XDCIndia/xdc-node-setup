@@ -98,7 +98,7 @@ Automatic monitoring and fleet management:
 
 - Auto-registration on startup
 - Heartbeat every 30 seconds
-- View all nodes at [net.xdc.network](https://net.xdc.network)
+- View all nodes at [skynet.xdcindia.com](https://skynet.xdcindia.com)
 - Get alerts for offline nodes
 
 ### 🔧 XDC Node Support
@@ -131,7 +131,7 @@ XDC_RPC_URL=http://localhost:8545 # XDC node endpoint
 
 # SkyNet
 SKYNET_ENABLED=true
-SKYNET_API_URL=https://net.xdc.network/api
+SKYNET_API_URL=https://skynet.xdcindia.com/api
 SKYNET_API_KEY=your-api-key       # Required for SkyNet
 SKYNET_NODE_NAME=my-node          # Display name
 SKYNET_ROLE=fullnode              # fullnode, validator, rpc
@@ -227,7 +227,7 @@ docker run -p 7070:7070 -p 8545:8545 xdc-skyone:latest
 - 💬 [Discord Community](https://discord.gg/xdc)
 - 🐛 [GitHub Issues](https://github.com/AnilChinchawale/xdc-node-setup/issues)
 - 📧 [Email Support](mailto:support@xdc.network)
-- 🌐 [SkyNet Platform](https://net.xdc.network)
+- 🌐 [SkyNet Platform](https://skynet.xdcindia.com)
 
 ## License
 

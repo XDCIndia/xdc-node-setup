@@ -19,8 +19,8 @@ validate_skyone_env() {
     
     # Critical: SkyNet API URL
     if [[ -z "${SKYNET_API_URL:-}" ]]; then
-        echo "⚠️  WARNING: SKYNET_API_URL not set, defaulting to https://net.xdc.network/api"
-        export SKYNET_API_URL="https://net.xdc.network/api"
+        echo "⚠️  WARNING: SKYNET_API_URL not set, defaulting to https://skynet.xdcindia.com/api"
+        export SKYNET_API_URL="https://skynet.xdcindia.com/api"
         ((warnings++))
     fi
     
@@ -57,9 +57,9 @@ validate_skyone_env() {
     fi
     
     # SkyNet API connectivity
-    if ! curl -sf -m 5 "${SKYNET_API_URL:-https://net.xdc.network/api}/health" >/dev/null 2>&1; then
-        if ! curl -sf -m 5 "${SKYNET_API_URL:-https://net.xdc.network/api}/v1/nodes" >/dev/null 2>&1; then
-            echo "⚠️  WARNING: Cannot reach SkyNet API at ${SKYNET_API_URL:-https://net.xdc.network/api}"
+    if ! curl -sf -m 5 "${SKYNET_API_URL:-https://skynet.xdcindia.com/api}/health" >/dev/null 2>&1; then
+        if ! curl -sf -m 5 "${SKYNET_API_URL:-https://skynet.xdcindia.com/api}/v1/nodes" >/dev/null 2>&1; then
+            echo "⚠️  WARNING: Cannot reach SkyNet API at ${SKYNET_API_URL:-https://skynet.xdcindia.com/api}"
             ((warnings++))
         fi
     else

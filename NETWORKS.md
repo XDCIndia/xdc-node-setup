@@ -217,7 +217,7 @@ SkyNet automatically detects the network from the chainId:
 
 - **Official Repository:** https://github.com/XinFinOrg/XinFin-Node
 - **Apothem Faucet:** https://faucet.apothem.network
-- **SkyNet Dashboard:** https://net.xdc.network
+- **SkyNet Dashboard:** https://skynet.xdcindia.com
 - **Documentation:** https://docs.xdc.org
 
 ---

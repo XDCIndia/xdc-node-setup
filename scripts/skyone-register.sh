@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Configuration
-SKYNET_ENDPOINT="${SKYNET_ENDPOINT:-https://net.xdc.network}"
+SKYNET_ENDPOINT="${SKYNET_ENDPOINT:-https://skynet.xdcindia.com}"
 SKYNET_API_KEY="${SKYNET_API_KEY:-}"
 HEARTBEAT_INTERVAL="${HEARTBEAT_INTERVAL:-60}"
 

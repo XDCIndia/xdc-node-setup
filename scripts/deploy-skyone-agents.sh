@@ -12,7 +12,7 @@ GP5_RPC_PORT="${2:-8545}"
 ERIGON_RPC_PORT="${3:-8546}"
 NM_RPC_PORT="${4:-8547}"
 
-SKYNET_API="https://net.xdc.network/api"
+SKYNET_API="https://skynet.xdcindia.com/api"
 SKYNET_KEY="${SKYNET_API_KEY:-xdc-netown-key-2026-prod}"
 SKYONE_IMAGE="anilchinchawale/xdc-skyone:latest"
 

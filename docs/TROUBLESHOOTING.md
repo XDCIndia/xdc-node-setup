@@ -255,7 +255,7 @@ cat mainnet/.xdc-node/skynet.conf
 
 # Test SkyNet connection
 curl -H "Authorization: Bearer YOUR_API_KEY" \
-  https://net.xdc.network/api/v1/nodes/status
+  https://skynet.xdcindia.com/api/v1/nodes/status
 ```
 
 #### Solutions

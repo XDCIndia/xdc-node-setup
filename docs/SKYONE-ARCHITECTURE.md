@@ -33,7 +33,7 @@
                                    ▼
                     ┌──────────────────────────────┐
                     │      XDC SkyNet Platform      │
-                    │   https://net.xdc.network     │
+                    │   https://skynet.xdcindia.com     │
                     │                                │
                     │  ┌──────────────────────────┐  │
                     │  │    API Gateway            │  │
@@ -296,7 +296,7 @@ Server 185.180.220.183 (Apothem)
                     │ All agents report to │
                     ▼                      ▼
         ┌──────────────────────────────────────┐
-        │      SkyNet: net.xdc.network         │
+        │      SkyNet: skynet.xdcindia.com         │
         │                                      │
         │  Fleet Overview                      │
         │  ┌────────────────────────────────┐  │

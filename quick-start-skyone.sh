@@ -64,7 +64,7 @@ setup_skynet_config() {
         node_name=${node_name:-$(hostname)}
         
         cat > "${SCRIPT_DIR}/skynet.conf" << EOF
-SKYNET_API_URL=https://net.xdc.network/api
+SKYNET_API_URL=https://skynet.xdcindia.com/api
 SKYNET_API_KEY=${skynet_key}
 SKYNET_NODE_NAME=${node_name}
 SKYNET_ROLE=fullnode
@@ -74,7 +74,7 @@ EOF
         
         if [ -z "$skynet_key" ]; then
             log_warn "No SkyNet API key provided - SkyNet features will be disabled"
-            log_info "Get your API key at: https://net.xdc.network"
+            log_info "Get your API key at: https://skynet.xdcindia.com"
         fi
     fi
 }

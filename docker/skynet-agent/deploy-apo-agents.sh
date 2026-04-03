@@ -2,7 +2,7 @@
 # Deploy per-client xdc-agent containers for APO Apothem testnet
 # Usage: bash deploy-apo-agents.sh
 
-SKYNET_API_URL="https://net.xdc.network/api"
+SKYNET_API_URL="https://skynet.xdcindia.com/api"
 SKYNET_API_KEY="xdc-netown-key-2026-prod"
 HOST_IP="${HOST_IP:-185.180.220.183}"
 

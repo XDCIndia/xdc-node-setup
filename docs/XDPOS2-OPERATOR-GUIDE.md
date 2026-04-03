@@ -371,7 +371,7 @@ Weekly checks:
 ## Additional Resources
 
 - **XDC Network Explorer**: https://xdc.network/
-- **Masternode Monitoring**: https://net.xdc.network/
+- **Masternode Monitoring**: https://skynet.xdcindia.com/
 - **Technical Documentation**: https://docs.xdc.network/
 - **Community Support**: https://discord.gg/xdc
 

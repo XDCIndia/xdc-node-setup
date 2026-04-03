@@ -1201,7 +1201,7 @@ EOF
             curl -sSL "https://raw.githubusercontent.com/XDC-Node-Setup/main/configs/skynet.conf.template" -o "$STATE_DIR/skynet.conf" 2>/dev/null || \
             touch "$STATE_DIR/skynet.conf"
         # Pre-fill SkyNet API URL and prompt for API key
-        sed -i.bak "s|^SKYNET_API_URL=.*|SKYNET_API_URL=https://net.xdc.network/api/v1|" "$STATE_DIR/skynet.conf" 2>/dev/null
+        sed -i.bak "s|^SKYNET_API_URL=.*|SKYNET_API_URL=https://skynet.xdcindia.com/api/v1|" "$STATE_DIR/skynet.conf" 2>/dev/null
         sed -i.bak "s|^SKYNET_NODE_NAME=.*|SKYNET_NODE_NAME=$(hostname)-${NETWORK}|" "$STATE_DIR/skynet.conf" 2>/dev/null
         sed -i.bak "s|^SKYNET_ROLE=.*|SKYNET_ROLE=fullnode|" "$STATE_DIR/skynet.conf" 2>/dev/null
         rm -f "$STATE_DIR/skynet.conf.bak" 2>/dev/null
@@ -1216,7 +1216,7 @@ EOF
         cp "$SCRIPT_DIR/configs/skynet.conf.template" "$STATE_DIR/skynet-erigon.conf" 2>/dev/null || \
             cp "$STATE_DIR/skynet.conf" "$STATE_DIR/skynet-erigon.conf" 2>/dev/null || \
             cat > "$STATE_DIR/skynet-erigon.conf" << 'ERIGON_CONF_EOF'
-SKYNET_API_URL=https://net.xdc.network/api/v1
+SKYNET_API_URL=https://skynet.xdcindia.com/api/v1
 SKYNET_API_KEY=
 SKYNET_NODE_ID=
 SKYNET_NODE_NAME=
@@ -1767,7 +1767,7 @@ start_services() {
             )
             # Fetch live healthy peers from SkyNet
             local skynet_peers
-            skynet_peers=$(curl -s -m 10 "https://net.xdc.network/api/v1/peers/healthy?format=enode&limit=10" 2>/dev/null | jq -r '.peers[]?.enode // empty' 2>/dev/null || true)
+            skynet_peers=$(curl -s -m 10 "https://skynet.xdcindia.com/api/v1/peers/healthy?format=enode&limit=10" 2>/dev/null | jq -r '.peers[]?.enode // empty' 2>/dev/null || true)
             if [[ -n "$skynet_peers" ]]; then
                 while IFS= read -r enode; do
                     [[ -z "$enode" ]] && continue
@@ -1974,7 +1974,7 @@ register_with_skynet() {
     if [[ -z "$email" || -z "$telegram" ]]; then
         echo ""
         echo -e "${CYAN}${BOLD}📡 SkyNet Dashboard Registration${NC}"
-        echo "Register your node for monitoring and alerts on https://net.xdc.network"
+        echo "Register your node for monitoring and alerts on https://skynet.xdcindia.com"
         echo ""
     fi
     
@@ -2091,7 +2091,7 @@ EOF
     
     # Call registration API
     local response
-    response=$(curl -s -m 15 -X POST "https://net.xdc.network/api/v1/nodes/register" \
+    response=$(curl -s -m 15 -X POST "https://skynet.xdcindia.com/api/v1/nodes/register" \
         -H "Content-Type: application/json" \
         -d "$payload" 2>/dev/null || echo '{"error":"connection_failed"}')
     
@@ -2114,7 +2114,7 @@ EOF
 # XDC SkyNet Agent Configuration
 # Auto-generated during node setup
 
-SKYNET_API_URL=https://net.xdc.network/api/v1
+SKYNET_API_URL=https://skynet.xdcindia.com/api/v1
 SKYNET_NODE_ID=${node_id}
 SKYNET_NODE_NAME=${node_name}
 SKYNET_API_KEY=${api_key}
@@ -2148,7 +2148,7 @@ EOF
         echo "  SKYNET_EMAIL=your@email.com"
         echo "  SKYNET_TELEGRAM=@your_telegram_handle"
         echo ""
-        echo "View your node at: https://net.xdc.network"
+        echo "View your node at: https://skynet.xdcindia.com"
         return 0
     else
         local error_msg

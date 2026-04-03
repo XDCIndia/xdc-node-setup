@@ -252,7 +252,7 @@ docker logs skynet-agent | grep "Phase2" | wc -l
 ### Monitor API Health
 ```bash
 # Check SkyNet API response time
-time curl -s https://net.xdc.network/api/v1/fleet/overview > /dev/null
+time curl -s https://skynet.xdcindia.com/api/v1/fleet/overview > /dev/null
 
 # Check OpenScan RPC response time
 time curl -s -X POST https://rpc.openscan.ai/50 \
@@ -298,7 +298,7 @@ docker restart skynet-agent
 
 **Report Issues**: GitHub Issues  
 **Documentation**: `/root/.openclaw/workspace/XDC-Node-Setup/PHASE2-IMPLEMENTATION-REPORT.md`  
-**SkyNet API**: https://net.xdc.network/api/v1  
+**SkyNet API**: https://skynet.xdcindia.com/api/v1  
 **OpenScan RPC**: https://rpc.openscan.ai/{chainId}  
 
 ---

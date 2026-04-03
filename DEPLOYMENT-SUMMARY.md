@@ -21,7 +21,7 @@
 - **Node ID:** 6bbd0e18-1133-49a7-ae22-e74888e9081e
 - **API Key:** xdc_d1tsmLsRA1jCKGoM7JnRF7nHLIxdcm6wE74Pzi7XxoGPyaWi
 - **Node Name:** apothem-node-gcx
-- **Dashboard:** https://net.xdc.network/nodes/6bbd0e18-1133-49a7-ae22-e74888e9081e
+- **Dashboard:** https://skynet.xdcindia.com/nodes/6bbd0e18-1133-49a7-ae22-e74888e9081e
 
 **Heartbeat Features:**
 - Sends block height, peer count, sync status

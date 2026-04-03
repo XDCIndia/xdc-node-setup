@@ -90,7 +90,7 @@ There are **three main agent implementations** that share the same architecture 
 
 ```bash
 # Required
-SKYNET_API_URL=https://net.xdc.network/api/v1
+SKYNET_API_URL=https://skynet.xdcindia.com/api/v1
 SKYNET_API_KEY=                    # Auto-populated on registration
 SKYNET_NODE_ID=                    # Auto-populated on first boot
 
@@ -210,7 +210,7 @@ Written to `/tmp/skynet-heartbeat.json` for dashboard consumption:
 {
   "lastHeartbeat": "2026-04-03T05:30:00Z",
   "status": "success",
-  "skynetUrl": "https://net.xdc.network/api/v1",
+  "skynetUrl": "https://skynet.xdcindia.com/api/v1",
   "nodeId": "uuid",
   "nodeName": "xdc-mainnet-geth",
   "error": ""
@@ -543,7 +543,7 @@ bash scripts/macos-heartbeat.sh
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SKYNET_API_URL` | `https://net.xdc.network/api` | SkyNet API base URL |
+| `SKYNET_API_URL` | `https://skynet.xdcindia.com/api` | SkyNet API base URL |
 | `SKYNET_API_KEY` | (empty) | Auth key (auto-populated) |
 | `SKYNET_NODE_ID` | (empty) | Node UUID (auto-populated) |
 | `SKYNET_NODE_NAME` | hostname | Display name |

@@ -163,7 +163,7 @@ For real-time updates without polling:
 
 ```typescript
 // Connect to SkyNet WebSocket
-const ws = new WebSocket('wss://api.skynet.xdc.network/ws');
+const ws = new WebSocket('wss://api.skyskynet.xdcindia.com/ws');
 
 ws.onmessage = (event) => {
   const update = JSON.parse(event.data);
@@ -323,8 +323,8 @@ Users can:
 
 ### Base URL
 ```
-Production: https://api.skynet.xdc.network
-Staging: https://staging-api.skynet.xdc.network
+Production: https://api.skyskynet.xdcindia.com
+Staging: https://staging-api.skyskynet.xdcindia.com
 ```
 
 ### Endpoints Used

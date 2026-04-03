@@ -453,7 +453,7 @@ export async function GET() {
     }
     
     // Fetch network height from SkyNet for accurate comparison
-    const skynetUrl = process.env.SKYNET_API_URL || 'https://net.xdc.network/api/v1';
+    const skynetUrl = process.env.SKYNET_API_URL || 'https://skynet.xdcindia.com/api/v1';
     try {
       const skynetRes = await fetch(`${skynetUrl}/network/health`, {
         signal: AbortSignal.timeout(3000),

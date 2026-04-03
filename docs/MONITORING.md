@@ -405,7 +405,7 @@ The NetOwn Agent runs as a Docker sidecar container alongside your XDC node:
 - **Auto-registration**: Nodes self-register with the NetOwn platform
 - **Heartbeat reporting**: Sends health metrics every 60 seconds
 - **Security scoring**: Analyzes SSH config, firewall rules, and system hardening
-- **Fleet dashboard**: View all nodes at https://net.xdc.network
+- **Fleet dashboard**: View all nodes at https://skynet.xdcindia.com
 
 ### Architecture
 
@@ -424,7 +424,7 @@ The NetOwn Agent runs as a Docker sidecar container alongside your XDC node:
                                                ▼
                                       ┌──────────────────┐
                                       │  NetOwn Platform │
-                                      │ net.xdc.network  │
+                                      │ skynet.xdcindia.com  │
                                       └──────────────────┘
 ```
 
@@ -448,7 +448,7 @@ nano netown.conf
 Configure your `netown.conf`:
 ```bash
 # Required: Your NetOwn API endpoint
-NETOWN_API_URL=https://net.xdc.network/api/v1
+NETOWN_API_URL=https://skynet.xdcindia.com/api/v1
 
 # Required: Your node's API key (get from NetOwn dashboard)
 NETOWN_API_KEY=your-api-key-here
@@ -504,7 +504,7 @@ docker compose -f netown-agent-standalone.yml up -d
 
 ### Registering a New Node
 
-1. **Get API credentials**: Visit https://net.xdc.network/dashboard
+1. **Get API credentials**: Visit https://skynet.xdcindia.com/dashboard
 2. **Create node entry**: Click "Add Node" and note the assigned Node ID
 3. **Generate API key**: Create an API key for the node
 4. **Configure agent**: Add credentials to `netown.conf`
@@ -525,7 +525,7 @@ docker logs netown-agent --tail 50
 
 Check fleet status via API:
 ```bash
-curl -s https://net.xdc.network/api/v1/fleet/status | jq '.nodes[] | {name, status, security_score}'
+curl -s https://skynet.xdcindia.com/api/v1/fleet/status | jq '.nodes[] | {name, status, security_score}'
 ```
 
 ### Troubleshooting NetOwn Agent
@@ -574,14 +574,14 @@ curl -s https://net.xdc.network/api/v1/fleet/status | jq '.nodes[] | {name, stat
 
 #### Network Connectivity Issues
 
-The agent requires outbound HTTPS access to `net.xdc.network`:
+The agent requires outbound HTTPS access to `skynet.xdcindia.com`:
 
 ```bash
 # Test connectivity
-curl -I https://net.xdc.network/api/v1/health
+curl -I https://skynet.xdcindia.com/api/v1/health
 
 # Check DNS resolution
-nslookup net.xdc.network
+nslookup skynet.xdcindia.com
 ```
 
 ---

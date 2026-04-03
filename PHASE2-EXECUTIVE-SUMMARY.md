@@ -148,7 +148,7 @@ docker run -d \
   --name skynet-agent \
   --network host \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -e SKYNET_API_URL=https://net.xdc.network/api/v1 \
+  -e SKYNET_API_URL=https://skynet.xdcindia.com/api/v1 \
   -e RPC_URL=http://xdc-node:8545 \
   -e CONTAINER_NAME=xdc-node \
   xdc-skynet-agent:v2.0

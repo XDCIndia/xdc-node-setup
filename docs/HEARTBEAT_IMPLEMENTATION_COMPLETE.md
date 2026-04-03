@@ -90,7 +90,7 @@ Successfully implemented heartbeat notification and monitoring across XDC Node D
 {
   "lastHeartbeat": "2026-02-14T07:10:23Z",
   "status": "success",
-  "skynetUrl": "https://net.xdc.network/api/v1",
+  "skynetUrl": "https://skynet.xdcindia.com/api/v1",
   "nodeId": "node_abc123",
   "nodeName": "my-xdc-node",
   "error": ""

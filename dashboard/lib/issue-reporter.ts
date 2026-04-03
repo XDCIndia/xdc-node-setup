@@ -5,7 +5,7 @@
 
 import { DetectedIssue } from './issue-detector';
 
-const SKYNET_API_URL = process.env.SKYNET_API_URL || 'https://net.xdc.network/api/v1';
+const SKYNET_API_URL = process.env.SKYNET_API_URL || 'https://skynet.xdcindia.com/api/v1';
 const SKYNET_API_KEY = process.env.SKYNET_API_KEY || '';
 const SKYNET_NODE_ID = process.env.SKYNET_NODE_ID || '';
 

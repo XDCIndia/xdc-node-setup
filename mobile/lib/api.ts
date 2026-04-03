@@ -8,7 +8,7 @@ import type { Node, NodeDetail } from '@/types/node';
 import type { Alert } from '@/types/alert';
 import type { DashboardOverview } from '@/types/dashboard';
 
-const DEFAULT_API_ENDPOINT = 'https://api.skynet.xdc.network';
+const DEFAULT_API_ENDPOINT = 'https://api.skyskynet.xdcindia.com';
 const API_TIMEOUT = 30000;
 
 class ApiClient {

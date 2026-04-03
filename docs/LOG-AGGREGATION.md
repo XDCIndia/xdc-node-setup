@@ -305,7 +305,7 @@ Configure SkyNet integration:
 
 ```bash
 xdc config set skynet.logs.enabled true
-xdc config set skynet.logs.endpoint https://logs.skynet.xdc.network
+xdc config set skynet.logs.endpoint https://logs.skyskynet.xdcindia.com
 ```
 
 ## References

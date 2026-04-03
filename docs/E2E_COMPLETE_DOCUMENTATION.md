@@ -294,7 +294,7 @@ xdc config set skynet_enabled true
 xdc restart
 ```
 
-**Fleet Dashboard:** https://net.xdc.network
+**Fleet Dashboard:** https://skynet.xdcindia.com
 
 ---
 

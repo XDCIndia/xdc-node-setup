@@ -17,7 +17,7 @@
 - 💓 **Heartbeat monitoring** — Real-time connection status
 - 📈 **Fleet statistics** — Aggregate metrics across your infrastructure
 
-**SkyNet Platform:** [https://net.xdc.network](https://net.xdc.network) (managed by XDC Network)
+**SkyNet Platform:** [https://skynet.xdcindia.com](https://skynet.xdcindia.com) (managed by XDC Network)
 
 ---
 
@@ -37,7 +37,7 @@
          ▼
 ┌─────────────────┐      ┌──────────────────┐
 │ SkyNet Agent    │─────▶│  SkyNet API      │
-│ (skynet-agent.sh)│      │  net.xdc.network │
+│ (skynet-agent.sh)│      │  skynet.xdcindia.com │
 └─────────────────┘      └────────┬─────────┘
          │                         │
          │ Writes status           │ Stores metrics
@@ -52,7 +52,7 @@
 **Components:**
 
 1. **skynet-agent.sh** — Bash script that runs as daemon, collects metrics and sends heartbeat
-2. **SkyNet API** — Cloud endpoint (`https://net.xdc.network/api/v1`) that receives and stores data
+2. **SkyNet API** — Cloud endpoint (`https://skynet.xdcindia.com/api/v1`) that receives and stores data
 3. **Local API endpoint** — Dashboard reads heartbeat status from `/tmp/skynet-heartbeat.json`
 4. **SkyNet Dashboard** — Web UI to view all registered nodes
 
@@ -80,7 +80,7 @@ sudo ./setup.sh
 
 ```conf
 SKYNET_ENABLED=true
-SKYNET_URL=https://net.xdc.network/api/v1
+SKYNET_URL=https://skynet.xdcindia.com/api/v1
 NODE_ID=node_1a2b3c4d5e6f
 NODE_NAME=xdc-mainnet-01
 NODE_LOCATION=US-East-1
@@ -96,7 +96,7 @@ If you need to manually configure SkyNet:
 sudo mkdir -p /etc/xdc-node
 sudo tee /etc/xdc-node/skynet.conf <<EOF
 SKYNET_ENABLED=true
-SKYNET_URL=https://net.xdc.network/api/v1
+SKYNET_URL=https://skynet.xdcindia.com/api/v1
 NODE_ID=node_$(openssl rand -hex 8)
 NODE_NAME=$(hostname)-xdc
 NODE_LOCATION=Unknown
@@ -158,7 +158,7 @@ sudo systemctl status skynet-agent
 SKYNET_ENABLED=true
 
 # SkyNet API endpoint
-SKYNET_URL=https://net.xdc.network/api/v1
+SKYNET_URL=https://skynet.xdcindia.com/api/v1
 
 # Unique node identifier (auto-generated)
 NODE_ID=node_1a2b3c4d5e6f
@@ -188,7 +188,7 @@ Override config via environment variables:
 
 ```bash
 export SKYNET_ENABLED=true
-export SKYNET_URL=https://net.xdc.network/api/v1
+export SKYNET_URL=https://skynet.xdcindia.com/api/v1
 export NODE_ID=node_abc123
 export NODE_NAME=my-custom-name
 ```
@@ -237,7 +237,7 @@ After each heartbeat attempt, the agent writes status to `/tmp/skynet-heartbeat.
 {
   "lastHeartbeat": "2026-02-14T07:20:00Z",
   "status": "success",
-  "skynetUrl": "https://net.xdc.network/api/v1",
+  "skynetUrl": "https://skynet.xdcindia.com/api/v1",
   "nodeId": "node_1a2b3c4d5e6f",
   "nodeName": "xdc-mainnet-01",
   "error": ""
@@ -464,7 +464,7 @@ Main dashboard page includes a dedicated SkyNet status card:
   "status": "connected",
   "lastHeartbeat": "2026-02-14T07:18:30Z",
   "timeSinceLastHeartbeat": 90,
-  "skynetUrl": "https://net.xdc.network/api/v1",
+  "skynetUrl": "https://skynet.xdcindia.com/api/v1",
   "nodeId": "node_1a2b3c4d5e6f",
   "nodeName": "xdc-mainnet-01",
   "error": null
@@ -499,7 +499,7 @@ Main dashboard page includes a dedicated SkyNet status card:
 
 ### Accessing the Dashboard
 
-**URL:** [https://net.xdc.network](https://net.xdc.network)
+**URL:** [https://skynet.xdcindia.com](https://skynet.xdcindia.com)
 
 **Authentication:**
 - Register with email and password
@@ -604,7 +604,7 @@ Status:          Connected
 Node ID:         node_1a2b3c4d5e6f
 Node Name:       xdc-mainnet-01
 Last Heartbeat:  23 seconds ago
-SkyNet URL:      https://net.xdc.network/api/v1
+SkyNet URL:      https://skynet.xdcindia.com/api/v1
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -694,7 +694,7 @@ sudo journalctl -u skynet-agent -n 50
 **2. Test API connectivity:**
 
 ```bash
-curl -X POST https://net.xdc.network/api/v1/heartbeat \
+curl -X POST https://skynet.xdcindia.com/api/v1/heartbeat \
   -H "Content-Type: application/json" \
   -d '{"nodeId":"test","nodeName":"test","timestamp":"2026-02-14T07:00:00Z"}'
 ```
@@ -727,7 +727,7 @@ ls -la /etc/xdc-node/skynet.conf
 sudo mkdir -p /etc/xdc-node
 sudo tee /etc/xdc-node/skynet.conf <<EOF
 SKYNET_ENABLED=true
-SKYNET_URL=https://net.xdc.network/api/v1
+SKYNET_URL=https://skynet.xdcindia.com/api/v1
 NODE_ID=node_$(openssl rand -hex 8)
 NODE_NAME=$(hostname)-xdc
 EOF
@@ -755,7 +755,7 @@ docker compose restart xdc-agent
 **1. Check node is registered:**
 
 ```bash
-curl -X GET "https://net.xdc.network/api/v1/nodes/node_1a2b3c4d5e6f"
+curl -X GET "https://skynet.xdcindia.com/api/v1/nodes/node_1a2b3c4d5e6f"
 ```
 
 **Should return node details**
@@ -932,7 +932,7 @@ NODE_NAME=xdc-asia-1 ./setup.sh
 
 ### SkyNet API Endpoints
 
-**Base URL:** `https://net.xdc.network/api/v1`
+**Base URL:** `https://skynet.xdcindia.com/api/v1`
 
 #### POST /heartbeat
 
@@ -1006,7 +1006,7 @@ A: No, it's completely optional. Your node will work fine without it. SkyNet jus
 A: Basic monitoring is free. Premium features (advanced analytics, extended history) may require a subscription in the future.
 
 **Q: Can I self-host SkyNet?**  
-A: Not yet, but it's on the roadmap. Currently, you must use the hosted version at `net.xdc.network`.
+A: Not yet, but it's on the roadmap. Currently, you must use the hosted version at `skynet.xdcindia.com`.
 
 **Q: What data retention does SkyNet have?**  
 A: Free tier: 7 days. Premium: 90 days. Enterprise: Unlimited.
@@ -1027,7 +1027,7 @@ A: Yes! Just set `NODE_NAME=testnet-node` to distinguish from mainnet nodes.
 
 ## Support
 
-- **SkyNet Dashboard:** [https://net.xdc.network](https://net.xdc.network)
+- **SkyNet Dashboard:** [https://skynet.xdcindia.com](https://skynet.xdcindia.com)
 - **Documentation:** [https://docs.xdc.network/skynet](https://docs.xdc.network/skynet)
 - **GitHub Issues:** [https://github.com/AnilChinchawale/XDC-Node-Setup/issues](https://github.com/AnilChinchawale/XDC-Node-Setup/issues)
 - **Discord:** [XDC Network Discord](https://discord.gg/xdc)

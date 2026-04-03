@@ -30,7 +30,7 @@ fix_skynet() {
     
     # Create SkyNet config
     cat > $network/.xdc-node/skynet.conf << EOF
-SKYNET_API_URL=https://net.xdc.network/api
+SKYNET_API_URL=https://skynet.xdcindia.com/api
 SKYNET_API_KEY=xdc-netown-key-2026-prod
 SKYNET_NODE_ID=$node_id
 SKYNET_NODE_NAME=$node_name

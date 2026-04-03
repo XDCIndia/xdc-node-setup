@@ -185,7 +185,7 @@ TRIE_CACHE=1024
 PPROF_ADDR=127.0.0.1
 
 # SkyNet Integration
-SKYNET_API_URL=https://net.xdc.network/api/v1
+SKYNET_API_URL=https://skynet.xdcindia.com/api/v1
 SKYNET_API_KEY=your_api_key_here
 ```
 
@@ -285,7 +285,7 @@ Access at: `http://localhost:7070`
 
 ### SkyNet Fleet Dashboard
 
-Access at: `https://net.xdc.network`
+Access at: `https://skynet.xdcindia.com`
 
 **Features:**
 - Multi-node fleet overview

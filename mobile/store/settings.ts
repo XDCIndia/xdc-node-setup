@@ -40,7 +40,7 @@ const DEFAULT_STATE = {
   quietHoursStart: '22:00',
   quietHoursEnd: '08:00',
   refreshInterval: 30,
-  apiEndpoint: 'https://api.skynet.xdc.network',
+  apiEndpoint: 'https://api.skyskynet.xdcindia.com',
   theme: 'dark' as const,
   compactMode: false,
 };

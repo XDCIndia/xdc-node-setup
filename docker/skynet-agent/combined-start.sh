@@ -798,7 +798,7 @@ auto_register_identity() {
   local network_name="$3"
   local client_type="$4"
   local client_version="$5"
-  local api_url="${SKYNET_API_URL:-https://net.xdc.network/api}"
+  local api_url="${SKYNET_API_URL:-https://skynet.xdcindia.com/api}"
   
   # Issue #71: Get coinbase from RPC
   local coinbase
@@ -887,7 +887,7 @@ auto_register() {
   local network_name="$3"
   local client_type="$4"
   local client_version="$5"
-  local api_url="${SKYNET_API_URL:-https://net.xdc.network/api}"
+  local api_url="${SKYNET_API_URL:-https://skynet.xdcindia.com/api}"
   
   # Get host IP (prefer IPv4)
   HOST_IP=$(curl -4 -s -m 5 https://ifconfig.me 2>/dev/null || curl -4 -s -m 5 https://api.ipify.org 2>/dev/null || echo "unknown")

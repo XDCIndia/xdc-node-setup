@@ -8,7 +8,7 @@ source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || { echo "ERROR: Cannot source
 # Run: bash <(curl -s https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/scripts/macos-heartbeat.sh)
 
 NODE_ID="755f82db-a541-4224-9447-a385d11321b8"
-API_URL="https://net.xdc.network/api/v1/nodes"
+API_URL="https://skynet.xdcindia.com/api/v1/nodes"
 API_KEY="xdc-netown-key-2026-prod"
 RPC_URL="${XDC_RPC_URL:-http://127.0.0.1:8545}"
 
@@ -18,7 +18,7 @@ mkdir -p "$SCRIPT_DIR"
 cat > "$SCRIPT_DIR/heartbeat.sh" << 'HEARTBEAT'
 #!/bin/bash
 NODE_ID="755f82db-a541-4224-9447-a385d11321b8"
-API_URL="https://net.xdc.network/api/v1/nodes"
+API_URL="https://skynet.xdcindia.com/api/v1/nodes"
 API_KEY="xdc-netown-key-2026-prod"
 RPC_URL="${XDC_RPC_URL:-http://127.0.0.1:8545}"
 MAINNET_HEAD_RPC="https://rpc.xdc.org"

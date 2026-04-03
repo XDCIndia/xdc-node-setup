@@ -246,7 +246,7 @@ If you used `xdc start --client erigon`, registration is automatic. For manual s
 
 ```bash
 # Register node
-curl -X POST "https://net.xdc.network/api/v1/nodes/register" \
+curl -X POST "https://skynet.xdcindia.com/api/v1/nodes/register" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_SKYNET_API_KEY" \
   -d '{
@@ -269,7 +269,7 @@ cat > /root/erigon-heartbeat.sh << 'SCRIPT'
 NODE_ID="YOUR_NODE_ID"
 API_KEY="YOUR_SKYNET_API_KEY"
 RPC="http://127.0.0.1:8547"
-API="https://net.xdc.network/api/v1"
+API="https://skynet.xdcindia.com/api/v1"
 
 # Get block height
 BLOCK_HEX=$(curl -s -m 5 -X POST "$RPC" -H "Content-Type: application/json" \

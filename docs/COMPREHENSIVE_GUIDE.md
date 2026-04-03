@@ -252,7 +252,7 @@ self_healing:
 ```bash
 # Enable SkyNet reporting
 export SKYNET_ENABLED=true
-export SKYNET_URL=https://net.xdc.network
+export SKYNET_URL=https://skynet.xdcindia.com
 export SKYNET_API_KEY=your-api-key
 
 xdc start
@@ -264,7 +264,7 @@ xdc start
 # ~/.xdc-node/skynet.conf
 skynet:
   enabled: true
-  url: https://net.xdc.network
+  url: https://skynet.xdcindia.com
   api_key: ${SKYNET_API_KEY}
   heartbeat_interval_seconds: 30
   

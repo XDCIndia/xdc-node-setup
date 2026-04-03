@@ -317,7 +317,7 @@ If you used `xdc start --client geth-pr5`, registration is automatic. The node w
 **Manual registration:**
 
 ```bash
-curl -X POST "https://net.xdc.network/api/v1/nodes/register" \
+curl -X POST "https://skynet.xdcindia.com/api/v1/nodes/register" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_SKYNET_API_KEY" \
   -d '{

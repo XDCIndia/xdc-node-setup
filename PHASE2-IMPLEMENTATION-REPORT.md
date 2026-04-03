@@ -290,7 +290,7 @@ Don't just detect stalls — detect *deceleration* as early warning:
 
 ### Environment Variables (unchanged)
 ```bash
-SKYNET_API_URL="https://net.xdc.network/api/v1"
+SKYNET_API_URL="https://skynet.xdcindia.com/api/v1"
 SKYNET_NODE_ID="auto-registered"
 SKYNET_API_KEY="auto-registered"
 RPC_URL="http://xdc-node:8545"
@@ -392,7 +392,7 @@ docker run -d \
   --name skynet-agent \
   --network host \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -e SKYNET_API_URL=https://net.xdc.network/api/v1 \
+  -e SKYNET_API_URL=https://skynet.xdcindia.com/api/v1 \
   -e RPC_URL=http://xdc-node:8545 \
   -e CONTAINER_NAME=xdc-node \
   xdc-skynet-agent:v2.0
@@ -412,7 +412,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      SKYNET_API_URL: https://net.xdc.network/api/v1
+      SKYNET_API_URL: https://skynet.xdcindia.com/api/v1
       RPC_URL: http://xdc-node:8545
       CONTAINER_NAME: xdc-node
 ```

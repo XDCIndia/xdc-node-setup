@@ -17,7 +17,7 @@ source "${SCRIPT_DIR}/lib/notify.sh" 2>/dev/null || source "/opt/xdc-node/script
 
 # Configuration
 readonly XDC_RPC_URL="${XDC_RPC_URL:-http://localhost:8545}"
-readonly SKYNET_API="${SKYNET_API_URL:-https://net.xdc.network/api/v1}"
+readonly SKYNET_API="${SKYNET_API_URL:-https://skynet.xdcindia.com/api/v1}"
 readonly EPOCH_LENGTH=900
 readonly BLOCK_TIME=2
 readonly POLL_INTERVAL="${XDPOS2_GAP_POLL_INTERVAL:-10}"

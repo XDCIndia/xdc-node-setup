@@ -114,7 +114,7 @@ docker compose up -d
 ## SkyNet Registration
 
 Nodes need to be registered on SkyNet after successful startup:
-- URL: https://net.xdc.network
+- URL: https://skynet.xdcindia.com
 - Node naming convention: xdc-gcx-apothem-{client}
 
 ---

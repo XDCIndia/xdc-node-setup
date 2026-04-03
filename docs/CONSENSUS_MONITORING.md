@@ -86,7 +86,7 @@ class ConsensusMonitor {
   }
   
   async reportToSkyNet(metrics: ConsensusMetrics): Promise<void> {
-    await fetch('https://skynet.xdc.network/api/metrics', {
+    await fetch('https://skyskynet.xdcindia.com/api/metrics', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(metrics),

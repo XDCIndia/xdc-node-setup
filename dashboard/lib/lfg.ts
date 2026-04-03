@@ -5,7 +5,7 @@
  * drops below the MIN_PEERS threshold.
  */
 
-const SKYNET_URL = process.env.SKYNET_API_URL || 'https://net.xdc.network/api/v1';
+const SKYNET_URL = process.env.SKYNET_API_URL || 'https://skynet.xdcindia.com/api/v1';
 const MIN_PEERS = parseInt(process.env.MIN_PEERS || '5');
 
 interface LFGResult {

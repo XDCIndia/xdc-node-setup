@@ -115,7 +115,7 @@ Epoch N (Blocks 0-899):
 | `SYNC_MODE` | snap | snap, full, fast |
 | `RPC_PORT` | 8545 | JSON-RPC port |
 | `P2P_PORT` | 30303 | P2P port |
-| `SKYNET_API_URL` | https://net.xdc.network | SkyNet endpoint |
+| `SKYNET_API_URL` | https://skynet.xdcindia.com | SkyNet endpoint |
 
 ---
 

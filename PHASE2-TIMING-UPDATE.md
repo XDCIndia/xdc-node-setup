@@ -181,7 +181,7 @@ if [ $((CONFIG_REFRESH_COUNTER % 50)) -eq 0 ]; then
 docker run -d \
   --name skynet-agent \
   -e HEARTBEAT_INTERVAL=30 \
-  -e SKYNET_API_URL=https://net.xdc.network/api/v1 \
+  -e SKYNET_API_URL=https://skynet.xdcindia.com/api/v1 \
   xdc-skynet-agent:v2.0
 ```
 
@@ -190,7 +190,7 @@ docker run -d \
 # Agent fetches config on startup automatically
 docker run -d \
   --name skynet-agent \
-  -e SKYNET_API_URL=https://net.xdc.network/api/v1 \
+  -e SKYNET_API_URL=https://skynet.xdcindia.com/api/v1 \
   xdc-skynet-agent:v2.0
 
 # Backend can control interval per node
@@ -207,7 +207,7 @@ services:
     image: xdc-skynet-agent:v2.0
     environment:
       HEARTBEAT_INTERVAL: 30  # Optional, fetches from API by default
-      SKYNET_API_URL: https://net.xdc.network/api/v1
+      SKYNET_API_URL: https://skynet.xdcindia.com/api/v1
 ```
 
 ---

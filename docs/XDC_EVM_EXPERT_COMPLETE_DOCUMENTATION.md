@@ -310,7 +310,7 @@ services:
 RPC_ADDR=127.0.0.1
 
 # Restrict CORS to specific origins
-RPC_CORS_DOMAIN=http://localhost:7070,https://net.xdc.network
+RPC_CORS_DOMAIN=http://localhost:7070,https://skynet.xdcindia.com
 
 # Disable RPC if not needed
 ENABLE_RPC=false

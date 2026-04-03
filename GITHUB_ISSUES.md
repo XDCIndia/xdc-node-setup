@@ -26,7 +26,7 @@ SkyNet API should accept heartbeat and display node on dashboard.
 ### Environment
 - Node ID: 6bbd0e18-1133-49a7-ae22-e74888e9081e
 - Network: Apothem Testnet (Chain ID: 51)
-- API URL: https://net.xdc.network/api/v1
+- API URL: https://skynet.xdcindia.com/api/v1
 
 ### Proposed Solutions
 1. Contact SkyNet team to verify testnet node support

@@ -327,8 +327,8 @@ xdc attach
 
 | Endpoint | Purpose | Auth |
 |----------|---------|------|
-| `net.xdc.network/api/v1/nodes/register` | Node registration | API Key |
-| `net.xdc.network/api/v1/nodes/heartbeat` | Heartbeat | API Key |
+| `skynet.xdcindia.com/api/v1/nodes/register` | Node registration | API Key |
+| `skynet.xdcindia.com/api/v1/nodes/heartbeat` | Heartbeat | API Key |
 
 ---
 

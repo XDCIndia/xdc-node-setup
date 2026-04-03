@@ -298,7 +298,7 @@ Automatically register your node with XDC SkyNet for fleet monitoring:
 ```bash
 # Enable SkyNet (enabled by default)
 export SKYNET_ENABLED=true
-export SKYNET_URL=https://net.xdc.network
+export SKYNET_URL=https://skynet.xdcindia.com
 xdc start
 ```
 

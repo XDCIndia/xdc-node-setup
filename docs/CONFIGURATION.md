@@ -114,7 +114,7 @@ Location: `mainnet/.xdc-node/skynet.conf`
 
 ```bash
 # SkyNet API Configuration
-SKYNET_API_URL=https://net.xdc.network/api/v1
+SKYNET_API_URL=https://skynet.xdcindia.com/api/v1
 SKYNET_API_KEY=your-api-key-here
 
 # Node Identity

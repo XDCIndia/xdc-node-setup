@@ -305,7 +305,7 @@ docker scan xdc-erigon
    bash /path/to/skynet-agent.sh --add-peers
    
    # Manual (from SkyNet API)
-   curl https://net.xdc.network/api/v1/peers/healthy?limit=20
+   curl https://skynet.xdcindia.com/api/v1/peers/healthy?limit=20
    ```
 
 3. **Verify connectivity:**
@@ -323,13 +323,13 @@ docker scan xdc-erigon
 - **Erigon Docs:** https://erigon.tech
 - **XDC Network:** https://xdc.network
 - **XDC Docs:** https://docs.xdc.network
-- **SkyNet Platform:** https://net.xdc.network
+- **SkyNet Platform:** https://skynet.xdcindia.com
 
 ### Internal Resources
 
 - **xdc-node-setup:** https://github.com/AnilChinchawale/xdc-node-setup
 - **erigon-xdc fork:** https://github.com/AnilChinchawale/erigon-xdc
-- **SkyNet Dashboard:** https://net.xdc.network
+- **SkyNet Dashboard:** https://skynet.xdcindia.com
 
 ---
 

@@ -14,7 +14,7 @@ if [ -d "$SKYNET_CONF" ]; then
   rm -rf "$SKYNET_CONF"
   # Create minimal config — auto-registration will fill in the rest
   cat > "$SKYNET_CONF" <<EOCONF
-SKYNET_API_URL=https://net.xdc.network/api
+SKYNET_API_URL=https://skynet.xdcindia.com/api
 SKYNET_API_KEY=${SKYNET_API_KEY:-}
 SKYNET_NODE_NAME=$(hostname)
 SKYNET_ROLE=fullnode
@@ -133,7 +133,7 @@ LFG_CHECK_INTERVAL=${LFG_CHECK_INTERVAL:-600}
     if [ "$PEER_COUNT" -lt "$LFG_MIN_PEERS" ]; then
       echo "[$(date '+%Y-%m-%d %H:%M:%S')] LFG: $PEER_COUNT peers < $LFG_MIN_PEERS, fetching from SkyNet..." | tee -a /var/log/xdc/lfg.log
       # Get enodes, shuffle, take max
-      ALL_ENODES=$(curl -s -m 10 "https://net.xdc.network/api/v1/peers/healthy?format=text" 2>/dev/null)
+      ALL_ENODES=$(curl -s -m 10 "https://skynet.xdcindia.com/api/v1/peers/healthy?format=text" 2>/dev/null)
       if [ -n "$ALL_ENODES" ]; then
         SHUFFLED=$(echo "$ALL_ENODES" | sort -R | head -n "$LFG_MAX_ADD")
         ADDED=0

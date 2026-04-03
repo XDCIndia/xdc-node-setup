@@ -269,7 +269,7 @@ Expected output:
 
 1. **GitHub Issues:** https://github.com/AnilChinchawale/xdc-node-setup/issues
 2. **XDC Discord:** https://discord.gg/xdc
-3. **SkyNet Dashboard:** https://net.xdc.network
+3. **SkyNet Dashboard:** https://skynet.xdcindia.com
 
 When reporting issues, include:
 - Client name and version

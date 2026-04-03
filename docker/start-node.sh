@@ -126,7 +126,7 @@ with open('$genesis_file') as f:
 #===============================================================================
 skyone_register() {
     local node_id="${SKYNET_NODE_ID:-}"
-    local skynet_endpoint="${SKYNET_ENDPOINT:-https://net.xdc.network}"
+    local skynet_endpoint="${SKYNET_ENDPOINT:-https://skynet.xdcindia.com}"
     local rpc_port="${RPC_PORT:-8545}"
     
     if [[ "${SKYNET_ENABLED:-false}" != "true" ]]; then

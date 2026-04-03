@@ -83,7 +83,7 @@ SkyNet integration reads from `/etc/xdc-node/skynet.conf`:
 
 ```conf
 SKYNET_ENABLED=true
-SKYNET_URL=https://net.xdc.network/api/v1
+SKYNET_URL=https://skynet.xdcindia.com/api/v1
 NODE_ID=node_abc123def456
 NODE_NAME=my-xdc-node
 ```
@@ -279,7 +279,7 @@ Returns SkyNet heartbeat status.
   "status": "connected",
   "lastHeartbeat": "2026-02-14T07:18:30Z",
   "timeSinceLastHeartbeat": 90,
-  "skynetUrl": "https://net.xdc.network/api/v1",
+  "skynetUrl": "https://skynet.xdcindia.com/api/v1",
   "nodeId": "node_abc123def456",
   "nodeName": "my-xdc-node",
   "error": null

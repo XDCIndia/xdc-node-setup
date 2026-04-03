@@ -135,7 +135,7 @@ export function LFGBadge() {
             <div className="mt-3 text-xs text-[#6B7280]">
               <span className="inline-flex items-center gap-1">
                 <Users className="w-3 h-3" />
-                SkyNet Source: {lfgConfig?.skyNetUrl || 'https://net.xdc.network/api/v1'}
+                SkyNet Source: {lfgConfig?.skyNetUrl || 'https://skynet.xdcindia.com/api/v1'}
               </span>
             </div>
           </div>

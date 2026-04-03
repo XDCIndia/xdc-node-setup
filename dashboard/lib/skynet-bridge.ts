@@ -2,10 +2,10 @@
  * SkyNet Bridge - Push SkyOne metrics to SkyNet for real-time monitoring
  * 
  * This module sends heartbeat updates from SkyOne dashboard to the central
- * SkyNet monitoring system at net.xdc.network
+ * SkyNet monitoring system at skynet.xdcindia.com
  */
 
-const SKYNET_API_URL = process.env.SKYNET_API_URL || 'https://net.xdc.network/api/v1';
+const SKYNET_API_URL = process.env.SKYNET_API_URL || 'https://skynet.xdcindia.com/api/v1';
 const SKYNET_NODE_ID = process.env.SKYNET_NODE_ID || '';
 const SKYNET_API_KEY = process.env.SKYNET_API_KEY || '';
 
