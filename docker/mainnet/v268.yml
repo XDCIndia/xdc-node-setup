@@ -1,0 +1,30 @@
+# v2.6.8 Official Reference Node — Mainnet
+# Binary: XDC-mainnet (NOT XDC)
+# v2.6.8 uses legacy flags: --rpc/--rpcaddr (NOT --http/--http.addr)
+services:
+  v268-mainnet:
+    container_name: ${LOCATION:-test}-v268-mainnet-${SERVER_ID:-168}
+    image: ${V268_IMAGE:-xinfinorg/xdposchain:v2.6.8}
+    restart: unless-stopped
+    stop_grace_period: 3m
+    network_mode: host
+    volumes:
+      - ${DATA_ROOT:-/mnt/data}/mainnet/v268:/work/xdcchain
+    entrypoint: ["/usr/bin/XDC-mainnet"]
+    command: >
+      --datadir /work/xdcchain --networkid 50
+      --syncmode full --gcmode full
+      --port ${V268_MAINNET_P2P:-30310}
+      --cache ${CACHE:-4096}
+      --rpc --rpcaddr 0.0.0.0 --rpcport ${V268_MAINNET_RPC:-8550}
+      --rpccorsdomain "*" --rpcvhosts "*"
+      --rpcapi eth,net,web3,debug,txpool,admin
+      --ws --wsaddr 0.0.0.0 --wsport ${V268_MAINNET_WS:-8551} --wsorigins "*"
+      --wsapi eth,net,web3
+      --maxpeers 50 --verbosity 3
+      --ethstats "${LOCATION:-test}-v268-mainnet-${SERVER_ID:-168}:${ETHSTATS_SECRET:-xdc_openscan_stats_2026}@${ETHSTATS_HOST:-127.0.0.1:2000}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
