@@ -106,14 +106,10 @@ V268_ENODE=$(curl -sf -X POST -H "Content-Type: application/json" \
     -d '{"jsonrpc":"2.0","method":"admin_nodeInfo","params":[],"id":1}' \
     "http://localhost:${XDC_RPC}" | jq -r '.result.enode' 2>/dev/null)
 
-# Replace 127.0.0.1 with actual IP for external access, keep localhost for local
-V268_ENODE_LOCAL=$(echo "$V268_ENODE" | sed "s/@127.0.0.1:/@127.0.0.1:/")
+# Fix enode: replace [::] or 0.0.0.0 with 127.0.0.1 for local peering
+V268_ENODE_LOCAL=$(echo "$V268_ENODE" | sed 's/@\[::\]:/@127.0.0.1:/; s/@0.0.0.0:/@127.0.0.1:/')
 echo "   Enode: ${V268_ENODE_LOCAL:0:80}..."
-
-# Write static-nodes.json for GP5
-mkdir -p "${DATA_DIR}/${NETWORK}/geth/XDC"
-echo "[\"${V268_ENODE_LOCAL}\"]" > "${DATA_DIR}/${NETWORK}/geth/XDC/static-nodes.json"
-echo "   ✅ static-nodes.json written"
+# Note: GP5 ignores static-nodes.json (deprecated), using --bootnodes instead
 
 # ── Step 4: Deploy GP5 (geth) with trusted peer ────────────
 echo ""
