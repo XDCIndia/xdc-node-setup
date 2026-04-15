@@ -157,7 +157,7 @@ $(c BOLD)GENERAL COMMANDS:$(c NC)
     $(c GREEN)heartbeat$(c NC)      Manage SkyNet heartbeat agent (--install, --uninstall)
     $(c GREEN)ssl$(c NC)            Setup SSL/HTTPS for dashboard (--domain, --email)
     $(c GREEN)update$(c NC)         Update node Docker image and restart
-    $(c GREEN)snapshot$(c NC)       Download and apply chain snapshot (mainnet/pruned/archive)
+    $(c GREEN)snapshot$(c NC)       Snapshot operations (export|import|transfer|download)
     $(c GREEN)backup$(c NC)         Backup chaindata and config to archive
     $(c GREEN)restore$(c NC)        Restore from backup
     $(c GREEN)reset$(c NC)          Reset node and resync (fixes bad blocks)
@@ -191,6 +191,10 @@ $(c BOLD)EXAMPLES:$(c NC)
     xdc ssl -d dashboard.example.com -e admin@example.com  # Setup SSL
     xdc security                # Run security audit (advisory only)
     xdc security --fix          # Apply security fixes (with confirmation)
+    xdc snapshot export -o /backup/node.tar.gz  # Export snapshot
+    xdc snapshot import /backup/node.tar.gz --force  # Import snapshot
+    xdc snapshot transfer -p 12141 root@65.21.71.4 /data  # Transfer via SSH
+    xdc snapshot download       # Download from remote URL
     xdc backup --encrypt        # Create encrypted backup
     xdc logs --follow           # Tail logs continuously
     xdc attach                  # Attach to XDC JavaScript console
@@ -3755,47 +3759,107 @@ EOF
 }
 
 cmd_snapshot() {
-    local SNAPSHOT_URL="${1:-${SNAPSHOT_URL:-}}"
-    local DATA_DIR="${XDC_DATA:-${PROJECT_DIR}/${XDC_NETWORK}/xdcchain}"
-    local COMPOSE_FILE="${INSTALL_DIR}/docker/docker-compose.yml"
+    local subcommand=""
     
-    # Fallback to find compose file
-    if [[ ! -f "$COMPOSE_FILE" ]]; then
-        for cf in "${PROJECT_DIR}/docker/docker-compose.yml" "${PROJECT_DIR}/docker-compose.yml" "./docker-compose.yml"; do
-            [[ -f "$cf" ]] && COMPOSE_FILE="$cf" && break
-        done
+    # Check for subcommand
+    if [[ $# -gt 0 && ! "$1" =~ ^-- && ! "$1" =~ ^- ]]; then
+        subcommand="$1"
+        shift
     fi
+    
+    case "$subcommand" in
+        export) cmd_snapshot_export "$@" ;;
+        import) cmd_snapshot_import "$@" ;;
+        transfer) cmd_snapshot_transfer "$@" ;;
+        download) cmd_snapshot_download "$@" ;;
+        "") cmd_snapshot_download "$@" ;;
+        *)
+            error "Unknown subcommand: $subcommand"
+            echo "Usage: xdc snapshot [export|import|transfer|download]"
+            return 1
+            ;;
+    esac
+}
 
+#==============================================================================
+# Snapshot Helper Functions (v1.1.0)
+#==============================================================================
+
+# Auto-detect chaindata directory (XDC/ vs geth/ vs xdcchain/)
+find_chaindata_dir() {
+    local base_dir="${1:-${XDC_DATA:-${PROJECT_DIR}/${XDC_NETWORK}/xdcchain}}"
+    local min_size="${2:-10000000000}"  # Default 10GB minimum
+    
+    # Check XDC/ first (GP5 naming, typically larger)
+    if [[ -d "$base_dir/XDC/chaindata" ]]; then
+        local xdc_size=$(du -sb "$base_dir/XDC/chaindata" 2>/dev/null | cut -f1 || echo "0")
+        if [[ -n "$xdc_size" && "$xdc_size" -gt "$min_size" ]]; then
+            echo "XDC"
+            return 0
+        fi
+    fi
+    
+    # Check geth/ (standard Geth naming)
+    if [[ -d "$base_dir/geth/chaindata" ]]; then
+        echo "geth"
+        return 0
+    fi
+    
+    # Fallback to xdcchain/ (XNS standard)
+    if [[ -d "$base_dir/xdcchain" ]]; then
+        echo "xdcchain"
+        return 0
+    fi
+    
+    # Check for chaindata directly under base_dir
+    if [[ -d "$base_dir/chaindata" ]]; then
+        echo ""
+        return 0
+    fi
+    
+    echo ""
+    return 1
+}
+
+# Show state cache regeneration warning
+show_state_cache_warning() {
+    echo ""
+    echo -e "${YELLOW}⚠️  Important: State root cache needs regeneration${NC}"
+    echo -e "   The state cache (100K LRU entries) is stored in RAM and not preserved in snapshots."
+    echo -e "   To rebuild the cache:"
+    echo -e "   ${CYAN}xdc restart --syncmode full${NC}"
+    echo -e "   This may take 10-30 minutes depending on block height."
+    echo ""
+}
+
+#==============================================================================
+# New Command: snapshot export
+#==============================================================================
+cmd_snapshot_export() {
+    local output_file=""
+    local compression="gzip"
+    local DATA_DIR="${XDC_DATA:-${PROJECT_DIR}/${XDC_NETWORK}/xdcchain}"
+    
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --url)
-                SNAPSHOT_URL="$2"
-                shift 2
-                ;;
+            --output|-o) output_file="$2"; shift 2 ;;
+            --compression|-c) compression="$2"; shift 2 ;;
             --help|-h)
                 cat << EOF
-$(c BOLD)xdc snapshot$(c NC) — Download and apply chain snapshot
+${BOLD}xdc snapshot export${NC} — Export local chaindata to snapshot
 
-$(c BOLD)USAGE:$(c NC)
-    xdc snapshot [URL]
-    xdc snapshot --url <snapshot_url>
+${BOLD}USAGE:${NC}
+    xdc snapshot export [--output <file>] [--compression gzip|pigz|zstd]
 
-$(c BOLD)DESCRIPTION:$(c NC)
-    Downloads and applies a chain snapshot to quickly sync the node.
-    Supports XDC mainnet snapshots (pruned ~100GB, archive ~500GB).
-    Automatically stops the node, backs up existing data, downloads
-    and extracts the snapshot, then restarts.
+${BOLD}OPTIONS:${NC}
+    --output, -o <file>     Output file path (default: auto-generated)
+    --compression, -c <type> Compression: gzip, pigz (parallel), zstd
+    --help, -h              Show this help
 
-$(c BOLD)SNAPSHOTS:$(c NC)
-    Without a URL, prompts to select:
-      1) XDC Mainnet (pruned) — ~100GB
-      2) XDC Mainnet (archive) — ~500GB
-      3) Custom URL
-
-$(c BOLD)EXAMPLES:$(c NC)
-    xdc snapshot                    # Interactive snapshot selection
-    xdc snapshot https://example.com/snapshot.tar.gz
-    xdc snapshot --url https://example.com/snapshot.tar.gz
+${BOLD}EXAMPLES:${NC}
+    xdc snapshot export
+    xdc snapshot export --output /backup/snapshot.tar.gz
+    xdc snapshot export --compression pigz
 
 EOF
                 return 0
@@ -3803,68 +3867,286 @@ EOF
             *) shift ;;
         esac
     done
-
-    if [ -z "$SNAPSHOT_URL" ]; then
-        # Default XDC mainnet snapshot URLs
-        echo "Available snapshots:"
-        echo "  1) XDC Mainnet (pruned) — ~100GB"
-        echo "  2) XDC Mainnet (archive) — ~500GB"
-        echo "  3) Custom URL"
-        read -rp "Select [1-3]: " choice
-        case $choice in
-            1) SNAPSHOT_URL="https://download.xinfin.network/xdcchain-mainnet-pruned.tar.gz" ;;
-            2) SNAPSHOT_URL="https://download.xinfin.network/xdcchain-mainnet-archive.tar.gz" ;;
-            3) read -rp "Enter URL: " SNAPSHOT_URL ;;
-            *) error "Invalid choice"; return 1 ;;
-        esac
+    
+    # Auto-detect chaindata directory
+    local chain_subdir=$(find_chaindata_dir "$DATA_DIR")
+    if [[ -z "$chain_subdir" ]]; then
+        if [[ ! -d "$DATA_DIR/chaindata" ]]; then
+            echo "Error: No chaindata directory found in $DATA_DIR" >&2
+            return 1
+        fi
+        chain_subdir=""
     fi
-
-    if [ -z "$SNAPSHOT_URL" ]; then
-        error "No snapshot URL provided"
-        return 1
+    
+    # Default output filename
+    if [[ -z "$output_file" ]]; then
+        local timestamp=$(date +%Y%m%d_%H%M%S)
+        local network=$(detect_network)
+        local ext="tar.gz"
+        [[ "$compression" == "zstd" ]] && ext="tar.zst"
+        output_file="${XDC_BACKUP:-/backup}/xdc-snapshot-${network}-${timestamp}.${ext}"
     fi
-
-    # Check for required tools
-    if ! command -v wget &>/dev/null && ! command -v curl &>/dev/null; then
-        die "Either wget or curl is required"
+    
+    # Ensure output directory exists
+    mkdir -p "$(dirname "$output_file")"
+    
+    # Confirm if file exists
+    if [[ -f "$output_file" ]]; then
+        read -p "Output file exists. Overwrite? [y/N]: " confirm
+        [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Export cancelled" >&2; return 1; }
     fi
-
-    # 1. Stop node
-    log "Stopping node..."
-    if ! docker compose -f "$COMPOSE_FILE" stop xdc-node 2>/dev/null; then
-        docker-compose -f "$COMPOSE_FILE" stop xdc-node 2>/dev/null || warn "Failed to stop node, continuing anyway"
+    
+    # Stop node
+    log "Stopping node for snapshot export..."
+    cmd_stop 2>/dev/null || true
+    
+    # Create snapshot
+    log "Creating snapshot of $DATA_DIR/${chain_subdir:-chaindata}..."
+    local source_dir="$DATA_DIR"
+    [[ -n "$chain_subdir" ]] && source_dir="$DATA_DIR/$chain_subdir"
+    
+    # Use pigz if available for parallel compression
+    local compress_cmd="gzip -c"
+    if [[ "$compression" == "pigz" ]] && command -v pigz &>/dev/null; then
+        compress_cmd="pigz -c"
+    elif [[ "$compression" == "zstd" ]] && command -v zstd &>/dev/null; then
+        compress_cmd="zstd -c"
     fi
-
-    # 2. Backup existing chaindata
-    if [ -d "$DATA_DIR/xdcchain" ]; then
-        log "Backing up existing chaindata..."
-        mv "$DATA_DIR/xdcchain" "$DATA_DIR/xdcchain.backup.$(date +%Y%m%d_%H%M%S)"
-    fi
-    mkdir -p "$DATA_DIR/xdcchain"
-
-    # 3. Download with resume support
-    log "Downloading snapshot from $SNAPSHOT_URL..."
-    log "This may take a while depending on snapshot size and network speed..."
-    if command -v wget &>/dev/null; then
-        wget -c "$SNAPSHOT_URL" -O "$DATA_DIR/snapshot.tar.gz" || die "Download failed"
+    
+    # Use pv if available for progress
+    if command -v pv &>/dev/null && [[ -d "$source_dir" ]]; then
+        local total_size=$(du -sb "$source_dir" | cut -f1)
+        tar cf - -C "$DATA_DIR" "${chain_subdir:-.}" | pv -s "$total_size" | $compress_cmd > "$output_file"
     else
-        curl -C - -L "$SNAPSHOT_URL" -o "$DATA_DIR/snapshot.tar.gz" || die "Download failed"
+        tar cf - -C "$DATA_DIR" "${chain_subdir:-.}" | $compress_cmd > "$output_file"
     fi
-
-    # 4. Extract
-    log "Extracting snapshot..."
-    tar xzf "$DATA_DIR/snapshot.tar.gz" -C "$DATA_DIR/xdcchain/" || die "Extraction failed"
-    rm "$DATA_DIR/snapshot.tar.gz"
-
-    # 5. Restart
-    log "Starting node with snapshot data..."
-    if ! docker compose -f "$COMPOSE_FILE" up -d xdc-node 2>/dev/null; then
-        docker-compose -f "$COMPOSE_FILE" up -d xdc-node || die "Failed to start node"
-    fi
-    log "Snapshot applied. Check sync with: xdc status"
+    
+    local size=$(du -h "$output_file" | cut -f1)
+    log "Snapshot created: $output_file ($size)"
+    
+    # Restart node
+    log "Restarting node..."
+    cmd_start
 }
 
-cmd_monitor() {
+#==============================================================================
+# New Command: snapshot import
+#==============================================================================
+cmd_snapshot_import() {
+    local snapshot_file=""
+    local force=false
+    local DATA_DIR="${XDC_DATA:-${PROJECT_DIR}/${XDC_NETWORK}/xdcchain}"
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --force|-f) force=true; shift ;;
+            --help|-h)
+                cat << EOF
+${BOLD}xdc snapshot import${NC} — Import chaindata from snapshot
+
+${BOLD}USAGE:${NC}
+    xdc snapshot import <file> [--force]
+
+${BOLD}IMPORTANT:${NC}
+    State root cache is NOT preserved in snapshots (stored in RAM).
+    After import, run: xdc restart --syncmode full
+
+EOF
+                return 0
+                ;;
+            *)
+                if [[ -z "$snapshot_file" && -f "$1" ]]; then
+                    snapshot_file="$1"
+                fi
+                shift ;;
+        esac
+    done
+    
+    if [[ -z "$snapshot_file" ]]; then
+        echo "Error: No snapshot file specified" >&2
+        return 1
+    fi
+    
+    if [[ ! -f "$snapshot_file" ]]; then
+        echo "Error: Snapshot file not found: $snapshot_file" >&2
+        return 1
+    fi
+    
+    # Get decompression command
+    local decompress_cmd="gzip -dc"
+    if [[ "$snapshot_file" == *.zst ]] || [[ "$snapshot_file" == *.zstd ]]; then
+        if command -v zstd &>/dev/null; then
+            decompress_cmd="zstd -dc"
+        else
+            echo "Error: Cannot decompress .zst file (install zstd)" >&2
+            return 1
+        fi
+    elif [[ "$snapshot_file" == *.bz2 ]]; then
+        decompress_cmd="bzip2 -dc"
+    fi
+    
+    # Auto-detect target directory
+    local chain_subdir=$(find_chaindata_dir "$DATA_DIR")
+    [[ -z "$chain_subdir" ]] && chain_subdir="XDC"
+    
+    # Confirm import
+    if [[ "$force" != "true" ]]; then
+        warn "This will REPLACE existing chaindata in $DATA_DIR/$chain_subdir"
+        read -p "Continue? [y/N]: " confirm
+        [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Import cancelled" >&2; return 1; }
+    fi
+    
+    # Stop node
+    log "Stopping node..."
+    cmd_stop 2>/dev/null || true
+    
+    # Backup existing chaindata
+    if [[ -d "$DATA_DIR/$chain_subdir" ]]; then
+        local backup_suffix=$(date +%Y%m%d_%H%M%S)
+        log "Backing up existing chaindata..."
+        mv "$DATA_DIR/$chain_subdir" "$DATA_DIR/${chain_subdir}.backup.$backup_suffix"
+    fi
+    
+    # Extract snapshot
+    log "Extracting snapshot..."
+    mkdir -p "$DATA_DIR"
+    $decompress_cmd "$snapshot_file" | tar xf - -C "$DATA_DIR/"
+    
+    log "Snapshot extracted"
+    
+    # Restart node
+    log "Restarting node..."
+    cmd_start
+    
+    show_state_cache_warning
+}
+
+#==============================================================================
+# New Command: snapshot transfer
+#==============================================================================
+cmd_snapshot_transfer() {
+    local source=""
+    local target=""
+    local ssh_port=22
+    local ssh_user=""
+    local DATA_DIR="${XDC_DATA:-${PROJECT_DIR}/${XDC_NETWORK}/xdcchain}"
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -p|--port) ssh_port="$2"; shift 2 ;;
+            -u|--user) ssh_user="$2"; shift 2 ;;
+            --help|-h)
+                cat << EOF
+${BOLD}xdc snapshot transfer${NC} — Transfer snapshot between nodes via SSH
+
+${BOLD}USAGE:${NC}
+    xdc snapshot transfer <source> <target> [options]
+
+${BOLD}OPTIONS:${NC}
+    -p, --port <port>    SSH port (default: 22)
+    -u, --user <user>    SSH user (default: root)
+
+${BOLD}EXAMPLES:${NC}
+    xdc snapshot transfer root@source:/data/XDC /data/local
+    xdc snapshot transfer -p 12141 root@65.21.71.4 /mnt/data
+
+EOF
+                return 0
+                ;;
+            *)
+                if [[ -z "$source" ]]; then
+                    source="$1"
+                elif [[ -z "$target" ]]; then
+                    target="$1"
+                fi
+                shift ;;
+        esac
+    done
+    
+    if [[ -z "$source" || -z "$target" ]]; then
+        echo "Usage: xdc snapshot transfer <source-host:dir> <target-dir>" >&2
+        return 1
+    fi
+    
+    # Parse source (user@host:dir format)
+    local source_user=""
+    local source_host=""
+    local source_dir=""
+    
+    if [[ "$source" =~ ^([^@]+)@([^:]+):(.*)$ ]]; then
+        source_user="${BASH_REMATCH[1]}"
+        source_host="${BASH_REMATCH[2]}"
+        source_dir="${BASH_REMATCH[3]}"
+    elif [[ "$source" =~ ^([^:]+):(.*)$ ]]; then
+        source_host="${BASH_REMATCH[1]}"
+        source_dir="${BASH_REMATCH[2]}"
+    else
+        source_dir="$source"
+    fi
+    
+    [[ -n "$ssh_user" ]] && source_user="$ssh_user"
+    [[ -z "$source_user" ]] && source_user="root"
+    
+    log "Transferring from $source_user@$source_host:$source_dir to $target..."
+    
+    local ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p $ssh_port"
+    
+    # Detect source directory type
+    log "Detecting source directory structure..."
+    local remote_subdir=$(ssh $ssh_opts "$source_user@$source_host" "
+        for d in XDC geth xdcchain; do
+            if [[ -d \"$source_dir/\$d/chaindata\" ]] || [[ -d \"$source_dir/\$d\" && \"\$d\" == \"xdcchain\" ]]; then
+                echo \"\$d\"; exit 0
+            fi
+        done
+        echo XDC
+    " 2>/dev/null)
+    
+    [[ -z "$remote_subdir" ]] && remote_subdir="XDC"
+    log "Source directory: $remote_subdir"
+    
+    # Detect local directory type
+    local local_subdir=$(find_chaindata_dir "$target")
+    [[ -z "$local_subdir" ]] && local_subdir="$remote_subdir"
+    
+    mkdir -p "$target"
+    
+    # Backup existing local chaindata
+    if [[ -d "$target/$local_subdir" ]]; then
+        local backup_suffix=$(date +%Y%m%d_%H%M%S)
+        log "Backing up existing chaindata..."
+        mv "$target/$local_subdir" "$target/${local_subdir}.backup.$backup_suffix"
+    fi
+    
+    # Stop local node
+    log "Stopping local node..."
+    cmd_stop 2>/dev/null || true
+    
+    # Transfer via SSH pipe
+    log "Starting transfer (this may take several minutes)..."
+    if command -v pv &>/dev/null; then
+        local source_size=$(ssh $ssh_opts "$source_user@$source_host" "du -sb '$source_dir/$remote_subdir' | cut -f1" 2>/dev/null || echo "0")
+        if [[ "$source_size" -gt 0 ]]; then
+            ssh $ssh_opts "$source_user@$source_host" "tar czf - -C '$source_dir' '$remote_subdir'" | \
+                pv -s "$source_size" | tar xzf - -C "$target/"
+        else
+            ssh $ssh_opts "$source_user@$source_host" "tar czf - -C '$source_dir' '$remote_subdir'" | \
+                tar xzf - -C "$target/"
+        fi
+    else
+        ssh $ssh_opts "$source_user@$source_host" "tar czf - -C '$source_dir' '$remote_subdir'" | \
+            tar xzf - -C "$target/"
+    fi
+    
+    local size=$(du -sh "$target/$local_subdir" 2>/dev/null | cut -f1)
+    log "Transfer complete: $size"
+    
+    # Restart local node
+    log "Restarting local node..."
+    cmd_start
+    
+    show_state_cache_warning
+}
     local action="all"
     local args=""
     
