@@ -3833,6 +3833,107 @@ show_state_cache_warning() {
 }
 
 #==============================================================================
+# New Command: snapshot download (legacy/remote)
+#==============================================================================
+cmd_snapshot_download() {
+    local SNAPSHOT_URL="${1:-${SNAPSHOT_URL:-}}"
+    local DATA_DIR="${XDC_DATA:-${PROJECT_DIR}/${XDC_NETWORK}/xdcchain}"
+    local COMPOSE_FILE="${INSTALL_DIR}/docker/docker-compose.yml"
+    
+    # Fallback to find compose file
+    if [[ ! -f "$COMPOSE_FILE" ]]; then
+        for cf in "${PROJECT_DIR}/docker/docker-compose.yml" "${PROJECT_DIR}/docker-compose.yml" "./docker-compose.yml"; do
+            [[ -f "$cf" ]] && COMPOSE_FILE="$cf" && break
+        done
+    fi
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --url)
+                SNAPSHOT_URL="$2"
+                shift 2
+                ;;
+            --help|-h)
+                cat << EOF
+${BOLD}xdc snapshot download${NC} — Download and apply chain snapshot
+
+${BOLD}USAGE:${NC}
+    xdc snapshot download [URL]
+    xdc snapshot download --url <snapshot_url>
+
+${BOLD}DESCRIPTION:${NC}
+    Downloads and applies a chain snapshot from remote server.
+
+${BOLD}SNAPSHOTS:${NC}
+    1) XDC Mainnet (pruned) — ~100GB
+    2) XDC Mainnet (archive) — ~500GB
+    3) Custom URL
+
+EOF
+                return 0
+                ;;
+            *) shift ;;
+        esac
+    done
+
+    if [[ -z "$SNAPSHOT_URL" ]]; then
+        echo "Available snapshots:"
+        echo "  1) XDC Mainnet (pruned) — ~100GB"
+        echo "  2) XDC Mainnet (archive) — ~500GB"
+        echo "  3) Custom URL"
+        read -rp "Select [1-3]: " choice
+        case $choice in
+            1) SNAPSHOT_URL="https://download.xinfin.network/xdcchain-mainnet-pruned.tar.gz" ;;
+            2) SNAPSHOT_URL="https://download.xinfin.network/xdcchain-mainnet-archive.tar.gz" ;;
+            3) read -rp "Enter URL: " SNAPSHOT_URL ;;
+            *) echo "Invalid choice" >&2; return 1 ;;
+        esac
+    fi
+
+    if [[ -z "$SNAPSHOT_URL" ]]; then
+        echo "No snapshot URL provided" >&2
+        return 1
+    fi
+
+    # Auto-detect target directory
+    local chain_subdir=$(find_chaindata_dir "$DATA_DIR")
+    [[ -z "$chain_subdir" ]] && chain_subdir="xdcchain"
+
+    # 1. Stop node
+    echo "Stopping node..."
+    docker compose -f "$COMPOSE_FILE" stop xdc-node 2>/dev/null || \
+        docker-compose -f "$COMPOSE_FILE" stop xdc-node 2>/dev/null || true
+
+    # 2. Backup existing chaindata
+    if [[ -d "$DATA_DIR/$chain_subdir" ]]; then
+        echo "Backing up existing chaindata..."
+        mv "$DATA_DIR/$chain_subdir" "$DATA_DIR/${chain_subdir}.backup.$(date +%Y%m%d_%H%M%S)"
+    fi
+    mkdir -p "$DATA_DIR/$chain_subdir"
+
+    # 3. Download with resume support
+    echo "Downloading snapshot from $SNAPSHOT_URL..."
+    if command -v wget &>/dev/null; then
+        wget -c "$SNAPSHOT_URL" -O "$DATA_DIR/snapshot.tar.gz" || { echo "Download failed" >&2; return 1; }
+    else
+        curl -C - -L "$SNAPSHOT_URL" -o "$DATA_DIR/snapshot.tar.gz" || { echo "Download failed" >&2; return 1; }
+    fi
+
+    # 4. Extract
+    echo "Extracting snapshot..."
+    tar xzf "$DATA_DIR/snapshot.tar.gz" -C "$DATA_DIR/$chain_subdir/" || { echo "Extraction failed" >&2; return 1; }
+    rm "$DATA_DIR/snapshot.tar.gz"
+
+    # 5. Restart
+    echo "Starting node with snapshot data..."
+    docker compose -f "$COMPOSE_FILE" up -d xdc-node 2>/dev/null || \
+        docker-compose -f "$COMPOSE_FILE" up -d xdc-node || { echo "Failed to start node" >&2; return 1; }
+    echo "Snapshot applied. Check sync with: xdc status"
+    
+    show_state_cache_warning
+}
+
+#==============================================================================
 # New Command: snapshot export
 #==============================================================================
 cmd_snapshot_export() {
@@ -4147,6 +4248,8 @@ EOF
     
     show_state_cache_warning
 }
+
+cmd_monitor() {
     local action="all"
     local args=""
     
