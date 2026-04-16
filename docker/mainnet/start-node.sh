@@ -40,7 +40,8 @@ export ENABLE_RPC="${ENABLED:-true}"
 # Security Fix (#492 #493): Secure RPC defaults — localhost only, no wildcards
 # Use RPC_ADDR=0.0.0.0 explicitly for production deployments
 export RPC_ADDR="${RPC_ADDR:-${ADDR:-127.0.0.1}}"
-export RPC_PORT="${HTTP_PORT:-${RPC_PORT:-8545}}"
+# XNS Standard: Use port 9545 (not 8545) for RPC
+export RPC_PORT="${HTTP_PORT:-${RPC_PORT:-9545}}"
 export RPC_API="${API:-admin,eth,net,web3,XDPoS}"
 # Security Fix (#492): Default CORS to localhost only (not * wildcard)
 export RPC_ALLOW_ORIGINS="${RPC_ALLOW_ORIGINS:-${CORS_DOMAIN:-${RPC_CORS:-localhost}}}"
@@ -49,7 +50,8 @@ export RPC_CORS_DOMAIN="$RPC_ALLOW_ORIGINS"
 export RPC_VHOSTS="${RPC_VHOSTS:-${VHOSTS:-localhost}}"
 # Security: Default to localhost for WebSocket
 export WS_ADDR="${WS_ADDR:-127.0.0.1}"
-export WS_PORT="${WS_PORT:-8546}"
+# XNS Standard: Use port 9546 (not 8546) for WebSocket
+export WS_PORT="${WS_PORT:-9546}"
 export WS_API="${WS_API:-eth,net,web3,XDPoS}"
 # Security: Default to localhost for WS origins
 export WS_ORIGINS="${WS_ORIGINS:-localhost}"
