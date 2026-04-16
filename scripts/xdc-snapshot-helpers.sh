@@ -247,3 +247,177 @@ show_migration_status() {
     local current=$(find_chaindata_dir "$datadir" 0)
     echo "Active directory: $current/"
 }
+
+#==============================================================================
+# Snapshot Validation for XNS (Phase 1.2 - Geth Alignment)
+# https://github.com/XDCIndia/xdc-node-setup/issues/165
+#==============================================================================
+
+# Validate snapshot before transfer
+# Returns 0 if valid, 1 if invalid
+validate_snapshot_for_transfer() {
+    local datadir="${1:-${XDC_DATA:-${PROJECT_DIR}/${XDC_NETWORK}/xdcchain}}"
+    local allow_incomplete="${2:-false}"
+    
+    log_info "Validating snapshot at: $datadir"
+    
+    # Check if xdc binary supports snapshot validate
+    if ! command -v xdc &>/dev/null || ! xdc snapshot validate --help &>/dev/null 2>&1; then
+        log_warn "xdc snapshot validate not available, using basic checks"
+        
+        # Basic validation: check if chaindata exists and has data
+        local chaindata_dir=$(find_chaindata_dir "$datadir")
+        if [[ -z "$chaindata_dir" ]]; then
+            log_error "No chaindata directory found"
+            return 1
+        fi
+        
+        local chaindata_path="$datadir/$chaindata_dir/chaindata"
+        if [[ ! -d "$chaindata_path" ]]; then
+            log_error "Chaindata not found at $chaindata_path"
+            return 1
+        fi
+        
+        # Check if chaindata has SST files
+        local sst_count=$(find "$chaindata_path" -name "*.sst" 2>/dev/null | wc -l)
+        if [[ $sst_count -eq 0 ]]; then
+            log_error "No SST files found in chaindata"
+            return 1
+        fi
+        
+        log_info "Basic validation passed ($sst_count SST files)"
+        return 0
+    fi
+    
+    # Run full validation
+    local report_file=$(mktemp)
+    if ! xdc snapshot validate --datadir "$datadir" --json --output "$report_file" 2>/dev/null; then
+        log_error "Snapshot validation failed!"
+        if [[ -f "$report_file" ]] && command -v jq &>/dev/null; then
+            cat "$report_file" | jq -r '.errors[]?' 2>/dev/null | while read err; do
+                log_error "  - $err"
+            done
+        fi
+        rm -f "$report_file"
+        return 1
+    fi
+    
+    # Parse results
+    local is_complete="false"
+    local state_height=0
+    local block_height=0
+    
+    if [[ -f "$report_file" ]] && command -v jq &>/dev/null; then
+        is_complete=$(cat "$report_file" | jq -r '.isComplete // "false"')
+        state_height=$(cat "$report_file" | jq -r '.stateHeight // 0')
+        block_height=$(cat "$report_file" | jq -r '.blockHeight // 0')
+    fi
+    
+    local state_gap=$((block_height - state_height))
+    
+    log_info "Validation results:"
+    log_info "  Block height: $block_height"
+    log_info "  State height: $state_height"
+    log_info "  Gap: $state_gap blocks"
+    log_info "  Complete: $is_complete"
+    
+    # Check if acceptable
+    if [[ "$is_complete" != "true" ]]; then
+        log_warn "Incomplete snapshot detected!"
+        log_warn "  State is $state_gap blocks behind block height"
+        
+        if [[ "$allow_incomplete" != "true" ]]; then
+            log_error "Transfer aborted. Use --allow-incomplete to override."
+            rm -f "$report_file"
+            return 1
+        else
+            log_warn "Continuing with incomplete snapshot (override enabled)"
+        fi
+    fi
+    
+    # Save report for later
+    local report_dir="${XDC_STATE_DIR:-$datadir/.state}/validation-reports"
+    mkdir -p "$report_dir"
+    cp "$report_file" "$report_dir/pre-transfer-$(date +%Y%m%d-%H%M%S).json" 2>/dev/null || true
+    
+    rm -f "$report_file"
+    return 0
+}
+
+# Quick validation (faster, less thorough)
+quick_validate_snapshot() {
+    local datadir="${1:-${XDC_DATA:-${PROJECT_DIR}/${XDC_NETWORK}/xdcchain}}"
+    
+    log_info "Quick validation at: $datadir"
+    
+    if ! command -v xdc &>/dev/null || ! xdc snapshot validate --help &>/dev/null 2>&1; then
+        # Fallback to basic check
+        local chaindata_dir=$(find_chaindata_dir "$datadir")
+        if [[ -d "$datadir/$chaindata_dir/chaindata" ]]; then
+            return 0
+        fi
+        return 1
+    fi
+    
+    # Quick mode - only check recent blocks
+    local report_file=$(mktemp)
+    if xdc snapshot validate --datadir "$datadir" --quick --json --output "$report_file" 2>/dev/null; then
+        local is_complete=$(cat "$report_file" | jq -r '.isComplete // "false"' 2>/dev/null || echo "false")
+        rm -f "$report_file"
+        
+        if [[ "$is_complete" == "true" ]]; then
+            log_info "Quick validation passed"
+            return 0
+        else
+            log_warn "Quick validation indicates incomplete state"
+            return 1
+        fi
+    fi
+    
+    rm -f "$report_file"
+    return 1
+}
+
+# Get snapshot metadata without full validation
+get_snapshot_metadata() {
+    local datadir="${1:-${XDC_DATA:-${PROJECT_DIR}/${XDC_NETWORK}/xdcchain}}"
+    
+    if ! command -v xdc &>/dev/null || ! xdc snapshot validate --help &>/dev/null 2>&1; then
+        echo "{}"
+        return 0
+    fi
+    
+    local report_file=$(mktemp)
+    xdc snapshot validate --datadir "$datadir" --quick --json --output "$report_file" 2>/dev/null || true
+    
+    if [[ -f "$report_file" ]]; then
+        cat "$report_file"
+        rm -f "$report_file"
+    else
+        echo "{}"
+    fi
+}
+
+# Display snapshot info in table format
+show_snapshot_info() {
+    local datadir="${1:-${XDC_DATA:-${PROJECT_DIR}/${XDC_NETWORK}/xdcchain}}"
+    
+    local meta=$(get_snapshot_metadata "$datadir")
+    
+    local block_height=$(echo "$meta" | jq -r '.blockHeight // "N/A"' 2>/dev/null || echo "N/A")
+    local state_height=$(echo "$meta" | jq -r '.stateHeight // "N/A"' 2>/dev/null || echo "N/A")
+    local ancient_height=$(echo "$meta" | jq -r '.ancientHeight // "N/A"' 2>/dev/null || echo "N/A")
+    local is_complete=$(echo "$meta" | jq -r '.isComplete // "N/A"' 2>/dev/null || echo "N/A")
+    local status=$(echo "$meta" | jq -r '.status // "N/A"' 2>/dev/null || echo "N/A")
+    
+    echo "========================================"
+    echo "      SNAPSHOT INFORMATION"
+    echo "========================================"
+    printf "%-20s %s\n" "Data Directory:" "$datadir"
+    printf "%-20s %s\n" "Block Height:" "$block_height"
+    printf "%-20s %s\n" "State Height:" "$state_height"
+    printf "%-20s %s\n" "Ancient Height:" "$ancient_height"
+    printf "%-20s %s\n" "Complete:" "$is_complete"
+    printf "%-20s %s\n" "Status:" "$status"
+    echo "========================================"
+}
