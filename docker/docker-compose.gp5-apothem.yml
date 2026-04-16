@@ -28,6 +28,10 @@ services:
       - EXTERNAL_IP=${EXTERNAL_IP:-}
       - INSTANCE_NAME=${INSTANCE_NAME:-XDC_GP5_Apothem}
       - HTTP_API=${HTTP_API:-admin,eth,net,web3,XDPoS}
+      - STATS_SECRET=${STATS_SECRET:-xdc_openscan_stats_2026}
+      - STATS_SERVER=${STATS_SERVER:-stats.xdcindia.com:443}
+      - STATS_SECRET=${STATS_SECRET:-xdc_openscan_stats_2026}
+      - STATS_SERVER=${STATS_SERVER:-stats.xdcindia.com:443}
     entrypoint: ["/bin/sh", "/work/start.sh"]
     networks:
       - docker_xdc-network

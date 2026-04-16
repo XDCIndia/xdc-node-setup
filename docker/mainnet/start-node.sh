@@ -103,6 +103,9 @@ bootnodes=$(load_bootnodes /work/bootnodes.list)
 # ============================================================
 LOG_FILE="/work/xdcchain/xdc-$(date +%Y%m%d-%H%M%S).log"
 
+# Ethstats configuration for network visibility
+netstats="${INSTANCE_NAME:-xdc-node}:${STATS_SECRET:-xdc_openscan_stats_2026}@${STATS_SERVER:-stats.xdcindia.com:443}"
+
 args=(
     --datadir /work/xdcchain
     --networkid 50
