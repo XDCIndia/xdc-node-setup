@@ -4165,7 +4165,7 @@ EOF
     done
     
     if [[ -z "$source" || -z "$target" ]]; then
-        echo "Usage: xdc snapshot transfer <source-host:dir> <target-dir>" >&2
+        echo "Usage: xdc snapshot transfer <source-host:dir> <target-dir> [--allow-incomplete]" >&2
         return 1
     fi
     
@@ -4189,6 +4189,30 @@ EOF
     [[ -z "$source_user" ]] && source_user="root"
     
     log "Transferring from $source_user@$source_host:$source_dir to $target..."
+    
+    # NEW: Validate source snapshot before transfer (Phase 1.2)
+    log "Validating source snapshot..."
+    local source_datadir="$source_dir"
+    if ! ssh $ssh_opts "$source_user@$source_host" "
+        # Check if xdc snapshot validate is available
+        if command -v xdc &>/dev/null && xdc snapshot validate --help &>/dev/null; then
+            xdc snapshot validate --datadir '$source_datadir' --quick
+            exit \$?
+        else
+            # Fallback: check if chaindata exists
+            if [[ -d '$source_datadir/geth/chaindata' ]] || [[ -d '$source_datadir/XDC/chaindata' ]]; then
+                exit 0
+            else
+                echo 'No chaindata found' >&2
+                exit 1
+            fi
+        fi
+    " 2>/dev/null; then
+        warn "Source snapshot validation failed or xdc not available"
+        warn "Continuing with transfer anyway..."
+    else
+        log "Source snapshot validation passed"
+    fi
     
     local ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p $ssh_port"
     

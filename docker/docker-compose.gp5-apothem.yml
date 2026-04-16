@@ -1,18 +1,19 @@
 #==============================================================================
 # XDC Node Docker Compose — GP5 Client on Apothem (Testnet)
+# Uses GP5 v34 image with XNS standard ports
 #==============================================================================
 
 services:
   xdc-node-gp5-apothem:
-    image: anilchinchawale/xdc-gp5:latest
+    image: anilchinchawale/gp5-xdc:v34
     platform: linux/amd64
     container_name: xdc-node-gp5-apothem
     restart: always
     ports:
       - "${P2P_PORT:-30322}:30303"
       - "${P2P_PORT:-30322}:30303/udp"
-      - "${RPC_BIND:-127.0.0.1}:${RPC_PORT:-8584}:8545"
-      - "${WS_BIND:-127.0.0.1}:${WS_PORT:-8585}:8546"
+      - "${RPC_BIND:-127.0.0.1}:${RPC_PORT:-9545}:9545"
+      - "${WS_BIND:-127.0.0.1}:${WS_PORT:-9546}:9546"
     volumes:
       - ${DATA_DIR:-../apothem}/xdcchain-gp5:/work/xdcchain
       - ./apothem/genesis.json:/work/genesis.json:ro
@@ -28,11 +29,13 @@ services:
       - EXTERNAL_IP=${EXTERNAL_IP:-}
       - INSTANCE_NAME=${INSTANCE_NAME:-XDC_GP5_Apothem}
       - HTTP_API=${HTTP_API:-admin,eth,net,web3,XDPoS}
+      - STATS_SECRET=${STATS_SECRET:-xdc_openscan_stats_2026}
+      - STATS_SERVER=${STATS_SERVER:-stats.xdcindia.com:443}
     entrypoint: ["/bin/sh", "/work/start.sh"]
     networks:
       - docker_xdc-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8545 --post-data='{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' --header='Content-Type: application/json' | grep -q 'result' || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9545 --post-data='{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' --header='Content-Type: application/json' | grep -q 'result' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -54,7 +57,7 @@ services:
     volumes:
       - ${DATA_DIR:-../apothem}/.xdc-node/skynet.conf:/etc/xdc-node/skynet.conf:ro
     environment:
-      - RPC_URL=http://localhost:${RPC_PORT:-8584}
+      - RPC_URL=http://localhost:${RPC_PORT:-9545}
       - NETWORK=apothem
       - NODE_NAME=${NODE_NAME:-xdc-gp5-apothem}
       - SKYNET_URL=${SKYNET_URL:-https://net.xdc.network}
