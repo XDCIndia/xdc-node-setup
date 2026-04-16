@@ -20,6 +20,7 @@
 - [Quick Start](#quick-start)
 - [Features](#features)
 - [Requirements](#requirements)
+- [GP5 Deployment Standard](#gp5-deployment-standard)
 - [Setup Guide](#setup-guide)
   - [Mainnet Setup](#mainnet-setup)
   - [Apothem Testnet Setup](#apothem-testnet-setup)
@@ -76,6 +77,8 @@ Your node will be running and syncing within 5 minutes.
 | 🔧 **Multi-Client Support** | Geth stable, Geth PR5, Erigon, Nethermind, Reth | ✅ |
 | 🌐 **Multi-Network** | Mainnet, Testnet (Apothem), Devnet | ✅ |
 | 📡 **SkyNet Integration** | Auto-registers with XDC SkyNet for fleet monitoring | ✅ |
+| 📈 **EthStats Integration** | Automatic visibility on stats.xdcindia.com | ✅ |
+| 🏆 **GP5 Standard** | Compliant with GP5 Deployment Standard | ✅ |
 | 💾 **Fast Sync** | Snapshot download with resume support | ✅ |
 | 🔄 **Auto-Updates** | Automatic version checks and updates | ✅ |
 | 🛠️ **Powerful CLI** | Single `xdc` command for all operations | ✅ |
@@ -100,6 +103,33 @@ Your node will be running and syncing within 5 minutes.
 - ✅ Linux ARM64
 - ✅ macOS (with Rosetta emulation)
 - ⚠️ Windows (via WSL2)
+
+---
+
+## 🏆 GP5 Deployment Standard
+
+All nodes deployed with XDC Node Setup v2.0+ are **GP5 Deployment Standard** compliant by default.
+
+### What is GP5?
+
+The GP5 (Geth PR5) Deployment Standard ensures all nodes have:
+
+1. **Automatic SkyNet Registration** - Nodes auto-register with SkyNet fleet management
+2. **EthStats Visibility** - Nodes appear on stats.xdcindia.com within 5 minutes
+3. **Standardized Naming** - `{location}-{client}-{network}-{ip}` convention
+4. **Controlled Peering** - `--nodiscover` with static peers for stability
+
+### Compliance Verification
+
+```bash
+# Check GP5 compliance
+xdc gp5 validate
+
+# View GP5 status
+xdc gp5 status
+```
+
+See [docs/GP5_DEPLOYMENT_STANDARD.md](docs/GP5_DEPLOYMENT_STANDARD.md) for full specification.
 
 ---
 
@@ -251,6 +281,19 @@ xdc update
 
 # Check version
 xdc version
+```
+
+### GP5 Standard Commands
+
+```bash
+# Validate GP5 compliance
+xdc gp5 validate
+
+# Check GP5 status
+xdc gp5 status
+
+# Generate GP5 configuration
+xdc gp5 generate --name mynode --network mainnet
 ```
 
 ### Advanced Commands
