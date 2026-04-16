@@ -36,13 +36,13 @@ exec XDC \
   --XDCx.datadir /work/xdcchain/XDCx \
   --rpc \
   --rpcaddr 127.0.0.1 \  # SECURITY FIX #355: Localhost only
-  --rpcport 8545 \
+  --rpcport 9545 \
   --rpcapi admin,eth,net,web3,XDPoS \
   --rpccorsdomain "${RPC_CORS:-*}" \
   --rpcvhosts "*" \
   --store-reward \
   --ws \
-  --wsaddr 0.0.0.0 \
-  --wsport 8546 \
+  --wsaddr 127.0.0.1 \
+  --wsport 9546 \
   --wsapi eth,net,web3,txpool,debug,XDPoS \
   --wsorigins "*"
