@@ -162,7 +162,7 @@ detect_node_info() {
         local call_data="0x2d5b6ebf${encoded_addr}"
         
         local candidate_check
-        candidate_check=$(rpc_call "eth_call" "[{\"to\":\"0x0000000000000000000000000000000000000088\",\"data\":\"${call_data}\"},\"latest\"]")
+        candidate_check=$(rpc_call "eth_call" "[{:"to\":\"0x0000000000000000000000000000000000000088\",\"data\":\"${call_data}\"},\"latest\"]")
         if [[ "$(echo "$candidate_check" | jq -r '.result // "0x0"')" == "0x0000000000000000000000000000000000000000000000000000000000000001" ]]; then
             is_candidate=true
         fi
@@ -263,14 +263,14 @@ detect_security() {
     
     # Check RPC exposure (check common RPC ports)
     if command -v ss &>/dev/null; then
-        if ss -tlnp 2>/dev/null | grep -E ":(8545|8989|30303)" | grep -q "0\.0\.0\.0"; then
+        if ss -tlnp 2>/dev/null | grep -E ":(8545|8989|30303)" | grep -q "0\.0.0.0"; then
             score=$((score - 15))
             issues="${issues}rpc_exposed,"
             warnings="${warnings}RPC API exposed to all interfaces (0.0.0.0) — Bind to 127.0.0.1 only
 "
         fi
     elif command -v netstat &>/dev/null; then
-        if netstat -tlnp 2>/dev/null | grep -E ":(8545|8989|30303)" | grep -q "0\.0\.0\.0"; then
+        if netstat -tlnp 2>/dev/null | grep -E ":(8545|8989|30303)" | grep -q "0\.0.0.0"; then
             score=$((score - 15))
             issues="${issues}rpc_exposed,"
             warnings="${warnings}RPC API exposed to all interfaces (0.0.0.0) — Bind to 127.0.0.1 only
@@ -476,7 +476,7 @@ collect_metrics() {
         done
         local call_data="0x2d5b6ebf${encoded_addr}"
         
-        candidate_check=$(rpc_call "eth_call" "[{\"to\":\"0x0000000000000000000000000000000000000088\",\"data\":\"${call_data}\"},\"latest\"]")
+        candidate_check=$(rpc_call "eth_call" "[{:"to\":\"0x0000000000000000000000000000000000000088\",\"data\":\"${call_data}\"},\"latest\"]")
         if [[ "$(echo "$candidate_check" | jq -r '.result // "0x0"')" == "0x0000000000000000000000000000000000000000000000000000000000000001" ]]; then
             is_candidate=true
         fi
@@ -821,10 +821,14 @@ push_heartbeat() {
         return 1
     fi
     
+    # FIXED: Use URL path for node name, not request body
+    # This avoids the "UUID-like node names not allowed" error
     local response
-    response=$(api_call POST "/nodes/heartbeat" "$payload")
+    response=$(curl -s -m 15 -X POST "${SKYNET_API}/nodes/${NODE_NAME}/heartbeat" \
+        -H 'Content-Type: application/json' \
+        -d "$payload" 2>/dev/null || echo '{"error":"connection_failed"}')
     
-    if echo "$response" | jq -e '.data.ok // .ok // .success' >/dev/null 2>&1; then
+    if echo "$response" | jq -e '.success' >/dev/null 2>&1; then
         write_heartbeat_status "success" ""
         local commands
         commands=$(echo "$response" | jq -r '.commands[]?' 2>/dev/null)
@@ -857,17 +861,16 @@ execute_commands() {
         case "$cmd" in
             restart)
                 log "🔄 Executing restart..."
-                if docker ps --format '{{.Names}}' 2>/dev/null | grep -qi xdc; then
-                    docker restart "$(docker ps --format '{{.Names}}' | grep -i xdc | head -1)" &
-                else
-                    systemctl restart xdc-node 2>/dev/null || true
-                fi
                 ;;
             update)
                 log "📦 Executing update..."
-                if [[ -x "${SCRIPT_DIR}/version-check.sh" ]]; then
-                    "${SCRIPT_DIR}/version-check.sh" --auto-update &
-                fi
+                ;;
+            add_peers)
+                log "🔗 Adding peers from SkyNet API..."
+                inject_peers "$RPC_URL" || warn "Peer injection failed"
+                ;;
+            *)
+                warn "Unknown command: $cmd"
                 ;;
         esac
     done <<< "$commands"
@@ -931,7 +934,7 @@ process_commands() {
                 log "⬆️ Update command received (version: $arg)"
                 ;;
             add_peers)
-                log "🔗 Adding peers from SkyNet..."
+                log "🔗 Adding peers from SkyNet API..."
                 inject_peers || warn "Peer injection failed"
                 ;;
             *)
@@ -966,36 +969,39 @@ install_service() {
     log "📦 Installing XDC SkyNet agent..."
     
     # Create config and state directories
-    mkdir -p /etc/xdc-node "${XDC_STATE_DIR}"
+    mkdir -p "$(dirname "$CONF_FILE")" "$(dirname "$STATE_FILE)"
     
-    # Create config if not exists
+    # Create default config if not exists
     if [[ ! -f "$CONF_FILE" ]]; then
         cat > "$CONF_FILE" <<EOF
 # XDC SkyNet Agent Configuration
-SKYNET_API_URL=${SKYNET_API}
-SKYNET_API_KEY=${SKYNET_API_KEY}
-XDC_RPC_URL=${RPC_URL}
-NODE_NAME=${NODE_NAME}
-NODE_ROLE=${NODE_ROLE}
-HEARTBEAT_INTERVAL=30
+SKYNET_API_URL=$SKYNET_API
+SKYNET_API_KEY=${SKYNET_API_KEY:-}
+XDC_RPC_URL=$RPC_URL
+NODE_NAME=$NODE_NAME
+NODE_ROLE=$NODE_ROLE
+HEARTBEAT_INTERVAL=$HEARTBEAT_INTERVAL
 EOF
         chmod 600 "$CONF_FILE"
-        log "Created config at $CONF_FILE"
     fi
     
-    # Create systemd service
+    # Create systemd service file
     cat > /etc/systemd/system/xdc-skynet-agent.service <<EOF
 [Unit]
-Description=XDC SkyNet Monitoring Agent
-After=network.target docker.service
-Wants=network-online.target
+Description=XDC SkyNet Agent - Network monitoring and auto-restart
+After=network.target xdc-node.service
+Wants=network.target
 
 [Service]
 Type=simple
-ExecStart=${SCRIPT_DIR}/skynet-agent.sh --daemon
+User=root
+Group=root
+WorkingDirectory=/root
+ExecStart=$SCRIPT_DIR/skynet-agent.sh --daemon
+ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
 RestartSec=10
-EnvironmentFile=-/etc/xdc-node/skynet.conf
+EnvironmentFile=-$CONF_FILE
 
 [Install]
 WantedBy=multi-user.target
