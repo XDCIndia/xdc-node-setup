@@ -47,9 +47,9 @@ services:
       retries: 5
       start_period: 60s
 
-  # ==================== GETH PR5 APOTHEM ====================
+  # ==================== GETH PR5 APOTHEM (v34 with geth binary) ====================
   xdc-node-gx-apothem:
-    image: anilchinchawale/gx:latest
+    image: anilchinchawale/gp5-xdc:v34
     platform: linux/amd64
     container_name: xdc-node-gx-apothem
     restart: unless-stopped
@@ -59,10 +59,10 @@ services:
       - "30307:30307"    # P2P TCP
       - "30307:30307/udp"  # P2P UDP
     volumes:
-      - xdc-gx-apothem-data:/data/xdc
-    entrypoint: ["/usr/local/bin/XDC"]
+      - xdc-gx-apothem-data:/data
+    # Entrypoint script handles XDC -> geth directory migration automatically
     command:
-      - --datadir=/data/xdc
+      - --datadir=/data
       - --networkid=51
       - --port=30307
       - --http
