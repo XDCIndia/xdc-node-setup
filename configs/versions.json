@@ -5,16 +5,38 @@
   "clients": {
     "XDPoSChain": {
       "repo": "XinFinOrg/XDPoSChain",
-      "current": "v2.6.0",
+      "current": "v2.6.8",
       "latest": null,
       "autoUpdate": false,
       "binary": "XDC",
-      "image": "xinfinorg/xdposchain",
+      "image": "xinfinorg/xdposchain:v2.6.8",
       "nodes": [
         {
           "host": "localhost",
           "role": "production",
           "rpcPort": 8545
+        }
+      ]
+    },
+    "gp5-xdc": {
+      "repo": "AnilChinchawale/go-ethereum",
+      "current": "v34",
+      "latest": "v34",
+      "autoUpdate": false,
+      "binary": "geth",
+      "image": "anilchinchawale/gp5-xdc:v34",
+      "description": "GP5 XDC client with XDPoS v2 support",
+      "networks": ["mainnet", "apothem"],
+      "defaultPorts": {
+        "rpc": 9545,
+        "ws": 9546,
+        "p2p": 30303
+      },
+      "nodes": [
+        {
+          "host": "localhost",
+          "role": "production",
+          "rpcPort": 9545
         }
       ]
     },
@@ -44,6 +66,18 @@
       "enabled": false,
       "url": ""
     }
+  },
+  "ethstats": {
+    "enabled": true,
+    "server": "stats.xdcindia.com:443",
+    "secret": "xdc_openscan_stats_2026",
+    "nodeNamePrefix": "xdc-node"
+  },
+  "ethstats": {
+    "enabled": true,
+    "server": "stats.xdcindia.com:443",
+    "secret": "xdc_openscan_stats_2026",
+    "nodeNamePrefix": "xdc-node"
   },
   "monitoring": {
     "healthCheckInterval": 15,
