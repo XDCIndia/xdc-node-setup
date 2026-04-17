@@ -142,6 +142,57 @@ stop_and_remove_container() {
 }
 
 #==============================================================================
+# Ethstats Configuration Check
+#==============================================================================
+
+check_ethstats_connectivity() {
+    local stats_server="${STATS_SERVER:-stats.xdcindia.com:443}"
+    local ethstats_enabled="${ETHSTATS_ENABLED:-true}"
+    
+    if [[ "$ethstats_enabled" == "false" ]]; then
+        log_info "Ethstats is disabled (ETHSTATS_ENABLED=false)"
+        return 0
+    fi
+    
+    log_info "Checking ethstats connectivity to $stats_server..."
+    
+    # Extract host and port from server string
+    local host port
+    if [[ "$stats_server" == *:* ]]; then
+        host="${stats_server%:*}"
+        port="${stats_server##*:}"
+    else
+        host="$stats_server"
+        port="80"
+    fi
+    
+    # Try TCP connectivity check
+    if command -v nc >/dev/null 2>&1; then
+        if nc -z -w5 "$host" "$port" >/dev/null 2>&1; then
+            log_success "Ethstats server reachable: $stats_server"
+            return 0
+        else
+            log_error "Ethstats server unreachable: $stats_server"
+            log_warning "Node will not be visible on the stats dashboard"
+            return 1
+        fi
+    elif command -v curl >/dev/null 2>&1; then
+        if curl -s -o /dev/null --connect-timeout 5 "https://$stats_server" >/dev/null 2>&1 || \
+           curl -s -o /dev/null --connect-timeout 5 "http://$stats_server" >/dev/null 2>&1; then
+            log_success "Ethstats server reachable: $stats_server"
+            return 0
+        else
+            log_error "Ethstats server unreachable: $stats_server"
+            log_warning "Node will not be visible on the stats dashboard"
+            return 1
+        fi
+    else
+        log_warning "Neither nc nor curl available; skipping ethstats connectivity check"
+        return 0
+    fi
+}
+
+#==============================================================================
 # Main Check Functions
 #==============================================================================
 
@@ -400,14 +451,21 @@ main() {
     
     case "$command" in
         check)
+            local check_failed=false
             if [[ -n "$compose_file" ]]; then
                 if ! check_specific_compose "$compose_file"; then
-                    exit 1
+                    check_failed=true
                 fi
             else
                 if ! check_all_containers; then
-                    exit 1
+                    check_failed=true
                 fi
+            fi
+            if ! check_ethstats_connectivity; then
+                check_failed=true
+            fi
+            if [[ "$check_failed" == "true" ]]; then
+                exit 1
             fi
             ;;
         resolve)
