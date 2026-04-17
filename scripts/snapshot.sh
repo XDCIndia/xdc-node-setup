@@ -16,6 +16,9 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 CONFIGS_DIR="$PROJECT_DIR/configs"
 SNAPSHOTS_URL="https://xdc.network/snapshots/"
 
+# Source chaindata auto-detection library
+source "${SCRIPT_DIR}/lib/chaindata.sh" 2>/dev/null || true
+
 # ── colours ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
@@ -109,15 +112,16 @@ cmd_detect() {
   # 2) Heuristic: PBSS uses path-based keys → triehash file absent, trie dir differs
   #    HBSS uses XDC/chaindata/ancient/ directory
   local scheme="UNKNOWN"
+  local subdir
+  subdir=$(find_chaindata_subdir_or_default "$datadir" 2>/dev/null || echo "")
+  local chaindata_base="$datadir${subdir:+/$subdir}"
 
-  if [[ -d "$datadir/XDC/chaindata/ancient" ]] || \
-     [[ -d "$datadir/geth/chaindata/ancient" ]]; then
+  if [[ -d "$chaindata_base/chaindata/ancient" ]]; then
     scheme="HBSS"
   fi
 
   # PBSS (path-based state scheme) — go-ethereum ≥1.13 uses triedb/path/
-  if [[ -d "$datadir/XDC/chaindata/triedb" ]] || \
-     [[ -d "$datadir/geth/chaindata/triedb" ]]; then
+  if [[ -d "$chaindata_base/chaindata/triedb" ]]; then
     scheme="PBSS"
   fi
 
@@ -320,9 +324,11 @@ cmd_create() {
   if [[ -f "$datadir/.state-scheme" ]]; then
     scheme="$(cat "$datadir/.state-scheme")"
   else
-    scheme_label=""
-    [[ -d "$datadir/XDC/chaindata/ancient" ]] && scheme="HBSS"
-    [[ -d "$datadir/XDC/chaindata/triedb"  ]] && scheme="PBSS"
+    local subdir
+    subdir=$(find_chaindata_subdir_or_default "$datadir" 2>/dev/null || echo "")
+    local chaindata_base="$datadir${subdir:+/$subdir}"
+    [[ -d "$chaindata_base/chaindata/ancient" ]] && scheme="HBSS"
+    [[ -d "$chaindata_base/chaindata/triedb"  ]] && scheme="PBSS"
     [[ -f "$datadir/mdbx.dat" ]]              && scheme="ERIGON-MDBX"
   fi
 

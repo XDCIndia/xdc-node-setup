@@ -38,8 +38,31 @@ NETWORK_ID="${NETWORK_ID:-50}"
 
 echo "Config: sync=$SYNC_MODE gc=$GC_MODE network=$NETWORK_ID"
 
+# Detect chaindata subdirectory (geth/ vs XDC/ vs xdcchain/)
+find_chaindata_subdir() {
+    _base="$1"
+    if [ -d "$_base/geth/chaindata" ]; then
+        echo "geth"
+    elif [ -d "$_base/XDC/chaindata" ]; then
+        echo "XDC"
+    elif [ -d "$_base/xdcchain/chaindata" ]; then
+        echo "xdcchain"
+    elif [ -d "$_base/chaindata" ]; then
+        echo ""
+    else
+        echo "geth"
+    fi
+}
+
+CHAIN_SUBDIR=$(find_chaindata_subdir "$DATADIR")
+if [ -n "$CHAIN_SUBDIR" ]; then
+    CHAINDATA_DIR="$DATADIR/$CHAIN_SUBDIR/chaindata"
+else
+    CHAINDATA_DIR="$DATADIR/chaindata"
+fi
+
 # Init genesis if needed
-if [ ! -d "$DATADIR/XDC/chaindata" ]; then
+if [ ! -d "$CHAINDATA_DIR" ]; then
     echo "No existing chaindata found, initializing..."
     
     if [ -f "$PWD_FILE" ]; then
@@ -58,7 +81,7 @@ if [ ! -d "$DATADIR/XDC/chaindata" ]; then
         exit 1
     fi
 else
-    echo "Existing chaindata found at $DATADIR/XDC/chaindata"
+    echo "Existing chaindata found at $CHAINDATA_DIR"
     if [ -f "$PWD_FILE" ]; then
         wallet=$(XDC account list --datadir "$DATADIR" 2>/dev/null | head -n 1 | grep -oE '\{[^}]+\}' | tr -d '{}')
         [ -n "$wallet" ] && echo "Wallet: $wallet"
