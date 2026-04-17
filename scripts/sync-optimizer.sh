@@ -4,6 +4,7 @@ set -euo pipefail
 # Source common utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || source "/opt/xdc-node/scripts/lib/common.sh" || true
+source "${SCRIPT_DIR}/lib/chaindata.sh" 2>/dev/null || source "/opt/xdc-node/scripts/lib/chaindata.sh" || true
 
 
 #==============================================================================
@@ -58,10 +59,11 @@ recommend_sync_mode() {
     
     # Check current chaindata size
     local chaindata_size=0
-    if [[ -d "${XDC_DATADIR}/XDC/chaindata" ]]; then
-        chaindata_size=$(du -sb "${XDC_DATADIR}/XDC/chaindata" 2>/dev/null | awk '{print $1}' || echo "0")
-    elif [[ -d "${XDC_DATADIR}/chaindata" ]]; then
-        chaindata_size=$(du -sb "${XDC_DATADIR}/chaindata" 2>/dev/null | awk '{print $1}' || echo "0")
+    local subdir
+    subdir=$(find_chaindata_subdir_or_default "$XDC_DATADIR" 2>/dev/null || echo "")
+    local chaindata_path="$XDC_DATADIR/${subdir:+$subdir/}chaindata"
+    if [[ -d "$chaindata_path" ]]; then
+        chaindata_size=$(du -sb "$chaindata_path" 2>/dev/null | awk '{print $1}' || echo "0")
     fi
     local chaindata_gb=$((chaindata_size / 1073741824))
     
@@ -309,11 +311,9 @@ analyze_pruning() {
     echo -e "${BOLD}━━━ Chaindata Pruning Analysis ━━━${NC}"
     echo ""
     
-    local chaindata_path="${XDC_DATADIR}/XDC/chaindata"
-    if [[ ! -d "$chaindata_path" ]]; then
-        chaindata_path="${XDC_DATADIR}/chaindata"
-    fi
-    
+    local subdir
+    subdir=$(find_chaindata_subdir_or_default "$XDC_DATADIR" 2>/dev/null || echo "")
+    local chaindata_path="$XDC_DATADIR/${subdir:+$subdir/}chaindata"
     if [[ ! -d "$chaindata_path" ]]; then
         warn "Chaindata directory not found"
         return 1
@@ -382,8 +382,11 @@ perform_pruning() {
     echo ""
     echo "XDC uses geth-style chaindata. To prune:"
     echo ""
+    local subdir
+    subdir=$(find_chaindata_subdir_or_default "$XDC_DATADIR" 2>/dev/null || echo "")
+    local chaindata_path="$XDC_DATADIR/${subdir:+$subdir/}chaindata"
     echo "  Option 1: Offline prune (requires resync from snapshot)"
-    echo "    - Delete chaindata directory: rm -rf ${XDC_DATADIR}/XDC/chaindata"
+    echo "    - Delete chaindata directory: rm -rf $chaindata_path"
     echo "    - Download fresh snapshot: ./scripts/snapshot-manager.sh download mainnet-full"
     echo ""
     echo "  Option 2: Ancient data prune (if using XDC v2.5+)"
