@@ -137,6 +137,7 @@ $(c BOLD)XDC-SPECIFIC COMMANDS:$(c NC)
     $(c GREEN)snapshot$(c NC)       Manage chain snapshots (download/create/verify)
     $(c GREEN)monitor$(c NC)        XDC-specific monitoring (epoch, rewards, fork detection)
     $(c GREEN)sync$(c NC)           Sync optimization (status, ETA, pruning)
+    $(c GREEN)fix-sync$(c NC)       Auto-fix common sync issues (pivot header, 0 peers, bad block)
     $(c GREEN)rpc-secure$(c NC)     RPC security hardening (method filtering, rate limits)
     $(c GREEN)network$(c NC)        Network intelligence (peer map, fork readiness, diversity)
     $(c GREEN)consensus$(c NC)      XDPoS v2 consensus monitoring (epoch, rounds, votes, penalties)
@@ -157,7 +158,7 @@ $(c BOLD)GENERAL COMMANDS:$(c NC)
     $(c GREEN)heartbeat$(c NC)      Manage SkyNet heartbeat agent (--install, --uninstall)
     $(c GREEN)ssl$(c NC)            Setup SSL/HTTPS for dashboard (--domain, --email)
     $(c GREEN)update$(c NC)         Update node Docker image and restart
-    $(c GREEN)snapshot$(c NC)       Snapshot operations (export|import|transfer|download)
+    $(c GREEN)snapshot$(c NC)       Snapshot operations (export|import|transfer|validate|restore)
     $(c GREEN)backup$(c NC)         Backup chaindata and config to archive
     $(c GREEN)restore$(c NC)        Restore from backup
     $(c GREEN)reset$(c NC)          Reset node and resync (fixes bad blocks)
@@ -194,6 +195,8 @@ $(c BOLD)EXAMPLES:$(c NC)
     xdc snapshot export -o /backup/node.tar.gz  # Export snapshot
     xdc snapshot import /backup/node.tar.gz --force  # Import snapshot
     xdc snapshot transfer -p 12141 root@65.21.71.4 /data  # Transfer via SSH
+    xdc snapshot validate /backup/node.tar.gz --json  # Validate snapshot
+    xdc snapshot restore /backup/node.tar.gz --force   # Restore with translation
     xdc snapshot download       # Download from remote URL
     xdc backup --encrypt        # Create encrypted backup
     xdc logs --follow           # Tail logs continuously
@@ -3772,10 +3775,12 @@ cmd_snapshot() {
         import) cmd_snapshot_import "$@" ;;
         transfer) cmd_snapshot_transfer "$@" ;;
         download) cmd_snapshot_download "$@" ;;
+        validate) cmd_snapshot_validate "$@" ;;
+        restore) cmd_snapshot_restore "$@" ;;
         "") cmd_snapshot_download "$@" ;;
         *)
             error "Unknown subcommand: $subcommand"
-            echo "Usage: xdc snapshot [export|import|transfer|download]"
+            echo "Usage: xdc snapshot [export|import|transfer|download|validate|restore]"
             return 1
             ;;
     esac
@@ -4123,6 +4128,131 @@ EOF
 }
 
 #==============================================================================
+# New Command: snapshot validate
+#==============================================================================
+cmd_snapshot_validate() {
+    local snapshot_path=""
+    local datadir=""
+    local json_output=false
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --datadir)
+                datadir="$2"
+                shift 2
+                ;;
+            --json)
+                json_output=true
+                shift
+                ;;
+            --quick)
+                # --quick is accepted for compatibility but deep validation is already fast
+                shift
+                ;;
+            --help|-h)
+                echo "xdc-node snapshot validate — Deep snapshot validation"
+                echo ""
+                echo "Usage:"
+                echo "  xdc-node snapshot validate <snapshot.tar.gz>"
+                echo "  xdc-node snapshot validate --datadir /path/to/chaindata"
+                echo ""
+                echo "Options:"
+                echo "  --json     Output validation metadata as JSON"
+                echo "  --quick    Fast validation (checks metadata only)"
+                echo "  --help     Show this help"
+                return 0
+                ;;
+            *)
+                if [[ -z "$snapshot_path" ]]; then
+                    snapshot_path="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
+    
+    # If no snapshot path but datadir given, create a temporary tar and validate
+    if [[ -z "$snapshot_path" && -n "$datadir" ]]; then
+        info "Validating chaindata directory: $datadir"
+        local temp_tar="/tmp/xdc-validate-$(date +%s).tar.gz"
+        tar -czf "$temp_tar" -C "$datadir" . || {
+            error "Failed to create temporary archive from datadir"
+            return 1
+        }
+        snapshot_path="$temp_tar"
+    fi
+    
+    if [[ -z "$snapshot_path" ]]; then
+        error "Usage: xdc snapshot validate <snapshot.tar.gz>"
+        return 1
+    fi
+    
+    local args=""
+    [[ "$json_output" == "true" ]] && args="$args --json"
+    
+    run_script "validate-snapshot-deep.sh" "$args $snapshot_path"
+}
+
+#==============================================================================
+# New Command: snapshot restore
+#==============================================================================
+cmd_snapshot_restore() {
+    local snapshot_path=""
+    local datadir=""
+    local force=false
+    local skip_validate=false
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --datadir)
+                datadir="$2"
+                shift 2
+                ;;
+            --force)
+                force=true
+                shift
+                ;;
+            --skip-validate)
+                skip_validate=true
+                shift
+                ;;
+            --help|-h)
+                echo "xdc-node snapshot restore — Restore snapshot with layout translation"
+                echo ""
+                echo "Usage:"
+                echo "  xdc-node snapshot restore <snapshot.tar.gz>"
+                echo "  xdc-node snapshot restore <snapshot.tar.gz> --datadir /path"
+                echo ""
+                echo "Options:"
+                echo "  --datadir PATH      Target data directory"
+                echo "  --force             Skip confirmation prompt"
+                echo "  --skip-validate     Skip pre-flight validation"
+                echo "  --help              Show this help"
+                return 0
+                ;;
+            *)
+                if [[ -z "$snapshot_path" ]]; then
+                    snapshot_path="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
+    
+    if [[ -z "$snapshot_path" ]]; then
+        error "Usage: xdc snapshot restore <snapshot.tar.gz>"
+        return 1
+    fi
+    
+    local args=""
+    [[ -n "$datadir" ]] && args="$args --datadir $datadir"
+    [[ "$force" == "true" ]] && args="$args --force"
+    [[ "$skip_validate" == "true" ]] && args="$args --skip-validate"
+    
+    run_script "snapshot-restore.sh" "$args $snapshot_path"
+}
+
+#==============================================================================
 # New Command: snapshot transfer
 #==============================================================================
 cmd_snapshot_transfer() {
@@ -4341,6 +4471,36 @@ cmd_sync() {
     done
     
     run_script "sync-optimizer.sh" "--$action $args"
+}
+
+cmd_fix_sync() {
+    local args=""
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --rpc|--container|--compose|--logs|--dry-run)
+                args="$args $1 $2"
+                shift 2
+                ;;
+            --help|-h)
+                echo "xdc-node fix-sync — Auto-fix common sync issues"
+                echo ""
+                echo "Usage:"
+                echo "  xdc-node fix-sync              Run full diagnosis and apply fixes"
+                echo "  xdc-node fix-sync --dry-run    Diagnose only, do not apply fixes"
+                echo "  xdc-node fix-sync --rpc URL    Use custom RPC endpoint"
+                echo ""
+                echo "Fixes:"
+                echo "  • pivot header not found  → switch to full sync mode (#149)"
+                echo "  • 0 peers                 → inject bootnodes and restart (#146)"
+                echo "  • bad block / merkle root → offer reset or client switch (#148/#147)"
+                return 0
+                ;;
+            *) shift ;;
+        esac
+    done
+    
+    run_script "fix-sync.sh" "$args"
 }
 
 cmd_rpc_secure() {
@@ -5490,6 +5650,7 @@ main() {
         snapshot)     cmd_snapshot "$@" ;;
         monitor)      cmd_monitor "$@" ;;
         sync)         cmd_sync "$@" ;;
+        fix-sync)     cmd_fix_sync "$@" ;;
         rpc-secure)   cmd_rpc_secure "$@" ;;
         network)      cmd_network "$@" ;;
         consensus)    cmd_consensus "$@" ;;
@@ -5556,6 +5717,7 @@ main() {
                     snapshot)   cmd_snapshot --help ;;
                     monitor)    cmd_monitor --help ;;
                     sync)       cmd_sync --help ;;
+                    fix-sync)   cmd_fix_sync --help ;;
                     rpc-secure) cmd_rpc_secure --help ;;
                     network)    cmd_network --help ;;
                     consensus)  cmd_consensus --help ;;
