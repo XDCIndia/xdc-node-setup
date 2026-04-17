@@ -205,6 +205,16 @@ runcmd:
   - systemctl enable xdc-node
   - systemctl start xdc-node
   
+  # Install XNS CLI
+  - |
+    cd /opt
+    if [ ! -d "/opt/xdc-node-setup" ]; then
+      git clone https://github.com/XDCIndia/xdc-node-setup.git xdc-node-setup || true
+    fi
+    if [ -f "/opt/xdc-node-setup/cli/install.sh" ]; then
+      bash /opt/xdc-node-setup/cli/install.sh
+    fi
+  
   # Log completion
   - echo "XDC Node setup completed at $(date)" >> /var/log/xdc-setup.log
 

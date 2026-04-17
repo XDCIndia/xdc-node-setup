@@ -18,7 +18,7 @@ apt-get install -y curl wget git build-essential jq
 
 # Clone and run setup script
 cd /root
-git clone https://github.com/AnilChinchawale/XDC-Node-Setup.git
+git clone https://github.com/XDCIndia/xdc-node-setup.git XDC-Node-Setup
 cd XDC-Node-Setup
 
 # Run setup with environment variables
@@ -27,5 +27,10 @@ export NETWORK="${network}"
 export CLIENT="${client}"
 
 ./setup.sh --non-interactive
+
+# Ensure XNS CLI is installed
+if [ -f "./cli/install.sh" ]; then
+    bash ./cli/install.sh
+fi
 
 echo "XDC node setup complete!"
