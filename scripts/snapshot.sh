@@ -16,6 +16,9 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 CONFIGS_DIR="$PROJECT_DIR/configs"
 SNAPSHOTS_URL="https://xdc.network/snapshots/"
 
+# Source chaindata auto-detection library
+source "${SCRIPT_DIR}/lib/chaindata.sh" 2>/dev/null || true
+
 # ── colours ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
@@ -109,15 +112,16 @@ cmd_detect() {
   # 2) Heuristic: PBSS uses path-based keys → triehash file absent, trie dir differs
   #    HBSS uses XDC/chaindata/ancient/ directory
   local scheme="UNKNOWN"
+  local subdir
+  subdir=$(find_chaindata_subdir_or_default "$datadir" 2>/dev/null || echo "")
+  local chaindata_base="$datadir${subdir:+/$subdir}"
 
-  if [[ -d "$datadir/XDC/chaindata/ancient" ]] || \
-     [[ -d "$datadir/geth/chaindata/ancient" ]]; then
+  if [[ -d "$chaindata_base/chaindata/ancient" ]]; then
     scheme="HBSS"
   fi
 
   # PBSS (path-based state scheme) — go-ethereum ≥1.13 uses triedb/path/
-  if [[ -d "$datadir/XDC/chaindata/triedb" ]] || \
-     [[ -d "$datadir/geth/chaindata/triedb" ]]; then
+  if [[ -d "$chaindata_base/chaindata/triedb" ]]; then
     scheme="PBSS"
   fi
 
@@ -320,20 +324,52 @@ cmd_create() {
   if [[ -f "$datadir/.state-scheme" ]]; then
     scheme="$(cat "$datadir/.state-scheme")"
   else
-    scheme_label=""
-    [[ -d "$datadir/XDC/chaindata/ancient" ]] && scheme="HBSS"
-    [[ -d "$datadir/XDC/chaindata/triedb"  ]] && scheme="PBSS"
+    local subdir
+    subdir=$(find_chaindata_subdir_or_default "$datadir" 2>/dev/null || echo "")
+    local chaindata_base="$datadir${subdir:+/$subdir}"
+    [[ -d "$chaindata_base/chaindata/ancient" ]] && scheme="HBSS"
+    [[ -d "$chaindata_base/chaindata/triedb"  ]] && scheme="PBSS"
     [[ -f "$datadir/mdbx.dat" ]]              && scheme="ERIGON-MDBX"
   fi
 
+  # Get container image digest for tagging
+  local image_digest="unknown"
+  if docker inspect "$container" &>/dev/null 2>&1; then
+    image_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$container" 2>/dev/null || \
+                   docker inspect --format='{{.Config.Image}}' "$container" 2>/dev/null || echo "unknown")
+  fi
+  # Sanitize digest for filename
+  image_digest="${image_digest//[:\/]/-}"
+
   local ts
   ts="$(date +%Y%m%d-%H%M%S)"
-  local outfile="/var/backups/xdc/${client}-${network}-${scheme,,}-${ts}.tar.zst"
+  local outfile="/var/backups/xdc/${client}-${network}-${scheme,,}-${image_digest}-${ts}.tar.zst"
   mkdir -p /var/backups/xdc
 
   info "Creating snapshot: ${BOLD}$outfile${NC}"
   info "State scheme: ${BOLD}$scheme${NC}"
+  info "Image ref: ${BOLD}$image_digest${NC}"
   echo ""
+
+  # Pre-flight validation
+  local subdir
+  subdir=$(find_chaindata_subdir_or_default "$datadir" 2>/dev/null || echo "")
+  local chaindata_base="$datadir${subdir:+/$subdir}"
+  if [[ ! -d "$chaindata_base/chaindata" ]]; then
+    die "No chaindata directory found at $chaindata_base/chaindata"
+  fi
+
+  local db_files
+  db_files=$(find "$chaindata_base/chaindata" -maxdepth 1 \( -name "*.sst" -o -name "*.ldb" \) 2>/dev/null | wc -l)
+  if [[ "$db_files" -eq 0 ]]; then
+    die "Chaindata appears empty (no *.sst or *.ldb files). Aborting snapshot creation."
+  fi
+
+  # Warn about missing state root cache
+  if [[ ! -f "$datadir/xdc-state-root-cache.csv" ]] && [[ ! -f "$chaindata_base/xdc-state-root-cache.csv" ]]; then
+    warn "xdc-state-root-cache.csv not found — cold snapshot recovery may fail"
+    warn "Consider copying it into the datadir before distributing this snapshot"
+  fi
 
   # Stop container
   if docker inspect "$container" &>/dev/null 2>&1; then

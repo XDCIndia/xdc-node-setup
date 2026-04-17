@@ -12,7 +12,7 @@ packages:
 runcmd:
   - |
     cd /root
-    git clone https://github.com/AnilChinchawale/XDC-Node-Setup.git
+    git clone https://github.com/XDCIndia/xdc-node-setup.git XDC-Node-Setup
     cd XDC-Node-Setup
     
     export NODE_TYPE="${node_type}"
@@ -20,5 +20,10 @@ runcmd:
     export CLIENT="${client}"
     
     ./setup.sh --non-interactive
+    
+    # Ensure XNS CLI is installed
+    if [ -f "./cli/install.sh" ]; then
+        bash ./cli/install.sh
+    fi
 
 final_message: "XDC node setup complete!"

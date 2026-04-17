@@ -64,6 +64,39 @@
   tags: [install]
 
 # =========================================================================
+# Install XDC CLI (XNS)
+# =========================================================================
+- name: Ensure XNS CLI directory exists
+  ansible.builtin.file:
+    path: /opt/xdc-node-setup/cli
+    state: directory
+    mode: '0755'
+  tags: [install, cli]
+
+- name: Copy XNS CLI binary
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../cli/xdc"
+    dest: /usr/local/bin/xdc
+    mode: '0755'
+  when: ansible_stat.exists | default(false) or true
+  ignore_errors: yes
+  tags: [install, cli]
+
+- name: Install XNS CLI from repository
+  ansible.builtin.shell: |
+    set -e
+    if [ -f "{{ playbook_dir }}/../../cli/install.sh" ]; then
+      INSTALL_DIR=/usr/local/bin bash "{{ playbook_dir }}/../../cli/install.sh"
+    elif [ -f "{{ playbook_dir }}/../../cli/xdc" ]; then
+      cp "{{ playbook_dir }}/../../cli/xdc" /usr/local/bin/xdc
+      chmod +x /usr/local/bin/xdc
+    fi
+  args:
+    executable: /bin/bash
+  changed_when: true
+  tags: [install, cli]
+
+# =========================================================================
 # Configure Node
 # =========================================================================
 - name: Create XDC data directories

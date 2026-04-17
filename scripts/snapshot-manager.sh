@@ -4,6 +4,7 @@ set -euo pipefail
 # Source common utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh" 2>/dev/null || source "/opt/xdc-node/scripts/lib/common.sh" || true
+source "${SCRIPT_DIR}/lib/chaindata.sh" 2>/dev/null || source "/opt/xdc-node/scripts/lib/chaindata.sh" || true
 
 
 #==============================================================================
@@ -293,14 +294,13 @@ verify_chaindata() {
     echo -e "${BOLD}━━━ Verifying Chaindata Integrity ━━━${NC}"
     echo ""
     
-    # Check for chaindata directory
-    local chaindata_path="${datadir}/XDC/chaindata"
+    # Check for chaindata directory (auto-detect geth/ vs XDC/ vs xdcchain/)
+    local subdir
+    subdir=$(find_chaindata_subdir_or_default "$datadir")
+    local chaindata_path="$datadir/${subdir:+$subdir/}chaindata"
     if [[ ! -d "$chaindata_path" ]]; then
-        chaindata_path="${datadir}/chaindata"
-        if [[ ! -d "$chaindata_path" ]]; then
-            warn "Could not locate chaindata directory"
-            return 1
-        fi
+        warn "Could not locate chaindata directory"
+        return 1
     fi
     
     # Check database files
@@ -382,11 +382,9 @@ create_snapshot() {
     echo ""
     
     # Create archive with chaindata
-    local chaindata_path="${datadir}/XDC/chaindata"
-    if [[ ! -d "$chaindata_path" ]]; then
-        chaindata_path="${datadir}/chaindata"
-    fi
-    
+    local subdir
+    subdir=$(find_chaindata_subdir_or_default "$datadir")
+    local chaindata_path="$datadir/${subdir:+$subdir/}chaindata"
     if [[ ! -d "$chaindata_path" ]]; then
         die "Chaindata directory not found: $chaindata_path"
     fi

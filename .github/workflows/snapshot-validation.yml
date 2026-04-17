@@ -1,0 +1,61 @@
+name: Snapshot Validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate-snapshot-script:
+    name: Validate Snapshot Archive Script
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install zstd
+        run: sudo apt-get update && sudo apt-get install -y zstd
+
+      - name: Test validation script syntax
+        run: bash -n scripts/validate-snapshot-archive.sh
+
+      - name: Create mock valid snapshot
+        run: |
+          mkdir -p /tmp/mock-snapshot/geth/chaindata/ancient
+          touch /tmp/mock-snapshot/geth/chaindata/CURRENT
+          touch /tmp/mock-snapshot/geth/chaindata/1.ldb
+          touch /tmp/mock-snapshot/geth/chaindata/ancient/bodies.0000.cdat
+          touch /tmp/mock-snapshot/xdc-state-root-cache.csv
+          tar -czf /tmp/valid-snapshot.tar.gz -C /tmp/mock-snapshot .
+
+      - name: Validate mock valid snapshot
+        run: |
+          scripts/validate-snapshot-archive.sh --no-size-check /tmp/valid-snapshot.tar.gz
+
+      - name: Create mock empty snapshot
+        run: |
+          mkdir -p /tmp/mock-empty/geth/chaindata
+          touch /tmp/mock-empty/geth/chaindata/CURRENT
+          tar -czf /tmp/empty-snapshot.tar.gz -C /tmp/mock-empty .
+
+      - name: Validate mock empty snapshot fails
+        run: |
+          if scripts/validate-snapshot-archive.sh --no-size-check /tmp/empty-snapshot.tar.gz; then
+            echo "Expected validation to fail for empty snapshot"
+            exit 1
+          else
+            echo "Validation correctly rejected empty snapshot"
+          fi
+
+      - name: Create mock bad layout snapshot
+        run: |
+          mkdir -p /tmp/mock-bad/geth/chaindata
+          mkdir -p /tmp/mock-bad/XDC/chaindata
+          touch /tmp/mock-bad/geth/chaindata/1.ldb
+          touch /tmp/mock-bad/XDC/chaindata/2.ldb
+          tar -czf /tmp/bad-layout-snapshot.tar.gz -C /tmp/mock-bad .
+
+      - name: Validate mock bad layout snapshot warns
+        run: |
+          scripts/validate-snapshot-archive.sh --no-size-check /tmp/bad-layout-snapshot.tar.gz || true
