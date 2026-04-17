@@ -137,6 +137,7 @@ $(c BOLD)XDC-SPECIFIC COMMANDS:$(c NC)
     $(c GREEN)snapshot$(c NC)       Manage chain snapshots (download/create/verify)
     $(c GREEN)monitor$(c NC)        XDC-specific monitoring (epoch, rewards, fork detection)
     $(c GREEN)sync$(c NC)           Sync optimization (status, ETA, pruning)
+    $(c GREEN)fix-sync$(c NC)       Auto-fix common sync issues (pivot header, 0 peers, bad block)
     $(c GREEN)rpc-secure$(c NC)     RPC security hardening (method filtering, rate limits)
     $(c GREEN)network$(c NC)        Network intelligence (peer map, fork readiness, diversity)
     $(c GREEN)consensus$(c NC)      XDPoS v2 consensus monitoring (epoch, rounds, votes, penalties)
@@ -4343,6 +4344,36 @@ cmd_sync() {
     run_script "sync-optimizer.sh" "--$action $args"
 }
 
+cmd_fix_sync() {
+    local args=""
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --rpc|--container|--compose|--logs|--dry-run)
+                args="$args $1 $2"
+                shift 2
+                ;;
+            --help|-h)
+                echo "xdc-node fix-sync — Auto-fix common sync issues"
+                echo ""
+                echo "Usage:"
+                echo "  xdc-node fix-sync              Run full diagnosis and apply fixes"
+                echo "  xdc-node fix-sync --dry-run    Diagnose only, do not apply fixes"
+                echo "  xdc-node fix-sync --rpc URL    Use custom RPC endpoint"
+                echo ""
+                echo "Fixes:"
+                echo "  • pivot header not found  → switch to full sync mode (#149)"
+                echo "  • 0 peers                 → inject bootnodes and restart (#146)"
+                echo "  • bad block / merkle root → offer reset or client switch (#148/#147)"
+                return 0
+                ;;
+            *) shift ;;
+        esac
+    done
+    
+    run_script "fix-sync.sh" "$args"
+}
+
 cmd_rpc_secure() {
     local action="audit"
     local profile="public"
@@ -5490,6 +5521,7 @@ main() {
         snapshot)     cmd_snapshot "$@" ;;
         monitor)      cmd_monitor "$@" ;;
         sync)         cmd_sync "$@" ;;
+        fix-sync)     cmd_fix_sync "$@" ;;
         rpc-secure)   cmd_rpc_secure "$@" ;;
         network)      cmd_network "$@" ;;
         consensus)    cmd_consensus "$@" ;;
@@ -5556,6 +5588,7 @@ main() {
                     snapshot)   cmd_snapshot --help ;;
                     monitor)    cmd_monitor --help ;;
                     sync)       cmd_sync --help ;;
+                    fix-sync)   cmd_fix_sync --help ;;
                     rpc-secure) cmd_rpc_secure --help ;;
                     network)    cmd_network --help ;;
                     consensus)  cmd_consensus --help ;;

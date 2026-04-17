@@ -298,9 +298,104 @@ watch_sync() {
         calculate_sync_eta "true"
         
         echo ""
+        diagnose_sync_issues "true"
+        
+        echo ""
         echo -e "${DIM}Refreshing in ${interval}s...${NC}"
         sleep "$interval"
     done
+}
+
+#==============================================================================
+# Sync Issue Diagnosis
+#==============================================================================
+
+diagnose_sync_issues() {
+    local quiet="${1:-false}"
+    local container=""
+    container=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'xdc-(node|gp5|geth|v268)' | head -1 || true)
+    
+    if [[ -z "$container" ]]; then
+        return 0
+    fi
+    
+    local issues_found=0
+    local log_lines=200
+    
+    if [[ "$quiet" != "true" ]]; then
+        echo -e "${BOLD}━━━━━ Sync Health Diagnostics ━━━━━${NC}"
+        echo ""
+    fi
+    
+    # Check peer count
+    local peers_hex
+    peers_hex=$(rpc_call "$XDC_RPC_URL" "net_peerCount" | jq -r '.result // "0x0"')
+    local peers=0
+    peers=$(hex_to_dec "$peers_hex")
+    
+    if [[ "$peers" -eq 0 ]]; then
+        warn "0 peers detected (#146)"
+        info "  Run: xdc-node fix-sync"
+        issues_found=$((issues_found + 1))
+    fi
+    
+    # Check logs for pivot header
+    if docker logs --tail "$log_lines" "$container" 2>&1 | grep -qiE "pivot header is not found"; then
+        warn "'pivot header not found' detected in logs (#149)"
+        info "  Run: xdc-node fix-sync"
+        info "  Or manually: export SYNC_MODE=full; docker compose restart"
+        issues_found=$((issues_found + 1))
+    fi
+    
+    # Check logs for bad block
+    if docker logs --tail "$log_lines" "$container" 2>&1 | grep -qiE "BAD BLOCK|invalid merkle root|retrieved hash chain is invalid"; then
+        warn "Bad block / merkle root error detected (#148/#147)"
+        info "  Run: xdc-node fix-sync"
+        info "  Or consider switching client image or resetting chaindata"
+        issues_found=$((issues_found + 1))
+    fi
+    
+    # Check logs for state indexer recovery stuck
+    if docker logs --tail "$log_lines" "$container" 2>&1 | grep -qiE "State indexer is in recovery"; then
+        warn "State indexer in recovery detected"
+        info "  Monitor for 30 minutes. If stuck, consider chaindata reset"
+        issues_found=$((issues_found + 1))
+    fi
+    
+    # Stalled sync detection: if syncing but block hasn't changed in a while
+    local syncing
+    syncing=$(rpc_call "$XDC_RPC_URL" "eth_syncing" | jq -r '.result // false')
+    if [[ "$syncing" != "false" && "$peers" -gt 0 ]]; then
+        local current_block
+        current_block=$(rpc_call "$XDC_RPC_URL" "eth_blockNumber" | jq -r '.result // "0x0"')
+        current_block=$(hex_to_dec "$current_block")
+        
+        if [[ -f "$HISTORY_FILE" ]]; then
+            local prev_block
+            prev_block=$(jq -r '.last_block // 0' "$HISTORY_FILE")
+            if [[ "$prev_block" -gt 0 && "$current_block" -eq "$prev_block" ]]; then
+                local prev_time
+                prev_time=$(jq -r '.last_time // 0' "$HISTORY_FILE")
+                local current_time
+                current_time=$(date +%s)
+                local stalled_seconds=$((current_time - prev_time))
+                
+                if [[ "$stalled_seconds" -gt 300 ]]; then
+                    warn "Sync appears stalled (no block progress for ${stalled_seconds}s)"
+                    info "  Run: xdc-node fix-sync"
+                    issues_found=$((issues_found + 1))
+                fi
+            fi
+        fi
+    fi
+    
+    if [[ "$issues_found" -eq 0 && "$quiet" != "true" ]]; then
+        ok "No common sync issues detected"
+    fi
+    
+    if [[ "$quiet" != "true" ]]; then
+        echo ""
+    fi
 }
 
 #==============================================================================
@@ -558,7 +653,8 @@ Usage: $(basename "$0") <command> [options]
 
 Commands:
     recommend               Recommend optimal sync mode based on hardware
-    status                  Show current sync status and ETA
+    status                  Show current sync status, ETA, and health check
+    diagnose                Check for common sync issues and recommend fixes
     watch                   Auto-refresh sync status every 30 seconds
     prune                   Analyze and perform chaindata pruning
     compare                 Compare multiple XDC clients (if running)
@@ -613,7 +709,7 @@ main() {
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            recommend|status|watch|prune|compare)
+            recommend|status|watch|prune|compare|diagnose)
                 command="$1"
                 shift
                 ;;
@@ -638,15 +734,19 @@ main() {
         esac
     done
     
-    # Ensure history directory exists
-    mkdir -p "$(dirname "$HISTORY_FILE")"
+    # Ensure history directory exists (best effort)
+    mkdir -p "$(dirname "$HISTORY_FILE")" 2>/dev/null || true
     
     case "$command" in
         recommend)
             recommend_sync_mode
             ;;
+        diagnose)
+            diagnose_sync_issues
+            ;;
         status)
             calculate_sync_eta
+            diagnose_sync_issues
             ;;
         watch)
             watch_sync "$interval"
