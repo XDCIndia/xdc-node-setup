@@ -1429,9 +1429,18 @@ setup_log_rotation_cron() {
 # CLI Tool Installation
 #==============================================================================
 install_cli_tool() {
-    [[ "$INSTALL_CLI" != "true" ]] && return 0
+    [[ "${INSTALL_CLI:-true}" != "true" ]] && return 0
     
     log "Installing XDC CLI tool..."
+    
+    # Prefer the dedicated installer script if available
+    if [[ -f "${SCRIPT_DIR}/cli/install.sh" ]]; then
+        if bash "${SCRIPT_DIR}/cli/install.sh" >/dev/null 2>&1; then
+            log "CLI installed via cli/install.sh"
+            return 0
+        fi
+        warn "cli/install.sh failed, falling back to manual install"
+    fi
     
     # Copy CLI script — prefer cli/xdc (full version) over cli/xdc-node (legacy)
     local cli_source="${SCRIPT_DIR}/cli/xdc"
@@ -1445,9 +1454,9 @@ install_cli_tool() {
         log "Installed CLI from bundled $(basename "$cli_source")"
     else
         warn "CLI source not found, downloading..."
-        curl -fsSL "https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/cli/xdc" \
+        curl -fsSL "https://raw.githubusercontent.com/XDCIndia/xdc-node-setup/main/cli/xdc" \
             -o "$PROJECT_ROOT/scripts/xdc-node" 2>/dev/null || \
-        curl -fsSL "https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/cli/xdc-node" \
+        curl -fsSL "https://raw.githubusercontent.com/XDCIndia/xdc-node-setup/main/cli/xdc-node" \
             -o "$PROJECT_ROOT/scripts/xdc-node" 2>/dev/null || {
             error "Failed to download CLI tool"
             return 1

@@ -8,9 +8,28 @@
 
 The `xdc` command-line tool provides comprehensive control over your XDC Network node, including deployment, monitoring, troubleshooting, and maintenance operations.
 
-**Installation:** The CLI is automatically installed during `setup.sh` and available globally as `xdc`.
+**Installation:** The CLI is automatically installed during `setup.sh`, Ansible playbooks, and Terraform cloud-init deployments. It is available globally as `xdc`.
 
 **Location:** `/usr/local/bin/xdc` (symlinked from install directory)
+
+**Verification:** After deployment, confirm the CLI is installed:
+
+```bash
+xdc --version
+which xdc
+```
+
+If the CLI is missing, you can install it manually:
+
+```bash
+bash /path/to/xdc-node-setup/cli/install.sh
+```
+
+Or run the smoke test:
+
+```bash
+bash tests/test-cli-install.sh
+```
 
 ---
 
