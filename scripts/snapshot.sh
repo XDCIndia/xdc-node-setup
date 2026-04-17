@@ -332,14 +332,44 @@ cmd_create() {
     [[ -f "$datadir/mdbx.dat" ]]              && scheme="ERIGON-MDBX"
   fi
 
+  # Get container image digest for tagging
+  local image_digest="unknown"
+  if docker inspect "$container" &>/dev/null 2>&1; then
+    image_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$container" 2>/dev/null || \
+                   docker inspect --format='{{.Config.Image}}' "$container" 2>/dev/null || echo "unknown")
+  fi
+  # Sanitize digest for filename
+  image_digest="${image_digest//[:\/]/-}"
+
   local ts
   ts="$(date +%Y%m%d-%H%M%S)"
-  local outfile="/var/backups/xdc/${client}-${network}-${scheme,,}-${ts}.tar.zst"
+  local outfile="/var/backups/xdc/${client}-${network}-${scheme,,}-${image_digest}-${ts}.tar.zst"
   mkdir -p /var/backups/xdc
 
   info "Creating snapshot: ${BOLD}$outfile${NC}"
   info "State scheme: ${BOLD}$scheme${NC}"
+  info "Image ref: ${BOLD}$image_digest${NC}"
   echo ""
+
+  # Pre-flight validation
+  local subdir
+  subdir=$(find_chaindata_subdir_or_default "$datadir" 2>/dev/null || echo "")
+  local chaindata_base="$datadir${subdir:+/$subdir}"
+  if [[ ! -d "$chaindata_base/chaindata" ]]; then
+    die "No chaindata directory found at $chaindata_base/chaindata"
+  fi
+
+  local db_files
+  db_files=$(find "$chaindata_base/chaindata" -maxdepth 1 \( -name "*.sst" -o -name "*.ldb" \) 2>/dev/null | wc -l)
+  if [[ "$db_files" -eq 0 ]]; then
+    die "Chaindata appears empty (no *.sst or *.ldb files). Aborting snapshot creation."
+  fi
+
+  # Warn about missing state root cache
+  if [[ ! -f "$datadir/xdc-state-root-cache.csv" ]] && [[ ! -f "$chaindata_base/xdc-state-root-cache.csv" ]]; then
+    warn "xdc-state-root-cache.csv not found — cold snapshot recovery may fail"
+    warn "Consider copying it into the datadir before distributing this snapshot"
+  fi
 
   # Stop container
   if docker inspect "$container" &>/dev/null 2>&1; then
