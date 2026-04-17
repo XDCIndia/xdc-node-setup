@@ -198,6 +198,12 @@ variable "extra_flags" {
   default     = []
 }
 
+variable "state_scheme" {
+  description = "State database scheme (hash or path). Leave empty for auto-detection"
+  type        = string
+  default     = ""
+}
+
 variable "bootnodes" {
   description = "Custom bootnode URLs (overrides defaults)"
   type        = list(string)

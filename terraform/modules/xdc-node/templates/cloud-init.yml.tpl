@@ -72,6 +72,7 @@ write_files:
           environment:
             - NETWORK=${network}
             - NODE_NAME=${node_name}
+            - STATE_SCHEME=${state_scheme}
           command: >
 %{ if client == "XDPoSChain" ~}
             --${network}
