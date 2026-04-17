@@ -115,8 +115,13 @@ fi
 # NAT
 [ -n "$EXTERNAL_IP" ] && ARGS="$ARGS --nat extip:$EXTERNAL_IP"
 
-# Ethstats
-ARGS="$ARGS --ethstats $netstats"
+# Ethstats (conditional)
+if [ "${ETHSTATS_ENABLED:-true}" != "false" ]; then
+    ARGS="$ARGS --ethstats $netstats"
+    echo "Ethstats enabled: reporting to ${STATS_SERVER:-stats.xdcindia.com:443} as ${INSTANCE_NAME:-XDC_GP5}"
+else
+    echo "Ethstats disabled"
+fi
 
 # HTTP/RPC (GP5 uses --http.* style flags)
 ARGS="$ARGS --http"

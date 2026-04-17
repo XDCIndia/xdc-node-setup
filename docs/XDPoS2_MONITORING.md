@@ -390,6 +390,67 @@ interface XDPoSMetrics {
 
 ---
 
+## Ethstats Configuration
+
+Nodes must report to the ethstats dashboard at **stats.xdcindia.com** for network visibility and health monitoring.
+
+### Required Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ETHSTATS_ENABLED` | `true` | Toggle ethstats reporting on/off |
+| `INSTANCE_NAME` | `XDC_GP5_Apothem` | Descriptive node name shown on dashboard |
+| `STATS_SECRET` | `xdc_openscan_stats_2026` | Auth secret for the stats server |
+| `STATS_SERVER` | `stats.xdcindia.com:443` | Target stats server host:port |
+
+### Docker Compose Example
+
+```yaml
+environment:
+  - ETHSTATS_ENABLED=${ETHSTATS_ENABLED:-true}
+  - INSTANCE_NAME=${INSTANCE_NAME:-xdc03-gp5-apothem}
+  - STATS_SECRET=${STATS_SECRET:-xdc_openscan_stats_2026}
+  - STATS_SERVER=${STATS_SERVER:-stats.xdcindia.com:443}
+```
+
+### Disabling Ethstats
+
+For private or non-reporting nodes:
+
+```bash
+export ETHSTATS_ENABLED=false
+```
+
+### Pre-flight Verification
+
+Run the preflight check script to verify ethstats connectivity before deployment:
+
+```bash
+./scripts/preflight-check.sh
+```
+
+A successful check will show:
+
+```
+ℹ Checking ethstats connectivity to stats.xdcindia.com:443...
+✓ Ethstats server reachable: stats.xdcindia.com:443
+```
+
+### Troubleshooting Missing Nodes on Dashboard
+
+If a node does not appear on [stats.xdcindia.com](https://stats.xdcindia.com):
+
+1. Verify `ETHSTATS_ENABLED` is not set to `false`
+2. Confirm `STATS_SECRET` matches the server requirement
+3. Check firewall rules allow outbound TCP to `stats.xdcindia.com:443`
+4. Review container logs for ethstats connection errors:
+   ```bash
+   docker logs xdc-node-gp5-apothem | grep -i ethstats
+   ```
+5. Re-run preflight checks after correcting configuration
+
+---
+
 ## Troubleshooting
 
 ### Common Issues
