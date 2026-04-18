@@ -60,6 +60,59 @@ COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-xdc-node}"
 AUTO_RESOLVE="${XDC_DEPLOY_AUTO:-false}"
 
 #==============================================================================
+# Snapshot Validation
+#==============================================================================
+
+deploy_validate_snapshot() {
+    local datadir="${XDC_DATA:-${PROJECT_ROOT}/mainnet/xdcchain}"
+    local skip_validation="${XDC_SKIP_SNAPSHOT_VALIDATION:-false}"
+
+    if [[ "$skip_validation" == "true" ]]; then
+        log_warning "Skipping snapshot validation (XDC_SKIP_SNAPSHOT_VALIDATION=true)"
+        return 0
+    fi
+
+    # Only validate if chaindata exists (not a fresh deploy)
+    if [[ ! -d "$datadir" ]]; then
+        log_info "No existing datadir found — fresh deployment, skipping validation"
+        return 0
+    fi
+
+    log_step "Running pre-deployment snapshot validation..."
+
+    local validation_script="${SCRIPT_DIR}/validate-snapshot-deep.sh"
+    if [[ ! -f "$validation_script" ]]; then
+        log_warning "Deep validator not found, falling back to preflight only"
+        return 0
+    fi
+
+    local report_file=$(mktemp)
+    if ! bash "$validation_script" --quick --json --output "$report_file" --datadir "$datadir" >/dev/null 2>&1; then
+        log_error "Pre-deployment snapshot validation FAILED"
+        if command -v jq &>/dev/null && [[ -f "$report_file" ]]; then
+            local errors=$(jq -r '.checks | to_entries[] | select(.value.passed==false) | "  - \(.key): \(.value.detail // "failed")"' "$report_file" 2>/dev/null)
+            echo "$errors" | while read line; do log_error "$line"; done
+        fi
+        rm -f "$report_file"
+
+        # Notify operators
+        if [[ -f "${SCRIPT_DIR}/lib/notify.sh" ]]; then
+            source "${SCRIPT_DIR}/lib/notify.sh"
+            notify_load_config
+            notify_alert "critical" "Snapshot Validation Failed" \
+                "Pre-deployment validation failed for ${NOTIFY_NODE_HOST}. Deployment aborted. Check datadir: $datadir"
+        fi
+
+        log_error "Deployment aborted. To force deployment anyway, set XDC_SKIP_SNAPSHOT_VALIDATION=true"
+        exit 1
+    fi
+
+    log_success "Pre-deployment snapshot validation passed"
+    rm -f "$report_file"
+    return 0
+}
+
+#==============================================================================
 # Main
 #==============================================================================
 
@@ -86,6 +139,9 @@ main() {
     
     # Run preflight check
     "${SCRIPT_DIR}/preflight-check.sh" resolve
+    
+    # Run pre-deployment snapshot validation
+    deploy_validate_snapshot
     
     # Start deployment
     log_step "Starting deployment..."
