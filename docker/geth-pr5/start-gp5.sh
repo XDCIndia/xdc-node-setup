@@ -176,7 +176,7 @@ netstats="${INSTANCE_NAME}:${STATS_SECRET:-xdc_openscan_stats_2026}@${STATS_SERV
 # Build command line (GP5 / geth 1.17+ style flags)
 ARGS="--datadir $DATADIR"
 ARGS="$ARGS --networkid $NETWORK_ID"
-ARGS="$ARGS --port 30303"
+ARGS="$ARGS --port ${P2P_PORT:-30303}"
 ARGS="$ARGS --syncmode $SYNC_MODE"
 ARGS="$ARGS --gcmode $GC_MODE"
 ARGS="$ARGS --verbosity $LOG_LEVEL"
