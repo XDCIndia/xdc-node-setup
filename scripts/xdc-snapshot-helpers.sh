@@ -261,9 +261,9 @@ validate_snapshot_for_transfer() {
     
     log_info "Validating snapshot at: $datadir"
     
-    # Check if xdc binary supports snapshot validate
-    if ! command -v xdc &>/dev/null || ! xdc snapshot validate --help &>/dev/null 2>&1; then
-        log_warn "xdc snapshot validate not available, using basic checks"
+    local validation_script="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/validate-snapshot-deep.sh"
+    if [[ ! -f "$validation_script" ]]; then
+        log_warn "Deep validator not found at $validation_script, using basic checks"
         
         # Basic validation: check if chaindata exists and has data
         local chaindata_dir=$(find_chaindata_dir "$datadir")
@@ -278,39 +278,46 @@ validate_snapshot_for_transfer() {
             return 1
         fi
         
-        # Check if chaindata has SST files
-        local sst_count=$(find "$chaindata_path" -name "*.sst" 2>/dev/null | wc -l)
-        if [[ $sst_count -eq 0 ]]; then
-            log_error "No SST files found in chaindata"
+        # Check if chaindata has SST/LDB files
+        local file_count=$(find "$chaindata_path" -type f \( -name "*.sst" -o -name "*.ldb" \) 2>/dev/null | wc -l)
+        if [[ $file_count -eq 0 ]]; then
+            log_error "No database files found in chaindata"
             return 1
         fi
         
-        log_info "Basic validation passed ($sst_count SST files)"
+        log_info "Basic validation passed ($file_count database files)"
         return 0
     fi
     
-    # Run full validation
+    # Run validation using the deep validator
     local report_file=$(mktemp)
-    if ! xdc snapshot validate --datadir "$datadir" --json --output "$report_file" 2>/dev/null; then
+    local level="standard"
+    [[ "$allow_incomplete" == "true" ]] && level="quick"
+    
+    if ! bash "$validation_script" --"$level" --datadir "$datadir" --json --output "$report_file" >/dev/null 2>&1; then
         log_error "Snapshot validation failed!"
         if [[ -f "$report_file" ]] && command -v jq &>/dev/null; then
-            cat "$report_file" | jq -r '.errors[]?' 2>/dev/null | while read err; do
-                log_error "  - $err"
+            jq -r '.checks | to_entries[] | select(.value.passed==false) | "  - \(.key): \(.value.detail // "failed")"' "$report_file" 2>/dev/null | while read err; do
+                log_error "$err"
             done
         fi
         rm -f "$report_file"
         return 1
     fi
     
-    # Parse results
+    # Parse results from JSON report
     local is_complete="false"
     local state_height=0
     local block_height=0
     
     if [[ -f "$report_file" ]] && command -v jq &>/dev/null; then
-        is_complete=$(cat "$report_file" | jq -r '.isComplete // "false"')
-        state_height=$(cat "$report_file" | jq -r '.stateHeight // 0')
-        block_height=$(cat "$report_file" | jq -r '.blockHeight // 0')
+        # Check if all critical checks passed
+        local failed_critical
+        failed_critical=$(jq -r '.checks | to_entries[] | select(.value.passed==false and .value.severity!="warn") | .key' "$report_file" 2>/dev/null | wc -l)
+        [[ "$failed_critical" -eq 0 ]] && is_complete="true"
+        
+        block_height=$(jq -r '.checks.blockStateConsistency.blockHeight // 0' "$report_file" 2>/dev/null || echo "0")
+        state_height=$(jq -r '.checks.blockStateConsistency.stateHeight // 0' "$report_file" 2>/dev/null || echo "0")
     fi
     
     local state_gap=$((block_height - state_height))
@@ -350,7 +357,8 @@ quick_validate_snapshot() {
     
     log_info "Quick validation at: $datadir"
     
-    if ! command -v xdc &>/dev/null || ! xdc snapshot validate --help &>/dev/null 2>&1; then
+    local validation_script="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/validate-snapshot-deep.sh"
+    if [[ ! -f "$validation_script" ]]; then
         # Fallback to basic check
         local chaindata_dir=$(find_chaindata_dir "$datadir")
         if [[ -d "$datadir/$chaindata_dir/chaindata" ]]; then
@@ -359,22 +367,13 @@ quick_validate_snapshot() {
         return 1
     fi
     
-    # Quick mode - only check recent blocks
-    local report_file=$(mktemp)
-    if xdc snapshot validate --datadir "$datadir" --quick --json --output "$report_file" 2>/dev/null; then
-        local is_complete=$(cat "$report_file" | jq -r '.isComplete // "false"' 2>/dev/null || echo "false")
-        rm -f "$report_file"
-        
-        if [[ "$is_complete" == "true" ]]; then
-            log_info "Quick validation passed"
-            return 0
-        else
-            log_warn "Quick validation indicates incomplete state"
-            return 1
-        fi
+    # Quick mode via deep validator
+    if bash "$validation_script" --quick --datadir "$datadir" >/dev/null 2>&1; then
+        log_info "Quick validation passed"
+        return 0
     fi
     
-    rm -f "$report_file"
+    log_warn "Quick validation failed"
     return 1
 }
 
@@ -382,13 +381,14 @@ quick_validate_snapshot() {
 get_snapshot_metadata() {
     local datadir="${1:-${XDC_DATA:-${PROJECT_DIR}/${XDC_NETWORK}/xdcchain}}"
     
-    if ! command -v xdc &>/dev/null || ! xdc snapshot validate --help &>/dev/null 2>&1; then
+    local validation_script="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/validate-snapshot-deep.sh"
+    if [[ ! -f "$validation_script" ]]; then
         echo "{}"
         return 0
     fi
     
     local report_file=$(mktemp)
-    xdc snapshot validate --datadir "$datadir" --quick --json --output "$report_file" 2>/dev/null || true
+    bash "$validation_script" --quick --datadir "$datadir" --json --output "$report_file" >/dev/null 2>&1 || true
     
     if [[ -f "$report_file" ]]; then
         cat "$report_file"

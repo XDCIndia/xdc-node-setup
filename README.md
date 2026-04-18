@@ -60,6 +60,9 @@ xdc start
 
 # 4. Check status
 xdc status
+
+# 5. Validate snapshot before starting (optional but recommended)
+xdc snapshot validate --quick
 ```
 
 Your node will be running and syncing within 5 minutes.
@@ -77,6 +80,7 @@ Your node will be running and syncing within 5 minutes.
 | 🌐 **Multi-Network** | Mainnet, Testnet (Apothem), Devnet | ✅ |
 | 📡 **SkyNet Integration** | Auto-registers with XDC SkyNet for fleet monitoring | ✅ |
 | 💾 **Fast Sync** | Snapshot download with resume support | ✅ |
+| 🔍 **Snapshot Validation** | Pre-deployment chaindata validation (quick/standard/full) | ✅ |
 | 🔄 **Auto-Updates** | Automatic version checks and updates | ✅ |
 | 🛠️ **Powerful CLI** | Single `xdc` command for all operations | ✅ |
 | 📱 **Mobile Ready** | Responsive dashboard for mobile monitoring | ✅ |
