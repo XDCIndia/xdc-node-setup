@@ -120,11 +120,75 @@ if [ -z "$EXTERNAL_IP" ]; then
 fi
 [ -n "$EXTERNAL_IP" ] && echo "External IP: $EXTERNAL_IP"
 
-# Write static-nodes.json if STATIC_NODES is set
+# Write config.toml with static/trusted nodes (GP5 / geth 1.17+ uses config.toml)
+CONFIG_DIR="$(dirname "$CONFIG_FILE")"
+mkdir -p "$CONFIG_DIR"
+
+cat > "$CONFIG_FILE" << 'EOF'
+[Eth]
+NetworkId = NETWORK_ID_PLACEHOLDER
+SyncMode = "SYNC_MODE_PLACEHOLDER"
+
+[Node]
+DataDir = "DATADIR_PLACEHOLDER"
+
+EOF
+
+# Replace placeholders with actual values
+sed -i "s/NETWORK_ID_PLACEHOLDER/$NETWORK_ID/" "$CONFIG_FILE"
+sed -i "s/SYNC_MODE_PLACEHOLDER/$SYNC_MODE/" "$CONFIG_FILE"
+sed -i "s|DATADIR_PLACEHOLDER|$DATADIR|" "$CONFIG_FILE"
+
+# Add P2P section with static/trusted nodes
+if [ -n "${STATIC_NODES:-}" ] || [ -n "${TRUSTED_NODES:-}" ]; then
+    cat >> "$CONFIG_FILE" << 'EOF'
+[P2P]
+EOF
+    if [ -n "${STATIC_NODES:-}" ]; then
+        echo "StaticNodes = [" >> "$CONFIG_FILE"
+        first=true
+        OLD_IFS="$IFS"
+        IFS=','
+        for node in $STATIC_NODES; do
+            node=$(echo "$node" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            [ -z "$node" ] && continue
+            if [ "$first" = "true" ]; then
+                first=false
+                echo "  \"$node\"" >> "$CONFIG_FILE"
+            else
+                echo "  ,\"$node\"" >> "$CONFIG_FILE"
+            fi
+        done
+        IFS="$OLD_IFS"
+        echo "]" >> "$CONFIG_FILE"
+    fi
+    if [ -n "${TRUSTED_NODES:-}" ]; then
+        echo "TrustedNodes = [" >> "$CONFIG_FILE"
+        first=true
+        OLD_IFS="$IFS"
+        IFS=','
+        for node in $TRUSTED_NODES; do
+            node=$(echo "$node" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            [ -z "$node" ] && continue
+            if [ "$first" = "true" ]; then
+                first=false
+                echo "  \"$node\"" >> "$CONFIG_FILE"
+            else
+                echo "  ,\"$node\"" >> "$CONFIG_FILE"
+            fi
+        done
+        IFS="$OLD_IFS"
+        echo "]" >> "$CONFIG_FILE"
+    fi
+    echo "Wrote config.toml with P2P settings"
+else
+    echo "Wrote minimal config.toml"
+fi
+
+# Also write legacy static-nodes.json and trusted-nodes.json for backward compatibility
 if [ -n "${STATIC_NODES:-}" ]; then
     static_nodes_file="$DATADIR/geth/static-nodes.json"
     mkdir -p "$(dirname "$static_nodes_file")"
-    # Convert comma-separated enodes to JSON array
     json_nodes="["
     first=true
     OLD_IFS="$IFS"
@@ -142,14 +206,12 @@ if [ -n "${STATIC_NODES:-}" ]; then
     IFS="$OLD_IFS"
     json_nodes="$json_nodes]"
     echo "$json_nodes" > "$static_nodes_file"
-    echo "Wrote static-nodes.json"
+    echo "Wrote static-nodes.json (legacy)"
 fi
 
-# Write trusted-nodes.json if TRUSTED_NODES is set
 if [ -n "${TRUSTED_NODES:-}" ]; then
     trusted_nodes_file="$DATADIR/geth/trusted-nodes.json"
     mkdir -p "$(dirname "$trusted_nodes_file")"
-    # Convert comma-separated enodes to JSON array
     json_nodes="["
     first=true
     OLD_IFS="$IFS"
@@ -167,7 +229,7 @@ if [ -n "${TRUSTED_NODES:-}" ]; then
     IFS="$OLD_IFS"
     json_nodes="$json_nodes]"
     echo "$json_nodes" > "$trusted_nodes_file"
-    echo "Wrote trusted-nodes.json"
+    echo "Wrote trusted-nodes.json (legacy)"
 fi
 
 # Ethstats
@@ -175,6 +237,7 @@ netstats="${INSTANCE_NAME}:${STATS_SECRET:-xdc_openscan_stats_2026}@${STATS_SERV
 
 # Build command line (GP5 / geth 1.17+ style flags)
 ARGS="--datadir $DATADIR"
+ARGS="$ARGS --config $CONFIG_FILE"
 ARGS="$ARGS --networkid $NETWORK_ID"
 ARGS="$ARGS --port ${P2P_PORT:-30303}"
 ARGS="$ARGS --syncmode $SYNC_MODE"
