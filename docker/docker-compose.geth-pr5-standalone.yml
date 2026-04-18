@@ -23,6 +23,7 @@ services:
       - NETWORK=${NETWORK:-mainnet}
       - NETWORK_ID=${NETWORK_ID:-50}
       - APOTHEM_FLAG=${APOTHEM_FLAG:-}
+      - STATE_SCHEME=${STATE_SCHEME:-auto}
     entrypoint: ["/usr/local/bin/XDC"]
     command:
       - --datadir=/data/xdc
@@ -39,7 +40,7 @@ services:
       - --ws.port=8560
       - --ws.origins=*
       - --syncmode=full
-      - --state.scheme=hash
+      - --state.scheme=${STATE_SCHEME:-hash}
       - --cache=4096
       - --maxpeers=100
       - --snapshot=false

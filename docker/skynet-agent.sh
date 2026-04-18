@@ -618,8 +618,16 @@ EOF
 #==============================================================================
 detect_state_scheme() {
     local scheme="hash"  # default HBSS
-    # Check container args for --state.scheme path
     if [[ -n "$XDC_CONTAINER_NAME" ]]; then
+        # 1) Check container env var STATE_SCHEME
+        local env_scheme
+        env_scheme=$(docker inspect "$XDC_CONTAINER_NAME" --format='{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep '^STATE_SCHEME=' | cut -d= -f2 || true)
+        if [[ -n "$env_scheme" && "$env_scheme" != "auto" ]]; then
+            echo "$env_scheme"
+            return
+        fi
+
+        # 2) Check container args
         local args
         args=$(docker inspect "$XDC_CONTAINER_NAME" --format '{{join .Config.Cmd " "}}' 2>/dev/null || true)
         if echo "$args" | grep -q "state.scheme.*path\|state\.scheme=path"; then
