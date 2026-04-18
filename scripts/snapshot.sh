@@ -19,6 +19,7 @@ SNAPSHOTS_URL="https://xdc.network/snapshots/"
 # Source chaindata auto-detection library
 source "${SCRIPT_DIR}/lib/chaindata.sh" 2>/dev/null || true
 source "${SCRIPT_DIR}/lib/snapshot-validation.sh" 2>/dev/null || true
+source "${SCRIPT_DIR}/lib/naming.sh" 2>/dev/null || true
 
 # ── colours ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'
@@ -423,7 +424,9 @@ cmd_create() {
 
   local ts
   ts="$(date +%Y%m%d-%H%M%S)"
-  local outfile="/var/backups/xdc/${client}-${network}-${scheme,,}-${image_digest}-${ts}.tar.zst"
+  local location="$(get_location)"
+  local sid="$(get_server_id)"
+  local outfile="/var/backups/xdc/$(build_snapshot_name "$client" "$network" "full" "${scheme,,}" "$location" "$sid" "$image_digest" "$ts" "tar.zst")"
   mkdir -p /var/backups/xdc
 
   info "Creating snapshot: ${BOLD}$outfile${NC}"
