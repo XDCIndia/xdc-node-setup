@@ -4096,7 +4096,7 @@ EOF
             env_exports+=("V268_IMAGE=xinfinorg/xdposchain:v2.6.8")
             ;;
         gp5|gp5_hbss|gp5_pbss)
-            env_exports+=("GP5_IMAGE=anilchinchawale/gp5-xdc:v34")
+            env_exports+=("GP5_IMAGE=anilchinchawale/gp5-xdc:v35")
             ;;
         erigon)
             env_exports+=("ERIGON_IMAGE=anilchinchawale/erigon-xdc:latest")
