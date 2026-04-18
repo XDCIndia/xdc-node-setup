@@ -60,6 +60,8 @@ services:
       - "30307:30307/udp"  # P2P UDP
     volumes:
       - xdc-gx-apothem-data:/data
+    environment:
+      - STATE_SCHEME=${STATE_SCHEME:-auto}
     # Entrypoint script handles XDC -> geth directory migration automatically
     command:
       - --datadir=/data
@@ -76,7 +78,7 @@ services:
       - --ws.port=9546
       - --ws.origins=*
       - --syncmode=full
-      - --state.scheme=hash
+      - --state.scheme=${STATE_SCHEME:-hash}
       - --apothem
       - --ethstats=xdc03-gp5-apothem-v34:xdc_openscan_stats_2026@stats.xdcindia.com:443
     networks:
