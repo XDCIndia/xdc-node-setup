@@ -75,7 +75,9 @@ _client_compose_v268_mainnet="docker/mainnet/v268.yml"
 _client_compose_v268_apothem="docker/apothem/v268.yml"
 _client_compose_gp5_mainnet="docker/docker-compose.geth-pr5.yml"
 _client_compose_gp5_apothem="docker/docker-compose.gp5-apothem.yml"
+_client_compose_gp5_hbss_mainnet="docker/mainnet/gp5-hbss.yml"
 _client_compose_gp5_hbss_apothem="docker/apothem/gp5-hbss.yml"
+_client_compose_gp5_pbss_mainnet="docker/mainnet/gp5-pbss.yml"
 _client_compose_gp5_pbss_apothem="docker/apothem/gp5-pbss.yml"
 _client_compose_erigon_mainnet="docker/docker-compose.erigon.yml"
 _client_compose_erigon_apothem="docker/docker-compose.erigon-testnet.yml"
@@ -89,6 +91,8 @@ _client_compose_reth_apothem="docker/docker-compose.reth-standalone.yml"
 _client_binary_v268_mainnet="XDC-mainnet"
 _client_binary_v268_apothem="XDC-testnet"
 _client_binary_gp5="geth"
+_client_binary_gp5_hbss="geth"
+_client_binary_gp5_pbss="geth"
 _client_binary_erigon="erigon"
 _client_binary_nethermind="nethermind"
 _client_binary_reth="reth"
@@ -3798,7 +3802,7 @@ $(c BOLD)USAGE:$(c NC)
     xdc deploy --client CLIENT --network NETWORK [OPTIONS]
 
 $(c BOLD)REQUIRED OPTIONS:$(c NC)
-    --client CLIENT      Client to deploy: v268, gp5, erigon, nethermind, reth
+    --client CLIENT      Client to deploy: v268, gp5, gp5-hbss, gp5-pbss, erigon, nethermind, reth
     --network NETWORK    Network to deploy on: mainnet, apothem
     --data-root PATH     Host path for blockchain data (e.g. /mnt/data)
 
@@ -3815,6 +3819,8 @@ $(c BOLD)OPTIONAL OPTIONS:$(c NC)
 $(c BOLD)EXAMPLES:$(c NC)
     xdc deploy --client v268 --network mainnet --data-root /mnt/data
     xdc deploy --client gp5 --network apothem --data-root /mnt/data
+    xdc deploy --client gp5-hbss --network mainnet --data-root /mnt/data
+    xdc deploy --client gp5-pbss --network mainnet --data-root /mnt/data
     xdc deploy --client v268 --network mainnet --data-root /mnt/data --monitoring
     xdc deploy --client erigon --network mainnet --data-root /mnt/data --dry-run
 
@@ -3961,6 +3967,12 @@ EOF
         gp5)
             env_port_var="GP5_${network_upper}_RPC"
             ;;
+        gp5_hbss)
+            env_port_var="GP5_HBSS_${network_upper}_RPC"
+            ;;
+        gp5_pbss)
+            env_port_var="GP5_PBSS_${network_upper}_RPC"
+            ;;
         erigon)
             env_port_var="ERIGON_${network_upper}_RPC"
             ;;
@@ -3981,13 +3993,27 @@ EOF
     if [[ -z "$rpc_port" ]]; then
         case "$client" in
             v268) rpc_port="8550" ;;
-            gp5|gp5_hbss|gp5_pbss)  rpc_port="8545" ;;
+            gp5) rpc_port="8545" ;;
+            gp5_hbss)
+                if [[ "$network" == "apothem" ]]; then
+                    rpc_port="9545"
+                else
+                    rpc_port="9745"
+                fi
+                ;;
+            gp5_pbss)
+                if [[ "$network" == "apothem" ]]; then
+                    rpc_port="9645"
+                else
+                    rpc_port="9845"
+                fi
+                ;;
             erigon) rpc_port="8547" ;;
             nethermind) rpc_port="8558" ;;
             reth) rpc_port="8548" ;;
         esac
-        # Apothem offset (+100)
-        if [[ "$network" == "apothem" ]]; then
+        # Apothem offset (+100) for base clients only
+        if [[ "$network" == "apothem" && "$client" =~ ^(v268|gp5)$ ]]; then
             rpc_port=$((rpc_port + 100))
         fi
     fi

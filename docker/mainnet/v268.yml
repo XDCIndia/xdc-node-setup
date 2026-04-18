@@ -14,12 +14,12 @@ services:
     command: >
       --datadir /work/xdcchain --networkid 50
       --syncmode full --gcmode full
-      --port ${V268_MAINNET_P2P:-30310}
+      --port ${V268_MAINNET_P2P:-30300}
       --cache ${CACHE:-4096}
-      --rpc --rpcaddr 0.0.0.0 --rpcport ${V268_MAINNET_RPC:-8550}
+      --rpc --rpcaddr 0.0.0.0 --rpcport ${V268_MAINNET_RPC:-8745}
       --rpccorsdomain "*" --rpcvhosts "*"
       --rpcapi eth,net,web3,debug,txpool,admin
-      --ws --wsaddr 0.0.0.0 --wsport ${V268_MAINNET_WS:-8551} --wsorigins "*"
+      --ws --wsaddr 0.0.0.0 --wsport ${V268_MAINNET_WS:-8746} --wsorigins "*"
       --wsapi eth,net,web3
       --maxpeers 50 --verbosity 3
       --bootnodes "${BOOTNODES:-}"
