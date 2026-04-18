@@ -75,6 +75,8 @@ _client_compose_v268_mainnet="docker/mainnet/v268.yml"
 _client_compose_v268_apothem="docker/apothem/v268.yml"
 _client_compose_gp5_mainnet="docker/docker-compose.geth-pr5.yml"
 _client_compose_gp5_apothem="docker/docker-compose.gp5-apothem.yml"
+_client_compose_gp5_hbss_apothem="docker/apothem/gp5-hbss.yml"
+_client_compose_gp5_pbss_apothem="docker/apothem/gp5-pbss.yml"
 _client_compose_erigon_mainnet="docker/docker-compose.erigon.yml"
 _client_compose_erigon_apothem="docker/docker-compose.erigon-testnet.yml"
 _client_compose_nethermind_mainnet="docker/docker-compose.nethermind.yml"
@@ -3887,6 +3889,8 @@ EOF
     case "$client" in
         v268|v2.6.8|stable|xdc-stable) client="v268" ;;
         gp5|geth-pr5|gx|pr5) client="gp5" ;;
+        gp5-hbss|gp5hbss|geth-pr5-hbss) client="gp5_hbss" ;;
+        gp5-pbss|gp5pbss|geth-pr5-pbss) client="gp5_pbss" ;;
         erigon|erigon-xdc) client="erigon" ;;
         nethermind|nm) client="nethermind" ;;
         reth|reth-xdc) client="reth" ;;
@@ -3977,7 +3981,7 @@ EOF
     if [[ -z "$rpc_port" ]]; then
         case "$client" in
             v268) rpc_port="8550" ;;
-            gp5)  rpc_port="8545" ;;
+            gp5|gp5_hbss|gp5_pbss)  rpc_port="8545" ;;
             erigon) rpc_port="8547" ;;
             nethermind) rpc_port="8558" ;;
             reth) rpc_port="8548" ;;
@@ -4027,11 +4031,12 @@ EOF
     fi
     
     # 4. Port availability (only for host-network or published ports)
-    # v268 uses network_mode: host; others use port mapping
+    # v268 uses network_mode: host; gp5_hbss/pbss also use host network
     local ports_to_check=()
-    if [[ "$client" == "v268" ]]; then
-        local p2p_port_var="V268_${network_upper}_P2P"
-        local ws_port_var="V268_${network_upper}_WS"
+    if [[ "$client" == "v268" || "$client" == "gp5_hbss" || "$client" == "gp5_pbss" ]]; then
+        local client_upper="$(echo "$client" | tr '[:lower:]' '[:upper:]')"
+        local p2p_port_var="${client_upper}_${network_upper}_P2P"
+        local ws_port_var="${client_upper}_${network_upper}_WS"
         local p2p_port="${!p2p_port_var:-30310}"
         local ws_port="${!ws_port_var:-8551}"
         [[ "$network" == "apothem" ]] && p2p_port=$((p2p_port + 10)) && ws_port=$((ws_port + 100))
@@ -4090,7 +4095,7 @@ EOF
         v268)
             env_exports+=("V268_IMAGE=xinfinorg/xdposchain:v2.6.8")
             ;;
-        gp5)
+        gp5|gp5_hbss|gp5_pbss)
             env_exports+=("GP5_IMAGE=anilchinchawale/gp5-xdc:v34")
             ;;
         erigon)

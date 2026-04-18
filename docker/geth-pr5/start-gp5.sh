@@ -109,6 +109,52 @@ if [ -z "$EXTERNAL_IP" ]; then
 fi
 [ -n "$EXTERNAL_IP" ] && echo "External IP: $EXTERNAL_IP"
 
+# Write static-nodes.json if STATIC_NODES is set
+if [ -n "${STATIC_NODES:-}" ]; then
+    static_nodes_file="$DATADIR/geth/static-nodes.json"
+    mkdir -p "$(dirname "$static_nodes_file")"
+    # Convert comma-separated enodes to JSON array
+    json_nodes="["
+    first=true
+    IFS=','
+    for node in $STATIC_NODES; do
+        node=$(echo "$node" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        [ -z "$node" ] && continue
+        if [ "$first" = "true" ]; then
+            first=false
+        else
+            json_nodes="$json_nodes,"
+        fi
+        json_nodes="$json_nodes\"$node\""
+    done
+    json_nodes="$json_nodes]"
+    echo "$json_nodes" > "$static_nodes_file"
+    echo "Wrote static-nodes.json"
+fi
+
+# Write trusted-nodes.json if TRUSTED_NODES is set
+if [ -n "${TRUSTED_NODES:-}" ]; then
+    trusted_nodes_file="$DATADIR/geth/trusted-nodes.json"
+    mkdir -p "$(dirname "$trusted_nodes_file")"
+    # Convert comma-separated enodes to JSON array
+    json_nodes="["
+    first=true
+    IFS=','
+    for node in $TRUSTED_NODES; do
+        node=$(echo "$node" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        [ -z "$node" ] && continue
+        if [ "$first" = "true" ]; then
+            first=false
+        else
+            json_nodes="$json_nodes,"
+        fi
+        json_nodes="$json_nodes\"$node\""
+    done
+    json_nodes="$json_nodes]"
+    echo "$json_nodes" > "$trusted_nodes_file"
+    echo "Wrote trusted-nodes.json"
+fi
+
 # Ethstats
 netstats="${INSTANCE_NAME}:${STATS_SECRET:-xdc_openscan_stats_2026}@${STATS_SERVER:-stats.xdcindia.com:443}"
 
@@ -119,6 +165,12 @@ ARGS="$ARGS --port 30303"
 ARGS="$ARGS --syncmode $SYNC_MODE"
 ARGS="$ARGS --gcmode $GC_MODE"
 ARGS="$ARGS --verbosity $LOG_LEVEL"
+
+# No-discover mode
+if [ "${NO_DISCOVER:-false}" = "true" ]; then
+    ARGS="$ARGS --nodiscover"
+    echo "Discovery disabled (no-discover mode)"
+fi
 
 # Miner settings (GP5 uses --miner.* style flags)
 ARGS="$ARGS --miner.gasprice 1"
