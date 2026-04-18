@@ -278,6 +278,19 @@ cmd_restore() {
     *)  die "Unsupported archive format: $file" ;;
   esac
 
+  # Handle normalized snapshot layout (RC3)
+  if [[ -f "$datadir/.snapshot-layout" ]]; then
+    info "Detected normalized snapshot layout"
+    local layout_info
+    layout_info="$(cat "$datadir/.snapshot-layout")"
+    info "Layout marker: $layout_info"
+
+    # Sanity check: normalized archives should have geth/chaindata
+    if [[ ! -d "$datadir/geth/chaindata" ]]; then
+      warn "Normalized layout marker present but geth/chaindata not found"
+    fi
+  fi
+
   # Fix permissions
   info "Fixing permissions …"
   case "$client" in
@@ -472,14 +485,22 @@ cmd_create() {
     fi
   fi
 
-  info "Compressing $datadir …"
+  # Normalize layout before archiving (RC3 — standardize datadir layouts)
+  local staging_dir=""
+  staging_dir=$(normalize_snapshot_layout "$datadir" "$(mktemp -d)")
+  ok "Normalized snapshot layout in $staging_dir"
+
+  info "Compressing normalized snapshot …"
   if command -v zstd &>/dev/null; then
-    tar -cf - -C "$(dirname "$datadir")" "$(basename "$datadir")" | \
+    tar -cf - -C "$(dirname "$staging_dir")" "$(basename "$staging_dir")" | \
       zstd -T0 -3 -o "$outfile"
   else
     outfile="${outfile%.zst}.gz"
-    tar -czf "$outfile" -C "$(dirname "$datadir")" "$(basename "$datadir")"
+    tar -czf "$outfile" -C "$(dirname "$staging_dir")" "$(basename "$staging_dir")"
   fi
+
+  # Cleanup staging
+  rm -rf "$staging_dir"
 
   ok "Snapshot created: $outfile"
   echo "  Size: $(du -sh "$outfile" | cut -f1)"

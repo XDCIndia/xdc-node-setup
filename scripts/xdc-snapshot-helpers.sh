@@ -108,6 +108,23 @@ show_state_cache_warning() {
     echo ""
 }
 
+# Check if a datadir uses normalized snapshot layout
+# Returns: 0 if normalized, 1 otherwise
+is_normalized_layout() {
+    local datadir="$1"
+    [[ -f "$datadir/.snapshot-layout" ]]
+}
+
+# Report snapshot layout status
+show_snapshot_layout_status() {
+    local datadir="$1"
+    if is_normalized_layout "$datadir"; then
+        log_info "Snapshot layout: normalized ($(cat "$datadir/.snapshot-layout"))"
+    else
+        log_info "Snapshot layout: legacy (no .snapshot-layout marker)"
+    fi
+}
+
 # Migrate legacy chaindata directories (XDC/ or xdcchain/) to standard geth/
 # Usage: migrate_to_geth_dir <datadir> [--dry-run|--execute]
 migrate_to_geth_dir() {
@@ -260,7 +277,10 @@ validate_snapshot_for_transfer() {
     local allow_incomplete="${2:-false}"
     
     log_info "Validating snapshot at: $datadir"
-    
+
+    # Report layout status (RC3)
+    show_snapshot_layout_status "$datadir"
+
     local validation_script="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/validate-snapshot-deep.sh"
     if [[ ! -f "$validation_script" ]]; then
         log_warn "Deep validator not found at $validation_script, using basic checks"
