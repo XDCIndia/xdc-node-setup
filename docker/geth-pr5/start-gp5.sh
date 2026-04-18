@@ -139,11 +139,15 @@ sed -i "s/NETWORK_ID_PLACEHOLDER/$NETWORK_ID/" "$CONFIG_FILE"
 sed -i "s/SYNC_MODE_PLACEHOLDER/$SYNC_MODE/" "$CONFIG_FILE"
 sed -i "s|DATADIR_PLACEHOLDER|$DATADIR|" "$CONFIG_FILE"
 
-# Add P2P section with static/trusted nodes
-if [ -n "${STATIC_NODES:-}" ] || [ -n "${TRUSTED_NODES:-}" ]; then
+# Add Node.P2P section with static/trusted nodes
+if [ -n "${STATIC_NODES:-}" ] || [ -n "${TRUSTED_NODES:-}" ] || [ "${NO_DISCOVER:-false}" = "true" ]; then
     cat >> "$CONFIG_FILE" << 'EOF'
-[P2P]
+[Node.P2P]
 EOF
+    echo "ListenAddr = \":${P2P_PORT:-30303}\"" >> "$CONFIG_FILE"
+    if [ "${NO_DISCOVER:-false}" = "true" ]; then
+        echo "NoDiscovery = true" >> "$CONFIG_FILE"
+    fi
     if [ -n "${STATIC_NODES:-}" ]; then
         echo "StaticNodes = [" >> "$CONFIG_FILE"
         first=true
@@ -180,7 +184,7 @@ EOF
         IFS="$OLD_IFS"
         echo "]" >> "$CONFIG_FILE"
     fi
-    echo "Wrote config.toml with P2P settings"
+    echo "Wrote config.toml with Node.P2P settings"
 else
     echo "Wrote minimal config.toml"
 fi
