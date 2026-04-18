@@ -13,8 +13,19 @@ BOOTNODES_FILE="/work/bootnodes.list"
 PWD_FILE="/work/.pwd"
 DATADIR="/work/xdcchain"
 
+# Detect available binary (XDC or geth)
+if command -v XDC >/dev/null 2>&1; then
+    BINARY="XDC"
+elif command -v geth >/dev/null 2>&1; then
+    BINARY="geth"
+else
+    echo "ERROR: No XDC or geth binary found in PATH"
+    exit 1
+fi
+
 echo "=============================================="
 echo "Starting XDC GP5 node..."
+echo "Binary: $BINARY"
 echo "Datadir: $DATADIR"
 echo "=============================================="
 
@@ -67,14 +78,14 @@ if [ ! -d "$CHAINDATA_DIR" ]; then
     
     if [ -f "$PWD_FILE" ]; then
         echo "Creating new wallet..."
-        wallet=$(XDC account new --password "$PWD_FILE" --datadir "$DATADIR" 2>/dev/null | grep -oE '\{[^}]+\}' | tr -d '{}' | head -1)
+        wallet=$($BINARY account new --password "$PWD_FILE" --datadir "$DATADIR" 2>/dev/null | grep -oE '\{[^}]+\}' | tr -d '{}' | head -1)
         [ -n "$wallet" ] && echo "$wallet" > "$DATADIR/coinbase.txt"
         echo "Wallet: $wallet"
     fi
     
     if [ -f "$GENESIS_FILE" ]; then
         echo "Initializing Genesis Block..."
-        XDC init --datadir "$DATADIR" "$GENESIS_FILE"
+        $BINARY init --datadir "$DATADIR" "$GENESIS_FILE"
         echo "Genesis initialized successfully"
     else
         echo "ERROR: No genesis file at $GENESIS_FILE"
@@ -83,7 +94,7 @@ if [ ! -d "$CHAINDATA_DIR" ]; then
 else
     echo "Existing chaindata found at $CHAINDATA_DIR"
     if [ -f "$PWD_FILE" ]; then
-        wallet=$(XDC account list --datadir "$DATADIR" 2>/dev/null | head -n 1 | grep -oE '\{[^}]+\}' | tr -d '{}')
+        wallet=$($BINARY account list --datadir "$DATADIR" 2>/dev/null | head -n 1 | grep -oE '\{[^}]+\}' | tr -d '{}')
         [ -n "$wallet" ] && echo "Wallet: $wallet"
     fi
 fi
@@ -222,4 +233,4 @@ echo "$ARGS" | tr ' ' '\n' | grep -v '^$'
 echo "=============================================="
 
 # shellcheck disable=SC2086
-exec XDC $ARGS
+exec $BINARY $ARGS
