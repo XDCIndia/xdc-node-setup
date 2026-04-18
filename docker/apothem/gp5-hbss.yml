@@ -28,7 +28,7 @@ services:
       - MAXPEERS=50
       - HTTP_PORT=9545
       - WS_PORT=9546
-      - AUTHRPC_PORT=9561
+      - AUTHRPC_PORT=8551
       - P2P_PORT=30321
       - EXTERNAL_IP=${EXTERNAL_IP:-}
       - INSTANCE_NAME=${INSTANCE_NAME:-168-gp5-full-hbss-apothem-168}

@@ -179,6 +179,7 @@ ARGS="$ARGS --networkid $NETWORK_ID"
 ARGS="$ARGS --port ${P2P_PORT:-30303}"
 ARGS="$ARGS --syncmode $SYNC_MODE"
 ARGS="$ARGS --gcmode $GC_MODE"
+ARGS="$ARGS --authrpc.port ${AUTHRPC_PORT:-8551}"
 ARGS="$ARGS --verbosity $LOG_LEVEL"
 
 # No-discover mode
