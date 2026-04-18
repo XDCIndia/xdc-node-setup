@@ -3015,7 +3015,7 @@ EOF
                     --datadir=/data/xdc --networkid="$gp5_network_id" --port=30307 \
                     --http --http.addr=0.0.0.0 --http.port=8557 --http.vhosts="*" \
                     --http.api=eth,net,web3,txpool,debug,admin \
-                    --syncmode=full --state.scheme=hash \
+                    --syncmode=full --state.scheme="${STATE_SCHEME:-hash}" \
                     $gp5_apothem_flag 2>/dev/null; then
                     stop_spinner true "Geth PR5 started (direct)"
                     echo -e "  RPC: http://127.0.0.1:${gp5_rpc}"

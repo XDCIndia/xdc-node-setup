@@ -397,11 +397,29 @@ run_check_state_cache() {
     detail='{"detail":"State root cache found"}'
   else
     passed="false"
-    severity="warn"
-    detail='{"detail":"xdc-state-root-cache.csv missing — cold recovery may be slower"}'
+    severity="fail"
+    detail='{"detail":"xdc-state-root-cache.csv missing — cold snapshot restore will fail"}'
   fi
 
   _record "stateRootCache" "$passed" "$severity" "$detail"
+  return 0
+}
+
+run_check_db_flushed() {
+  local chaindata_path="$1"
+  local passed="true"
+  local severity="pass"
+  local detail=""
+
+  if ! snapshot_check_db_flushed "$chaindata_path"; then
+    passed="false"
+    severity="fail"
+    detail='{"detail":"DB was not flushed before snapshot (CURRENT missing or empty)"}'
+  else
+    detail='{"detail":"DB flush check passed"}'
+  fi
+
+  _record "dbFlushed" "$passed" "$severity" "$detail" || return 1
   return 0
 }
 
@@ -527,6 +545,7 @@ run_checks() {
 
   run_check_engine "$chaindata_path" || { [[ "$FAIL_FAST" == "true" ]] && return 1; }
   run_check_current_marker "$chaindata_path" || { [[ "$FAIL_FAST" == "true" ]] && return 1; }
+  run_check_db_flushed "$chaindata_path" || { [[ "$FAIL_FAST" == "true" ]] && return 1; }
   run_check_ancient_integrity "$chaindata_path" || { [[ "$FAIL_FAST" == "true" ]] && return 1; }
   run_check_min_files "$chaindata_path" "$network" "$type" || { [[ "$FAIL_FAST" == "true" ]] && return 1; }
 
@@ -542,7 +561,7 @@ run_checks() {
     run_check_segment_continuity "$chaindata_path" || { [[ "$FAIL_FAST" == "true" ]] && return 1; }
   fi
 
-  # State cache is always checked (warn only)
+  # State cache is always checked (critical)
   run_check_state_cache "$datadir"
 
   return 0

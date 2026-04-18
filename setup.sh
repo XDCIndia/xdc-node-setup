@@ -1732,7 +1732,7 @@ start_services() {
                 --datadir=/data/xdc --networkid=${NETWORK_ID:-50} --port=30307 \
                 --http --http.addr=0.0.0.0 --http.port=8557 --http.vhosts="*" \
                 --http.api=eth,net,web3,txpool,debug,admin \
-                --syncmode=full --state.scheme=hash \
+                --syncmode=full --state.scheme="${STATE_SCHEME:-hash}" \
                 ${APOTHEM_FLAG:-}
         fi
     elif [[ "$CLIENT" == "erigon" ]]; then

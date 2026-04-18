@@ -18,6 +18,8 @@ SNAPSHOTS_URL="https://xdc.network/snapshots/"
 
 # Source chaindata auto-detection library
 source "${SCRIPT_DIR}/lib/chaindata.sh" 2>/dev/null || true
+source "${SCRIPT_DIR}/lib/snapshot-validation.sh" 2>/dev/null || true
+source "${SCRIPT_DIR}/lib/naming.sh" 2>/dev/null || true
 
 # ── colours ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'
@@ -277,6 +279,19 @@ cmd_restore() {
     *)  die "Unsupported archive format: $file" ;;
   esac
 
+  # Handle normalized snapshot layout (RC3)
+  if [[ -f "$datadir/.snapshot-layout" ]]; then
+    info "Detected normalized snapshot layout"
+    local layout_info
+    layout_info="$(cat "$datadir/.snapshot-layout")"
+    info "Layout marker: $layout_info"
+
+    # Sanity check: normalized archives should have geth/chaindata
+    if [[ ! -d "$datadir/geth/chaindata" ]]; then
+      warn "Normalized layout marker present but geth/chaindata not found"
+    fi
+  fi
+
   # Fix permissions
   info "Fixing permissions …"
   case "$client" in
@@ -301,6 +316,72 @@ cmd_restore() {
   ok "Restore complete: $datadir"
   echo ""
   info "Start node: docker compose up -d $container"
+}
+
+# Flush Pebble/LevelDB memtables and WAL to ensure consistent snapshot
+# Usage: flush_db <datadir> <client>
+# Returns: 0 on success, 1 on failure
+flush_db() {
+    local datadir="$1"
+    local client="$2"
+    local subdir=""
+    local chaindata_path=""
+
+    subdir=$(find_chaindata_subdir_or_default "$datadir" 2>/dev/null || echo "")
+    chaindata_path="$datadir${subdir:+/$subdir}/chaindata"
+
+    if [[ ! -d "$chaindata_path" ]]; then
+        warn "Cannot find chaindata to flush: $chaindata_path"
+        return 1
+    fi
+
+    # Detect engine
+    local engine=""
+    if command -v snapshot_detect_engine &>/dev/null; then
+        engine=$(snapshot_detect_engine "$chaindata_path")
+    else
+        local sst_count=0 ldb_count=0
+        sst_count=$(find "$chaindata_path" -maxdepth 1 -name '*.sst' -type f 2>/dev/null | wc -l | tr -d ' ')
+        ldb_count=$(find "$chaindata_path" -maxdepth 1 -name '*.ldb' -type f 2>/dev/null | wc -l | tr -d ' ')
+        if [[ "$sst_count" -gt 0 ]]; then
+            engine="pebble"
+        elif [[ "$ldb_count" -gt 0 ]]; then
+            engine="leveldb"
+        else
+            engine="unknown"
+        fi
+    fi
+
+    case "$engine" in
+        pebble)
+            info "Flushing Pebble DB at $chaindata_path ..."
+            # Use ldb tool if available to force compaction
+            if command -v ldb &>/dev/null; then
+                ldb compact --db="$chaindata_path" 2>/dev/null || true
+            fi
+            # Fallback: sync filesystem buffers
+            sync
+            # Verify CURRENT marker is present and non-empty
+            if [[ ! -s "$chaindata_path/CURRENT" ]]; then
+                warn "CURRENT marker missing or empty after flush"
+                return 1
+            fi
+            ;;
+        leveldb)
+            info "Flushing LevelDB at $chaindata_path ..."
+            sync
+            ;;
+        *)
+            warn "Unknown DB engine '$engine' — skipping flush"
+            ;;
+    esac
+
+    # Wait for any background compaction to settle
+    info "Waiting 5s for background compaction to settle..."
+    sleep 5
+
+    ok "DB flush complete"
+    return 0
 }
 
 # =============================================================================
@@ -343,7 +424,9 @@ cmd_create() {
 
   local ts
   ts="$(date +%Y%m%d-%H%M%S)"
-  local outfile="/var/backups/xdc/${client}-${network}-${scheme,,}-${image_digest}-${ts}.tar.zst"
+  local location="$(get_location)"
+  local sid="$(get_server_id)"
+  local outfile="/var/backups/xdc/$(build_snapshot_name "$client" "$network" "full" "${scheme,,}" "$location" "$sid" "$image_digest" "$ts" "tar.zst")"
   mkdir -p /var/backups/xdc
 
   info "Creating snapshot: ${BOLD}$outfile${NC}"
@@ -365,8 +448,28 @@ cmd_create() {
     die "Chaindata appears empty (no *.sst or *.ldb files). Aborting snapshot creation."
   fi
 
-  # Warn about missing state root cache
-  if [[ ! -f "$datadir/xdc-state-root-cache.csv" ]] && [[ ! -f "$chaindata_base/xdc-state-root-cache.csv" ]]; then
+  # Ensure state root cache is included in snapshot
+  local cache_src=""
+  local cache_candidates=(
+    "$datadir/xdc-state-root-cache.csv"
+    "$chaindata_base/xdc-state-root-cache.csv"
+    "$datadir/geth/xdc-state-root-cache.csv"
+    "$datadir/XDC/xdc-state-root-cache.csv"
+    "$datadir/xdcchain/xdc-state-root-cache.csv"
+  )
+  for cand in "${cache_candidates[@]}"; do
+    if [[ -f "$cand" ]]; then
+      cache_src="$cand"
+      break
+    fi
+  done
+
+  if [[ -n "$cache_src" ]]; then
+    if [[ "$cache_src" != "$datadir/xdc-state-root-cache.csv" ]]; then
+      cp -f "$cache_src" "$datadir/xdc-state-root-cache.csv"
+      ok "Copied state root cache to datadir root"
+    fi
+  else
     warn "xdc-state-root-cache.csv not found — cold snapshot recovery may fail"
     warn "Consider copying it into the datadir before distributing this snapshot"
   fi
@@ -377,14 +480,30 @@ cmd_create() {
     docker stop "$container"
   fi
 
-  info "Compressing $datadir …"
+  # Flush DB before archiving
+  if ! flush_db "$datadir" "$client"; then
+    warn "DB flush failed — snapshot may be inconsistent"
+    if [[ "${FORCE_SNAPSHOT:-false}" != "true" ]]; then
+      die "Aborting. Set FORCE_SNAPSHOT=true to override."
+    fi
+  fi
+
+  # Normalize layout before archiving (RC3 — standardize datadir layouts)
+  local staging_dir=""
+  staging_dir=$(normalize_snapshot_layout "$datadir" "$(mktemp -d)")
+  ok "Normalized snapshot layout in $staging_dir"
+
+  info "Compressing normalized snapshot …"
   if command -v zstd &>/dev/null; then
-    tar -cf - -C "$(dirname "$datadir")" "$(basename "$datadir")" | \
+    tar -cf - -C "$(dirname "$staging_dir")" "$(basename "$staging_dir")" | \
       zstd -T0 -3 -o "$outfile"
   else
     outfile="${outfile%.zst}.gz"
-    tar -czf "$outfile" -C "$(dirname "$datadir")" "$(basename "$datadir")"
+    tar -czf "$outfile" -C "$(dirname "$staging_dir")" "$(basename "$staging_dir")"
   fi
+
+  # Cleanup staging
+  rm -rf "$staging_dir"
 
   ok "Snapshot created: $outfile"
   echo "  Size: $(du -sh "$outfile" | cut -f1)"
