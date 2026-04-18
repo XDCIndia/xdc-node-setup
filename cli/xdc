@@ -4005,6 +4005,14 @@ EOF
         die "Docker Compose plugin not found. Install docker-compose-plugin."
     fi
     
+    # 2a. Detect snap Docker (can't access files outside /home or /tmp)
+    local snap_docker=false
+    local compose_workdir=""
+    if which docker 2>/dev/null | grep -q /snap/ || docker info 2>/dev/null | grep -qi snap; then
+        snap_docker=true
+        info "Snap Docker detected — compose files will be copied to /tmp/"
+    fi
+    
     # 3. Data root exists and is writable
     if [[ ! -d "$data_root" ]]; then
         if [[ "$dry_run" == "true" ]]; then
@@ -4096,6 +4104,17 @@ EOF
             ;;
     esac
     
+    # Auto-populate BOOTNODES from bootnodes.list if available
+    local bootnodes_file="${PROJECT_DIR}/docker/${network}/bootnodes.list"
+    if [[ -f "$bootnodes_file" ]]; then
+        local bootnodes_value
+        bootnodes_value=$(grep -v '^\s*#' "$bootnodes_file" | grep -v '^\s*$' | tr '\n' ',' | sed 's/,$//')
+        if [[ -n "$bootnodes_value" ]]; then
+            env_exports+=("BOOTNODES=${bootnodes_value}")
+            info "Loaded $(echo "$bootnodes_value" | tr ',' '\n' | wc -l | tr -d ' ') bootnodes from ${bootnodes_file}"
+        fi
+    fi
+    
     # Source additional env file if provided
     if [[ -n "$env_file" && -f "$env_file" ]]; then
         info "Loading environment from $env_file"
@@ -4132,11 +4151,39 @@ EOF
     log "Deploying $client on $network..."
     start_spinner "Deploying $client $network node"
     
+    # Handle snap Docker: copy compose files to /tmp/ where snap can access them
+    local effective_compose_file="$compose_file"
+    if [[ "$snap_docker" == "true" && "$dry_run" != "true" ]]; then
+        local tmp_compose_dir
+        tmp_compose_dir="/tmp/xdc-deploy-$$"
+        mkdir -p "$tmp_compose_dir"
+        cp "$compose_file" "$tmp_compose_dir/compose.yml"
+        effective_compose_file="$tmp_compose_dir/compose.yml"
+        info "Copied compose file to $effective_compose_file (snap Docker workaround)"
+        
+        # Also copy monitoring/logging compose files if needed
+        if [[ "$monitoring" == "true" ]]; then
+            local monitoring_file="${PROJECT_DIR}/docker/docker-compose.monitoring.yml"
+            if [[ -f "$monitoring_file" ]]; then
+                cp "$monitoring_file" "$tmp_compose_dir/monitoring.yml"
+            fi
+        fi
+        if [[ "$logging" == "true" ]]; then
+            local logging_file="${PROJECT_DIR}/docker/docker-compose.logging.yml"
+            if [[ -f "$logging_file" ]]; then
+                cp "$logging_file" "$tmp_compose_dir/logging.yml"
+            fi
+        fi
+    fi
+    
     # Build the compose command
-    local compose_cmd=("docker" "compose" "-f" "$compose_file")
+    local compose_cmd=("docker" "compose" "-f" "$effective_compose_file")
     
     if [[ "$monitoring" == "true" ]]; then
         local monitoring_file="${PROJECT_DIR}/docker/docker-compose.monitoring.yml"
+        if [[ "$snap_docker" == "true" && "$dry_run" != "true" && -f "$monitoring_file" ]]; then
+            monitoring_file="/tmp/xdc-deploy-$$/monitoring.yml"
+        fi
         if [[ -f "$monitoring_file" ]]; then
             compose_cmd+=("-f" "$monitoring_file")
         else
@@ -4146,6 +4193,9 @@ EOF
     
     if [[ "$logging" == "true" ]]; then
         local logging_file="${PROJECT_DIR}/docker/docker-compose.logging.yml"
+        if [[ "$snap_docker" == "true" && "$dry_run" != "true" && -f "$logging_file" ]]; then
+            logging_file="/tmp/xdc-deploy-$$/logging.yml"
+        fi
         if [[ -f "$logging_file" ]]; then
             compose_cmd+=("-f" "$logging_file")
         else
@@ -4168,7 +4218,12 @@ EOF
         error "Docker compose failed. Attempting rollback..."
         
         # Rollback: remove partially created containers for this project
-        docker compose -f "$compose_file" down --remove-orphans 2>/dev/null || true
+        docker compose -f "$effective_compose_file" down --remove-orphans 2>/dev/null || true
+        
+        # Clean up temp compose files on snap Docker
+        if [[ "$snap_docker" == "true" && "$dry_run" != "true" ]]; then
+            rm -rf "/tmp/xdc-deploy-$$" 2>/dev/null || true
+        fi
         
         error "Command: ${compose_cmd[*]}"
         return 1
