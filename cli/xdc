@@ -134,7 +134,7 @@ $(c BOLD)XDC-SPECIFIC COMMANDS:$(c NC)
     $(c GREEN)cluster$(c NC)        Multi-node cluster management (failover, health)
     $(c GREEN)stake$(c NC)          Stake management (delegations, auto-compound, tax)
     $(c GREEN)peers$(c NC)          Optimize peer connections (latency ranking, NAT detection)
-    $(c GREEN)snapshot$(c NC)       Manage chain snapshots (download/create/verify)
+    $(c GREEN)snapshot$(c NC)       Manage chain snapshots (download/create/validate)
     $(c GREEN)monitor$(c NC)        XDC-specific monitoring (epoch, rewards, fork detection)
     $(c GREEN)sync$(c NC)           Sync optimization (status, ETA, pruning)
     $(c GREEN)rpc-secure$(c NC)     RPC security hardening (method filtering, rate limits)
@@ -157,7 +157,7 @@ $(c BOLD)GENERAL COMMANDS:$(c NC)
     $(c GREEN)heartbeat$(c NC)      Manage SkyNet heartbeat agent (--install, --uninstall)
     $(c GREEN)ssl$(c NC)            Setup SSL/HTTPS for dashboard (--domain, --email)
     $(c GREEN)update$(c NC)         Update node Docker image and restart
-    $(c GREEN)snapshot$(c NC)       Snapshot operations (export|import|transfer|download)
+    $(c GREEN)snapshot$(c NC)       Snapshot operations (export|import|transfer|download|validate)
     $(c GREEN)backup$(c NC)         Backup chaindata and config to archive
     $(c GREEN)restore$(c NC)        Restore from backup
     $(c GREEN)reset$(c NC)          Reset node and resync (fixes bad blocks)
@@ -194,6 +194,9 @@ $(c BOLD)EXAMPLES:$(c NC)
     xdc snapshot export -o /backup/node.tar.gz  # Export snapshot
     xdc snapshot import /backup/node.tar.gz --force  # Import snapshot
     xdc snapshot transfer -p 12141 root@65.21.71.4 /data  # Transfer via SSH
+    xdc snapshot validate --quick  # Fast validation check
+    xdc snapshot validate --full --json --output report.json  # Deep validation with JSON report
+    xdc snapshot validate --standard --fail-fast --notify  # Standard validation with alerts
     xdc snapshot download       # Download from remote URL
     xdc backup --encrypt        # Create encrypted backup
     xdc logs --follow           # Tail logs continuously
@@ -3772,10 +3775,11 @@ cmd_snapshot() {
         import) cmd_snapshot_import "$@" ;;
         transfer) cmd_snapshot_transfer "$@" ;;
         download) cmd_snapshot_download "$@" ;;
+        validate) cmd_snapshot_validate "$@" ;;
         "") cmd_snapshot_download "$@" ;;
         *)
             error "Unknown subcommand: $subcommand"
-            echo "Usage: xdc snapshot [export|import|transfer|download]"
+            echo "Usage: xdc snapshot [export|import|transfer|download|validate]"
             return 1
             ;;
     esac
@@ -3830,6 +3834,41 @@ show_state_cache_warning() {
     echo -e "   ${CYAN}xdc restart --syncmode full${NC}"
     echo -e "   This may take 10-30 minutes depending on block height."
     echo ""
+}
+
+#------------------------------------------------------------------------------
+# Metrics helper for snapshot validation
+#------------------------------------------------------------------------------
+_snapshot_validation_metric() {
+    local event="$1"
+    local datadir="${2:-}"
+    local level="${3:-}"
+    local result="${4:-}"
+    local duration="${5:-0}"
+    local metrics_dir="${XDC_STATE_DIR}/metrics"
+    local metrics_file="${metrics_dir}/snapshot-validation.log"
+
+    mkdir -p "$metrics_dir"
+
+    local timestamp
+    timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+    # Build JSON line; use jq if available, otherwise manual (safe since no user input in keys)
+    if command -v jq &>/dev/null; then
+        jq -cn \
+            --arg timestamp "$timestamp" \
+            --arg event "$event" \
+            --arg datadir "$datadir" \
+            --arg level "$level" \
+            --arg result "$result" \
+            --argjson duration "$duration" \
+            '{timestamp:$timestamp,event:$event,datadir:$datadir,level:$level,result:$result,duration:$duration}' \
+            >> "$metrics_file"
+    else
+        printf '{"timestamp":"%s","event":"%s","datadir":"%s","level":"%s","result":"%s","duration":%s}\n' \
+            "$timestamp" "$event" "$datadir" "$level" "$result" "$duration" \
+            >> "$metrics_file"
+    fi
 }
 
 #==============================================================================
@@ -4271,6 +4310,117 @@ EOF
     cmd_start
     
     show_state_cache_warning
+}
+
+#==============================================================================
+# New Command: snapshot validate
+#==============================================================================
+cmd_snapshot_validate() {
+    local datadir="${XDC_DATA:-${PROJECT_DIR}/${XDC_NETWORK}/xdcchain}"
+    local level="standard"
+    local json_flag=""
+    local output_file=""
+    local fail_fast=""
+    local notify=""
+    local script="${SCRIPTS_DIR}/validate-snapshot-deep.sh"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --datadir|-d)
+                datadir="$2"
+                shift 2
+                ;;
+            --quick)
+                level="quick"
+                shift
+                ;;
+            --standard)
+                level="standard"
+                shift
+                ;;
+            --full)
+                level="full"
+                shift
+                ;;
+            --json)
+                json_flag="--json"
+                shift
+                ;;
+            --output|-o)
+                output_file="$2"
+                shift 2
+                ;;
+            --fail-fast)
+                fail_fast="--fail-fast"
+                shift
+                ;;
+            --notify)
+                notify="--notify"
+                shift
+                ;;
+            --help|-h)
+                cat << EOF
+${BOLD}xdc snapshot validate${NC} — Validate chaindata snapshot integrity
+
+${BOLD}USAGE:${NC}
+    xdc snapshot validate [--datadir <path>] [--quick|--standard|--full]
+                          [--json] [--output <file>] [--fail-fast] [--notify]
+
+${BOLD}OPTIONS:${NC}
+    --datadir, -d <path>  Data directory to validate (default: \$XDC_DATA)
+    --quick               Fast structural check (~5s)
+    --standard            Structural + heuristic checks (~30-60s) [default]
+    --full                Deep database inspection (~2-5min)
+    --json                Output JSON instead of human-readable table
+    --output, -o <file>   Write JSON report to file
+    --fail-fast           Exit non-zero on first critical failure
+    --notify              Send alert on failure (requires notify.conf)
+    --help, -h            Show this help
+
+${BOLD}EXAMPLES:${NC}
+    xdc snapshot validate
+    xdc snapshot validate --datadir /data/xdcchain --quick
+    xdc snapshot validate --full --json --output report.json
+    xdc snapshot validate --standard --fail-fast --notify
+
+EOF
+                return 0
+                ;;
+            *) shift ;;
+        esac
+    done
+
+    if [[ ! -f "$script" ]]; then
+        error "Validation script not found: $script"
+        return 1
+    fi
+
+    local start_time end_time duration
+    start_time=$(date +%s)
+
+    local script_args=(
+        --datadir "$datadir"
+        --"$level"
+    )
+    [[ -n "$json_flag" ]] && script_args+=("$json_flag")
+    [[ -n "$output_file" ]] && script_args+=(--output "$output_file")
+    [[ -n "$fail_fast" ]] && script_args+=("$fail_fast")
+    [[ -n "$notify" ]] && script_args+=("$notify")
+
+    local exit_code=0
+    if ! bash "$script" "${script_args[@]}"; then
+        exit_code=$?
+    fi
+
+    end_time=$(date +%s)
+    duration=$((end_time - start_time))
+
+    local result="pass"
+    [[ "$exit_code" -ne 0 ]] && result="fail"
+
+    _snapshot_validation_metric "validation_completed" "$datadir" "$level" "$result" "$duration"
+
+    return "$exit_code"
 }
 
 cmd_monitor() {
