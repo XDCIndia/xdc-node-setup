@@ -287,6 +287,34 @@ snapshot_check_state_cache() {
   return 0
 }
 
+# snapshot_check_db_flushed <chaindata_path>
+# Returns: 0 if CURRENT marker and recent WAL/SST state look consistent
+snapshot_check_db_flushed() {
+    local chaindata_path="$1"
+
+    if [[ ! -s "$chaindata_path/CURRENT" ]]; then
+        log_error "CURRENT marker missing or empty — DB was not flushed before snapshot"
+        return 1
+    fi
+
+    # Check for WAL files (*.log in Pebble) — their presence alone is fine,
+    # but if CURRENT is missing we already failed.
+    local wal_count=0
+    wal_count=$(find "$chaindata_path" -maxdepth 1 -name '*.log' -type f 2>/dev/null | wc -l | tr -d ' ')
+
+    # Heuristic: if we have ancient/ but no SSTs at all, the DB is empty
+    local sst_count=0
+    sst_count=$(find "$chaindata_path" -maxdepth 1 -name '*.sst' -type f 2>/dev/null | wc -l | tr -d ' ')
+
+    if [[ "$sst_count" -eq 0 && "$wal_count" -eq 0 ]]; then
+        log_warn "No SST or WAL files in chaindata — possible empty snapshot"
+        return 1
+    fi
+
+    log_debug "DB flush check passed (SSTs=$sst_count, WALs=$wal_count)"
+    return 0
+}
+
 # ---------------------------------------------------------------------------
 # Deep checks (require optional tools)
 # ---------------------------------------------------------------------------

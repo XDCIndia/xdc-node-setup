@@ -196,7 +196,8 @@ validate_archive() {
     if [[ "$has_state_cache" == "true" ]]; then
         ok "State root cache (xdc-state-root-cache.csv) present"
     else
-        warn "Missing xdc-state-root-cache.csv — snapshot may fail cold recovery"
+        error "Missing xdc-state-root-cache.csv — cold snapshot restore will fail"
+        fail=1
     fi
 
     # Summary

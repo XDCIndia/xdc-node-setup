@@ -18,6 +18,7 @@ SNAPSHOTS_URL="https://xdc.network/snapshots/"
 
 # Source chaindata auto-detection library
 source "${SCRIPT_DIR}/lib/chaindata.sh" 2>/dev/null || true
+source "${SCRIPT_DIR}/lib/snapshot-validation.sh" 2>/dev/null || true
 
 # ── colours ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'
@@ -303,6 +304,72 @@ cmd_restore() {
   info "Start node: docker compose up -d $container"
 }
 
+# Flush Pebble/LevelDB memtables and WAL to ensure consistent snapshot
+# Usage: flush_db <datadir> <client>
+# Returns: 0 on success, 1 on failure
+flush_db() {
+    local datadir="$1"
+    local client="$2"
+    local subdir=""
+    local chaindata_path=""
+
+    subdir=$(find_chaindata_subdir_or_default "$datadir" 2>/dev/null || echo "")
+    chaindata_path="$datadir${subdir:+/$subdir}/chaindata"
+
+    if [[ ! -d "$chaindata_path" ]]; then
+        warn "Cannot find chaindata to flush: $chaindata_path"
+        return 1
+    fi
+
+    # Detect engine
+    local engine=""
+    if command -v snapshot_detect_engine &>/dev/null; then
+        engine=$(snapshot_detect_engine "$chaindata_path")
+    else
+        local sst_count=0 ldb_count=0
+        sst_count=$(find "$chaindata_path" -maxdepth 1 -name '*.sst' -type f 2>/dev/null | wc -l | tr -d ' ')
+        ldb_count=$(find "$chaindata_path" -maxdepth 1 -name '*.ldb' -type f 2>/dev/null | wc -l | tr -d ' ')
+        if [[ "$sst_count" -gt 0 ]]; then
+            engine="pebble"
+        elif [[ "$ldb_count" -gt 0 ]]; then
+            engine="leveldb"
+        else
+            engine="unknown"
+        fi
+    fi
+
+    case "$engine" in
+        pebble)
+            info "Flushing Pebble DB at $chaindata_path ..."
+            # Use ldb tool if available to force compaction
+            if command -v ldb &>/dev/null; then
+                ldb compact --db="$chaindata_path" 2>/dev/null || true
+            fi
+            # Fallback: sync filesystem buffers
+            sync
+            # Verify CURRENT marker is present and non-empty
+            if [[ ! -s "$chaindata_path/CURRENT" ]]; then
+                warn "CURRENT marker missing or empty after flush"
+                return 1
+            fi
+            ;;
+        leveldb)
+            info "Flushing LevelDB at $chaindata_path ..."
+            sync
+            ;;
+        *)
+            warn "Unknown DB engine '$engine' — skipping flush"
+            ;;
+    esac
+
+    # Wait for any background compaction to settle
+    info "Waiting 5s for background compaction to settle..."
+    sleep 5
+
+    ok "DB flush complete"
+    return 0
+}
+
 # =============================================================================
 # CMD: create — create snapshot from running node
 # =============================================================================
@@ -365,8 +432,28 @@ cmd_create() {
     die "Chaindata appears empty (no *.sst or *.ldb files). Aborting snapshot creation."
   fi
 
-  # Warn about missing state root cache
-  if [[ ! -f "$datadir/xdc-state-root-cache.csv" ]] && [[ ! -f "$chaindata_base/xdc-state-root-cache.csv" ]]; then
+  # Ensure state root cache is included in snapshot
+  local cache_src=""
+  local cache_candidates=(
+    "$datadir/xdc-state-root-cache.csv"
+    "$chaindata_base/xdc-state-root-cache.csv"
+    "$datadir/geth/xdc-state-root-cache.csv"
+    "$datadir/XDC/xdc-state-root-cache.csv"
+    "$datadir/xdcchain/xdc-state-root-cache.csv"
+  )
+  for cand in "${cache_candidates[@]}"; do
+    if [[ -f "$cand" ]]; then
+      cache_src="$cand"
+      break
+    fi
+  done
+
+  if [[ -n "$cache_src" ]]; then
+    if [[ "$cache_src" != "$datadir/xdc-state-root-cache.csv" ]]; then
+      cp -f "$cache_src" "$datadir/xdc-state-root-cache.csv"
+      ok "Copied state root cache to datadir root"
+    fi
+  else
     warn "xdc-state-root-cache.csv not found — cold snapshot recovery may fail"
     warn "Consider copying it into the datadir before distributing this snapshot"
   fi
@@ -375,6 +462,14 @@ cmd_create() {
   if docker inspect "$container" &>/dev/null 2>&1; then
     info "Stopping container: $container (clean shutdown for consistent snapshot)"
     docker stop "$container"
+  fi
+
+  # Flush DB before archiving
+  if ! flush_db "$datadir" "$client"; then
+    warn "DB flush failed — snapshot may be inconsistent"
+    if [[ "${FORCE_SNAPSHOT:-false}" != "true" ]]; then
+      die "Aborting. Set FORCE_SNAPSHOT=true to override."
+    fi
   fi
 
   info "Compressing $datadir …"
