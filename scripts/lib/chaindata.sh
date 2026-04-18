@@ -126,3 +126,70 @@ chaindata_path() {
         echo "$base_dir/chaindata"
     fi
 }
+
+# ------------------------------------------------------------
+# normalize_snapshot_layout <source_datadir> <staging_dir>
+# ------------------------------------------------------------
+# Creates a normalized snapshot staging directory with standard
+# geth/ layout. Handles: XDC/ → geth/, xdcchain/ → geth/,
+# direct chaindata/ → geth/chaindata/.
+# Preserves: triedb/ subtree (PBSS), ancient/, keystore/, nodekey,
+# jwtsecret, transactions.rlp, blobpool, nodes, LOCK.
+# Copies state root cache to staging root.
+# Writes .snapshot-layout marker.
+# Returns: 0 on success, sets NORMALIZED_STAGING_DIR env var
+# ------------------------------------------------------------
+normalize_snapshot_layout() {
+    local src="$1"
+    local staging="${2:-$(mktemp -d)}"
+
+    mkdir -p "$staging/geth"
+
+    # Detect source subdir
+    local src_subdir=""
+    src_subdir=$(find_chaindata_subdir_or_default "$src")
+
+    # Migrate chaindata
+    local src_chaindata="$src/${src_subdir:+$src_subdir/}chaindata"
+    if [[ -d "$src_chaindata" ]]; then
+        if [[ -d "$staging/geth/chaindata" ]]; then
+            rm -rf "$staging/geth/chaindata"
+        fi
+        cp -a "$src_chaindata" "$staging/geth/chaindata"
+    fi
+
+    # Migrate triedb (PBSS path-based state scheme)
+    local src_triedb="$src/${src_subdir:+$src_subdir/}triedb"
+    if [[ -d "$src_triedb" ]]; then
+        cp -a "$src_triedb" "$staging/geth/triedb"
+    fi
+
+    # Migrate metadata files
+    for item in keystore nodekey jwtsecret transactions.rlp blobpool nodes; do
+        local src_item="$src/${src_subdir:+$src_subdir/}$item"
+        if [[ -e "$src_item" ]]; then
+            cp -a "$src_item" "$staging/geth/"
+        fi
+    done
+
+    # Migrate LOCK file if present
+    local src_lock="$src/${src_subdir:+$src_subdir/}LOCK"
+    if [[ -f "$src_lock" ]]; then
+        cp -a "$src_lock" "$staging/geth/" 2>/dev/null || true
+    fi
+
+    # Migrate state root cache (from any location to staging root)
+    for cand in "$src/xdc-state-root-cache.csv" "$src/${src_subdir:+$src_subdir/}xdc-state-root-cache.csv"; do
+        if [[ -f "$cand" ]]; then
+            cp -a "$cand" "$staging/"
+            break
+        fi
+    done
+
+    # Write layout marker
+    echo "normalized:geth:$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$staging/.snapshot-layout"
+
+    NORMALIZED_STAGING_DIR="$staging"
+    echo "$staging"
+    return 0
+}
