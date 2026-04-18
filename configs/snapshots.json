@@ -41,5 +41,39 @@
     "example": "export XDC_SNAPSHOT_URL='https://your-mirror.com/xdc-snapshot.tar.gz' && xdc snapshot download mainnet-full",
     "create_own": "xdc snapshot create /backup/xdc-snapshots",
     "community": "Check XDC community channels for shared snapshots"
+  },
+  "validation": {
+    "thresholds": {
+      "mainnet": {
+        "full": {
+          "minChaindataSizeBytes": 161061273600,
+          "minSstLdbFiles": 50000,
+          "minAncientSegments": 1000,
+          "maxStateBlockGap": 10,
+          "requiredSubdirs": ["chaindata", "chaindata/ancient"]
+        },
+        "archive": {
+          "minChaindataSizeBytes": 536870912000,
+          "minSstLdbFiles": 150000,
+          "minAncientSegments": 1000,
+          "maxStateBlockGap": 0,
+          "requiredSubdirs": ["chaindata", "chaindata/ancient", "chaindata/ancient/bodies", "chaindata/ancient/headers", "chaindata/ancient/receipts"]
+        }
+      },
+      "testnet": {
+        "full": {
+          "minChaindataSizeBytes": 21474836480,
+          "minSstLdbFiles": 10000,
+          "minAncientSegments": 200,
+          "maxStateBlockGap": 10,
+          "requiredSubdirs": ["chaindata", "chaindata/ancient"]
+        }
+      }
+    },
+    "tools": {
+      "ldbPackage": "rocksdb-tools",
+      "optional": true,
+      "note": "Install rocksdb-tools for full-level key-prefix verification"
+    }
   }
 }
