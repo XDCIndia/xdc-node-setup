@@ -127,6 +127,7 @@ if [ -n "${STATIC_NODES:-}" ]; then
     # Convert comma-separated enodes to JSON array
     json_nodes="["
     first=true
+    OLD_IFS="$IFS"
     IFS=','
     for node in $STATIC_NODES; do
         node=$(echo "$node" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
@@ -138,6 +139,7 @@ if [ -n "${STATIC_NODES:-}" ]; then
         fi
         json_nodes="$json_nodes\"$node\""
     done
+    IFS="$OLD_IFS"
     json_nodes="$json_nodes]"
     echo "$json_nodes" > "$static_nodes_file"
     echo "Wrote static-nodes.json"
@@ -150,6 +152,7 @@ if [ -n "${TRUSTED_NODES:-}" ]; then
     # Convert comma-separated enodes to JSON array
     json_nodes="["
     first=true
+    OLD_IFS="$IFS"
     IFS=','
     for node in $TRUSTED_NODES; do
         node=$(echo "$node" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
@@ -161,6 +164,7 @@ if [ -n "${TRUSTED_NODES:-}" ]; then
         fi
         json_nodes="$json_nodes\"$node\""
     done
+    IFS="$OLD_IFS"
     json_nodes="$json_nodes]"
     echo "$json_nodes" > "$trusted_nodes_file"
     echo "Wrote trusted-nodes.json"
