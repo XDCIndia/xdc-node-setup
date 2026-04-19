@@ -48,8 +48,8 @@ xdc client        # Check current client version
 
 - **Base:** Latest go-ethereum codebase
 - **Consensus:** XDPoS (XinFin Delegated Proof of Stake)
-- **Repository:** [github.com/AnilChinchawale/go-ethereum](https://github.com/AnilChinchawale/go-ethereum)
-- **Branch:** `feature/xdpos-consensus`
+- **Repository:** [github.com/XDCIndia/go-ethereum](https://github.com/XDCIndia/go-ethereum)
+- **Branch:** `xdc-network`
 - **PR:** #5 on the go-ethereum repository
 - **Build Requirements:** Go 1.22+
 
@@ -364,7 +364,7 @@ go version  # Should show go1.22.0 or later
 
 ```bash
 # Clone the feature branch
-git clone -b feature/xdpos-consensus https://github.com/AnilChinchawale/go-ethereum.git
+git clone -b xdc-network https://github.com/XDCIndia/go-ethereum.git
 cd go-ethereum
 
 # Build geth
@@ -480,7 +480,7 @@ curl -X POST http://localhost:8545 \
 | Mainnet compatibility | Testing | Report any consensus issues on GitHub |
 
 **Reporting Issues:**
-- Geth PR5 code: [github.com/AnilChinchawale/go-ethereum/issues](https://github.com/AnilChinchawale/go-ethereum/issues)
+- Geth PR5 code: [github.com/XDCIndia/go-ethereum/issues](https://github.com/XDCIndia/go-ethereum/issues)
 - Setup script: [github.com/AnilChinchawale/xdc-node-setup/issues](https://github.com/AnilChinchawale/xdc-node-setup/issues)
 
 ---
