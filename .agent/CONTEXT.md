@@ -64,7 +64,7 @@ Key facts for AI agents working with this repository. Read this before making ch
 
 ### Geth/XDC (go-ethereum fork)
 
-- Branch: `feature/xdpos-consensus` in `go-xdc` repo
+- Branch: `xdc-network` in `go-xdc` repo
 - Supports `admin_addPeer` and `admin_peers` RPC
 - `--unlock` and `--password` flags needed for validator nodes
 - `--gcmode archive` required for full state history

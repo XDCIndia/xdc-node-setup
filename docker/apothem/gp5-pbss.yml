@@ -6,7 +6,7 @@
 
 services:
   168-gp5-full-pbss-apothem-168:
-    image: anilchinchawale/gp5-xdc:v35
+    image: anilchinchawale/gp5-xdc:v36
     platform: linux/amd64
     container_name: 168-gp5-full-pbss-apothem-168
     restart: always
@@ -32,11 +32,11 @@ services:
       - P2P_PORT=30322
       - EXTERNAL_IP=${EXTERNAL_IP:-}
       - INSTANCE_NAME=${INSTANCE_NAME:-168-gp5-full-pbss-apothem-168}
-      - HTTP_API=admin,eth,net,web3,XDPoS
+      - HTTP_API=admin,eth,net,web3,xdpos
       - ETHSTATS_ENABLED=${ETHSTATS_ENABLED:-true}
       - STATS_SECRET=${STATS_SECRET:-xdc_openscan_stats_2026}
       - STATS_SERVER=${STATS_SERVER:-stats.xdcindia.com:443}
-      - NO_DISCOVER=true
+      - NO_DISCOVER=false
       - STATIC_NODES=${STATIC_NODES:-}
       - TRUSTED_NODES=${TRUSTED_NODES:-}
     entrypoint: ["/bin/sh", "/work/start.sh"]
