@@ -1,543 +1,293 @@
 # XDPoS 2.0 Consensus Monitoring Guide
 
-**Version:** 1.0  
-**Date:** February 27, 2026  
-**Applies to:** xdc-node-setup (SkyOne) v1.0+, XDCNetOwn (SkyNet)
+## Overview
 
----
+This guide covers XDPoS 2.0 consensus monitoring for XDC Network nodes, including QC validation, vote tracking, and epoch boundary monitoring.
 
-## Table of Contents
+## XDPoS 2.0 Fundamentals
 
-1. [Introduction](#introduction)
-2. [XDPoS 2.0 Overview](#xdpos-20-overview)
-3. [Epoch Structure](#epoch-structure)
-4. [Gap Blocks](#gap-blocks)
-5. [Vote Collection](#vote-collection)
-6. [Monitoring Implementation](#monitoring-implementation)
-7. [Alert Configuration](#alert-configuration)
-8. [Troubleshooting](#troubleshooting)
+### Epoch Structure
 
----
-
-## Introduction
-
-This guide covers XDPoS 2.0 consensus monitoring for XDC Network nodes. XDPoS 2.0 is a Byzantine Fault Tolerant (BFT) consensus mechanism that ensures network security and finality through a rotating masternode set.
-
----
-
-## XDPoS 2.0 Overview
+- **Epoch Length:** 900 blocks
+- **Masternodes:** 108 active validators
+- **Quorum:** 73 signatures (2/3 majority)
+- **Gap Blocks:** Empty blocks at epoch transitions
 
 ### Key Concepts
 
-| Concept | Description |
-|---------|-------------|
-| **Masternode** | Validator node that produces blocks and votes |
-| **Epoch** | Time period (900 blocks) with fixed masternode set |
-| **Gap Block** | Non-production block period for vote collection |
-| **Quorum Certificate (QC)** | Proof that 2/3+ masternodes voted for a block |
-| **Timeout Certificate (TC)** | Proof that 2/3+ masternodes timed out |
+| Term | Description |
+|------|-------------|
+| Epoch | 900-block period with fixed masternode set |
+| Round | Block number within epoch (0-899) |
+| QC | Quorum Certificate - proof of consensus |
+| Gap Block | Empty block at epoch boundary |
 
-### Consensus Flow
+## Consensus Health Monitoring
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     XDPoS 2.0 Consensus Flow                     │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Epoch Start (Block 0)                                          │
-│       │                                                          │
-│       ▼                                                          │
-│  ┌─────────────┐     ┌─────────────┐     ┌─────────────┐        │
-│  │   Block 1   │────▶│   Block 2   │────▶│   Block N   │        │
-│  │  (Round 1)  │     │  (Round 2)  │     │  (Round N)  │        │
-│  └──────┬──────┘     └──────┬──────┘     └──────┬──────┘        │
-│         │                   │                   │               │
-│         └───────────────────┴───────────────────┘               │
-│                         │                                       │
-│                         ▼                                       │
-│                  Vote Collection                                │
-│                         │                                       │
-│                         ▼                                       │
-│              Quorum Certificate (QC)                            │
-│                         │                                       │
-│                         ▼                                       │
-│  Gap Blocks (450-899) ──┴──▶ Epoch Transition                   │
-│                                                              │
-└─────────────────────────────────────────────────────────────────┘
-```
+### 1. QC Validation
 
----
+```typescript
+import { validateQC, isEpochBoundary } from '@/lib/consensus';
 
-## Epoch Structure
-
-### Epoch Parameters
-
-```yaml
-epoch_length: 900          # Blocks per epoch
-gap_start: 450            # First gap block
-gap_end: 899              # Last gap block
-production_blocks: 450    # Blocks with production
-masternode_count: 108     # Maximum masternodes
-```
-
-### Epoch Phases
-
-| Phase | Block Range | Activity |
-|-------|-------------|----------|
-| **Production** | 0-449 | Normal block production |
-| **Gap** | 450-899 | Vote collection, no production |
-| **Transition** | 899-900 | Masternode set update |
-
-### Monitoring Epoch Boundaries
-
-```bash
-#!/bin/bash
-# epoch-monitor.sh
-
-RPC_ENDPOINT="http://localhost:8545"
-EPOCH_LENGTH=900
-
-# Get current block number
-current_block=$(curl -s -X POST $RPC_ENDPOINT \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' | \
-  jq -r '.result' | xargs printf '%d')
-
-# Calculate epoch position
-current_epoch=$((current_block / EPOCH_LENGTH))
-epoch_position=$((current_block % EPOCH_LENGTH))
-blocks_to_gap=$((450 - epoch_position))
-blocks_to_epoch_end=$((900 - epoch_position))
-
-echo "Current Block: $current_block"
-echo "Current Epoch: $current_epoch"
-echo "Epoch Position: $epoch_position"
-echo "Blocks to Gap: $blocks_to_gap"
-echo "Blocks to Epoch End: $blocks_to_epoch_end"
-
-# Alert if approaching gap
-if [ $blocks_to_gap -le 10 ] && [ $blocks_to_gap -gt 0 ]; then
-  echo "WARNING: Approaching gap blocks in $blocks_to_gap blocks"
-fi
-
-# Alert if in gap
-if [ $epoch_position -ge 450 ]; then
-  echo "INFO: Currently in gap block period"
-fi
-```
-
----
-
-## Gap Blocks
-
-### What are Gap Blocks?
-
-Gap blocks are a unique feature of XDPoS 2.0 where block production pauses for 450 blocks at the end of each epoch. During this time:
-
-- **No new blocks** are produced
-- **Vote collection** continues for previously produced blocks
-- **Masternodes prepare** for the next epoch
-- **QC formation** completes for final blocks
-
-### Gap Block Monitoring
-
-```bash
-#!/bin/bash
-# gap-block-monitor.sh
-
-EPOCH_LENGTH=900
-GAP_START=450
-RPC_ENDPOINT="http://localhost:8545"
-
-get_block_number() {
-  curl -s -X POST $RPC_ENDPOINT \
-    -H "Content-Type: application/json" \
-    -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' | \
-    jq -r '.result' | xargs printf '%d'
-}
-
-is_gap_block() {
-  local block=$1
-  local position=$((block % EPOCH_LENGTH))
-  [ $position -ge $GAP_START ]
-}
-
-# Main monitoring loop
-while true; do
-  current_block=$(get_block_number)
-  
-  if is_gap_block $current_block; then
-    echo "$(date): GAP BLOCK ACTIVE - Block $current_block"
+// Check QC at checkpoint block
+async function checkConsensus(blockNum: number) {
+  if (isEpochBoundary(blockNum)) {
+    const validation = await validateQC(blockNum);
     
-    # Monitor vote collection during gap
-    # This would integrate with XDCNetOwn metrics
-  else
-    blocks_to_gap=$((GAP_START - (current_block % EPOCH_LENGTH)))
-    if [ $blocks_to_gap -le 50 ]; then
-      echo "$(date): Approaching gap blocks ($blocks_to_gap blocks remaining)"
-    fi
-  fi
-  
-  sleep 10
-done
+    if (!validation.valid) {
+      console.error(`QC validation failed: ${validation.error}`);
+      // Alert operators
+    }
+  }
+}
 ```
 
-### Prometheus Metrics for Gap Blocks
+### 2. Vote Tracking
+
+```typescript
+import { getVotes, countVotes } from '@/lib/consensus';
+
+// Monitor vote participation
+async function monitorVotes(blockNum: number) {
+  const votes = await getVotes(blockNum);
+  const voteCount = votes.length;
+  
+  if (voteCount < 73) {
+    console.warn(`Insufficient votes: ${voteCount}/73`);
+  }
+  
+  // Track vote latency
+  for (const vote of votes) {
+    const latency = await getVoteLatency(blockNum, vote.masternode);
+    if (latency > 2000) {
+      console.warn(`High vote latency from ${vote.masternode}: ${latency}ms`);
+    }
+  }
+}
+```
+
+### 3. Masternode Set Tracking
+
+```typescript
+import { getMasternodes, isMasternode } from '@/lib/consensus';
+
+// Monitor masternode participation
+async function trackMasternodes() {
+  const mnSet = await getMasternodes();
+  
+  console.log(`Epoch: ${mnSet.epoch}`);
+  console.log(`Active: ${mnSet.masternodes.length}`);
+  console.log(`Standby: ${mnSet.standbynodes.length}`);
+  console.log(`Penalized: ${mnSet.penalized.length}`);
+  
+  // Check if specific address is masternode
+  const isMn = await isMasternode('0x...');
+}
+```
+
+## Gap Block Detection
+
+Gap blocks occur at epoch boundaries when the network transitions between masternode sets.
+
+```typescript
+import { isGapBlock, detectGapBlocks } from '@/lib/consensus';
+
+// Detect gap blocks in range
+async function findGapBlocks() {
+  const currentBlock = await getBlockNumber();
+  const startBlock = currentBlock - 100;
+  
+  const gapBlocks = await detectGapBlocks(startBlock, currentBlock);
+  
+  if (gapBlocks.length > 0) {
+    console.log(`Found ${gapBlocks.length} gap blocks:`, gapBlocks);
+  }
+}
+```
+
+## Consensus Health Score
+
+The consensus health score combines multiple metrics:
+
+```typescript
+import { getConsensusHealth, checkConsensusHealth } from '@/lib/consensus';
+
+// Get comprehensive health metrics
+async function healthCheck() {
+  const health = await getConsensusHealth();
+  
+  console.log(`
+    Block: ${health.blockNumber}
+    Epoch: ${health.epoch}
+    Masternodes: ${health.masternodeCount}
+    Votes: ${health.voteCount}
+    Health Score: ${health.healthScore}
+    Is Epoch Boundary: ${health.isEpochBoundary}
+  `);
+  
+  if (health.qcData) {
+    console.log(`QC Signatures: ${health.qcData.signatures.length}`);
+  }
+}
+```
+
+## Edge Cases and Race Conditions
+
+### 1. Epoch Boundary Race Conditions
+
+At epoch transitions, vote/timeout race conditions can occur:
+
+```typescript
+// Monitor QC formation time at epoch boundary
+async function monitorEpochTransition(epoch: number) {
+  const startBlock = epoch * 900;
+  
+  // Wait for QC formation
+  const startTime = Date.now();
+  let qcData = null;
+  
+  while (Date.now() - startTime < 30000) { // 30 second timeout
+    qcData = await getQCData(startBlock);
+    if (qcData && qcData.signatures.length >= 73) {
+      break;
+    }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  
+  const formationTime = Date.now() - startTime;
+  
+  if (!qcData || qcData.signatures.length < 73) {
+    console.error(`QC formation failed after ${formationTime}ms`);
+  } else {
+    console.log(`QC formed in ${formationTime}ms with ${qcData.signatures.length} signatures`);
+  }
+}
+```
+
+### 2. Vote Timeout Handling
+
+```typescript
+// Handle vote timeouts
+async function handleVoteTimeout(blockNum: number) {
+  const votes = await getVotes(blockNum);
+  const mnSet = await getMasternodes();
+  
+  // Find masternodes that didn't vote
+  const votingMns = new Set(votes.map(v => v.masternode.toLowerCase()));
+  const nonVotingMns = mnSet.masternodes.filter(
+    mn => !votingMns.has(mn.toLowerCase())
+  );
+  
+  if (nonVotingMns.length > 0) {
+    console.warn(`Non-voting masternodes: ${nonVotingMns.join(', ')}`);
+  }
+}
+```
+
+## Monitoring Dashboard Integration
+
+### Prometheus Metrics
 
 ```yaml
-# gap_metrics.yml
-gap_block_active:
-  type: gauge
-  help: "1 if currently in gap block period, 0 otherwise"
-  
-gap_blocks_remaining:
-  type: gauge
-  help: "Number of blocks until gap period starts"
-  
-votes_collected_during_gap:
-  type: counter
-  help: "Total votes collected during gap period"
-  
-gap_period_duration_seconds:
-  type: histogram
-  help: "Duration of gap period in seconds"
-  buckets: [2700, 3600, 4500, 5400, 7200]  # 45min to 2 hours
+# prometheus.yml
+scrape_configs:
+  - job_name: 'xdc-consensus'
+    static_configs:
+      - targets: ['localhost:9090']
+    metrics_path: /debug/metrics/prometheus
 ```
 
----
-
-## Vote Collection
-
-### Vote Mechanics
-
-In XDPoS 2.0, masternodes submit votes for blocks to achieve consensus:
-
-1. **Block Proposal**: Masternode proposes a block
-2. **Vote Broadcast**: Other masternodes broadcast votes
-3. **QC Formation**: When 2/3+ votes received, QC is formed
-4. **Block Finality**: Block is considered final with QC
-
-### Vote Monitoring Script
-
-```bash
-#!/bin/bash
-# vote-monitor.sh
-
-MASTERNODE_ADDRESS="${MASTERNODE_ADDRESS}"
-RPC_ENDPOINT="http://localhost:8545"
-
-# Get masternode info for current epoch
-get_masternode_info() {
-  local epoch=$1
-  curl -s -X POST $RPC_ENDPOINT \
-    -H "Content-Type: application/json" \
-    -d "{\"jsonrpc\":\"2.0\",\"method\":\"XDPoS_getMasternodes\",\"params\":[\"$epoch\"],\"id\":1}"
-}
-
-# Check if node is in masternode set
-check_masternode_status() {
-  local epoch=$(curl -s -X POST $RPC_ENDPOINT \
-    -H "Content-Type: application/json" \
-    -d '{"jsonrpc":"2.0","method":"XDPoS_getEpochNumber","params":[],"id":1}' | \
-    jq -r '.result')
-  
-  local mn_list=$(get_masternode_info $epoch)
-  
-  if echo "$mn_list" | grep -q "$MASTERNODE_ADDRESS"; then
-    echo "Masternode Status: ACTIVE in epoch $epoch"
-    return 0
-  else
-    echo "Masternode Status: NOT IN SET for epoch $epoch"
-    return 1
-  fi
-}
-
-# Monitor vote participation
-monitor_votes() {
-  while true; do
-    if check_masternode_status; then
-      # Get vote statistics
-      # This would require additional RPC methods or event parsing
-      echo "$(date): Monitoring vote participation..."
-    fi
-    sleep 30
-  done
-}
-
-monitor_votes
-```
-
-### Vote Metrics
+### Grafana Alerts
 
 ```yaml
-# vote_metrics.yml
-vote_submissions_total:
-  type: counter
-  labels: [masternode_address, epoch]
-  help: "Total votes submitted by this masternode"
-
-vote_submissions_missed:
-  type: counter
-  labels: [masternode_address, epoch]
-  help: "Missed vote opportunities"
-
-vote_participation_rate:
-  type: gauge
-  labels: [masternode_address]
-  help: "Vote participation rate (0-1)"
-
-qc_formed_total:
-  type: counter
-  help: "Total quorum certificates formed"
-
-tc_formed_total:
-  type: counter
-  help: "Total timeout certificates formed"
-```
-
----
-
-## Monitoring Implementation
-
-### SkyOne Integration
-
-Add to `docker/monitoring/prometheus-rules.yml`:
-
-```yaml
+# alerts/consensus.yml
 groups:
-  - name: xdpos_consensus
+  - name: consensus
     rules:
-      - alert: XDPoSGapBlockActive
-        expr: gap_block_active == 1
-        for: 0m
-        labels:
-          severity: info
-        annotations:
-          summary: "Gap block period is active"
-          description: "Currently in gap block period (blocks 450-899)"
-      
-      - alert: XDPoSEpochTransitionSoon
-        expr: gap_blocks_remaining <= 10
-        for: 0m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Epoch transition approaching"
-          description: "Gap blocks start in {{ $value }} blocks"
-      
-      - alert: XDPoSLowVoteParticipation
-        expr: rate(vote_submissions_missed[1h]) > 0.1
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Low vote participation detected"
-          description: "Masternode has missed >10% of votes in the last hour"
-      
-      - alert: XDPoSMasternodeNotInSet
-        expr: masternode_in_current_set == 0
+      - alert: InsufficientMasternodes
+        expr: xdc_masternode_count < 73
         for: 5m
         labels:
           severity: critical
         annotations:
-          summary: "Masternode not in current set"
-          description: "This node is not in the current masternode set"
+          summary: "Insufficient masternodes"
+          
+      - alert: QCValidationFailed
+        expr: xdc_qc_valid == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "QC validation failed at epoch boundary"
 ```
-
-### SkyNet Integration
-
-Add to SkyNet heartbeat payload:
-
-```typescript
-interface XDPoSMetrics {
-  epoch: number;
-  epochPosition: number;
-  inGapPeriod: boolean;
-  masternodeInSet: boolean;
-  votesSubmittedThisEpoch: number;
-  votesMissedThisEpoch: number;
-  lastQCTime: string;
-  lastTCTime: string;
-}
-```
-
----
-
-## Alert Configuration
-
-### Critical Alerts
-
-| Alert | Condition | Action |
-|-------|-----------|--------|
-| **Consensus Fork** | Block hash divergence between clients | Immediate investigation |
-| **Masternode Removal** | Node no longer in masternode set | Check stake, penalties |
-| **QC Timeout** | No QC formed for >5 minutes | Check network connectivity |
-
-### Warning Alerts
-
-| Alert | Condition | Action |
-|-------|-----------|--------|
-| **Low Vote Rate** | <90% vote participation | Monitor, check node health |
-| **Epoch Transition** | Within 10 blocks of gap | Prepare for reduced activity |
-| **Gap Block Extended** | Gap period >2 hours | Check network consensus |
-
-### Info Alerts
-
-| Alert | Condition | Action |
-|-------|-----------|--------|
-| **Gap Block Start** | Entering gap period | Normal notification |
-| **New Epoch** | Epoch transition complete | Log for tracking |
-
----
-
-## Ethstats Configuration
-
-Nodes must report to the ethstats dashboard at **stats.xdcindia.com** for network visibility and health monitoring.
-
-### Required Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ETHSTATS_ENABLED` | `true` | Toggle ethstats reporting on/off |
-| `INSTANCE_NAME` | `XDC_GP5_Apothem` | Descriptive node name shown on dashboard |
-| `STATS_SECRET` | `xdc_openscan_stats_2026` | Auth secret for the stats server |
-| `STATS_SERVER` | `stats.xdcindia.com:443` | Target stats server host:port |
-
-### Docker Compose Example
-
-```yaml
-environment:
-  - ETHSTATS_ENABLED=${ETHSTATS_ENABLED:-true}
-  - INSTANCE_NAME=${INSTANCE_NAME:-xdc03-gp5-apothem}
-  - STATS_SECRET=${STATS_SECRET:-xdc_openscan_stats_2026}
-  - STATS_SERVER=${STATS_SERVER:-stats.xdcindia.com:443}
-```
-
-### Disabling Ethstats
-
-For private or non-reporting nodes:
-
-```bash
-export ETHSTATS_ENABLED=false
-```
-
-### Pre-flight Verification
-
-Run the preflight check script to verify ethstats connectivity before deployment:
-
-```bash
-./scripts/preflight-check.sh
-```
-
-A successful check will show:
-
-```
-ℹ Checking ethstats connectivity to stats.xdcindia.com:443...
-✓ Ethstats server reachable: stats.xdcindia.com:443
-```
-
-### Troubleshooting Missing Nodes on Dashboard
-
-If a node does not appear on [stats.xdcindia.com](https://stats.xdcindia.com):
-
-1. Verify `ETHSTATS_ENABLED` is not set to `false`
-2. Confirm `STATS_SECRET` matches the server requirement
-3. Check firewall rules allow outbound TCP to `stats.xdcindia.com:443`
-4. Review container logs for ethstats connection errors:
-   ```bash
-   docker logs xdc-node-gp5-apothem | grep -i ethstats
-   ```
-5. Re-run preflight checks after correcting configuration
-
----
 
 ## Troubleshooting
 
-### Common Issues
+### Low Vote Count
 
-#### Issue: Node Not in Masternode Set
+**Symptoms:** QC validation fails, insufficient signatures
 
-**Symptoms:**
-- `masternode_in_current_set == 0`
-- No block production
-- No votes being submitted
+**Causes:**
+- Network partition
+- Masternode offline
+- Clock skew
 
-**Diagnosis:**
+**Solutions:**
 ```bash
-# Check if node is registered as masternode
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"XDPoS_getMasternodes","params":["latest"],"id":1}'
+# Check network connectivity
+xdc peers
 
-# Check stake amount
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"XDPoS_getCandidateStatus","params":["0x..."],"id":1}'
+# Check system time
+ntpq -p
+
+# Restart node if needed
+xdc restart
 ```
 
-**Resolution:**
-1. Verify sufficient stake (10M XDC minimum)
-2. Check for penalties or slashing
-3. Ensure node is properly registered
+### Gap Block Issues
 
-#### Issue: Low Vote Participation
+**Symptoms:** Transactions not processing at epoch boundaries
 
-**Symptoms:**
-- `vote_participation_rate < 0.9`
-- Frequent missed votes
+**Expected:** Gap blocks are normal at epoch transitions
 
-**Diagnosis:**
-```bash
-# Check peer connectivity
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}'
-
-# Check sync status
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"eth_syncing","params":[],"id":1}'
+**Investigation:**
+```typescript
+// Check if gap block is expected
+const isExpected = isEpochBoundary(blockNum + 1);
 ```
 
-**Resolution:**
-1. Ensure adequate peer connections (>10)
-2. Verify node is fully synced
-3. Check network latency to other masternodes
+## API Reference
 
-#### Issue: Extended Gap Period
+### Consensus Endpoints
 
-**Symptoms:**
-- Gap period lasts >2 hours
-- No new epoch transition
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/consensus/health` | GET | Current consensus health |
+| `/api/v1/consensus/qc/:block` | GET | QC data for block |
+| `/api/v1/consensus/votes/:block` | GET | Votes for block |
+| `/api/v1/consensus/masternodes` | GET | Current masternode set |
 
-**Diagnosis:**
-```bash
-# Check current block and epoch
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+### Response Format
 
-# Check network health
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}'
+```json
+{
+  "blockNumber": 89234567,
+  "epoch": 99149,
+  "round": 567,
+  "masternodeCount": 108,
+  "voteCount": 108,
+  "qcValid": true,
+  "healthScore": 100,
+  "isEpochBoundary": false
+}
 ```
-
-**Resolution:**
-1. Check if network has consensus
-2. Verify sufficient masternodes online (>2/3)
-3. Contact other masternode operators
-
----
 
 ## References
 
-- [XDPoS 2.0 Technical Specification](https://docs.xdc.community)
-- [XDC Network Consensus Documentation](https://xinfin.org)
-- [SkyOne Node Setup Documentation](./README.md)
-- [SkyNet Dashboard Documentation](../XDCNetOwn/README.md)
+- [XDPoS 2.0 Technical Paper](https://docs.xdc.community/)
+- [XDC Consensus Documentation](https://github.com/XinFinOrg/XDPoSChain)
 
 ---
 
-*Document Version: 1.0*  
-*Last Updated: February 27, 2026*
+**Last Updated:** 2026-02-27  
+**Version:** 1.0.0
