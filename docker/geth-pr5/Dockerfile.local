@@ -1,0 +1,27 @@
+FROM alpine:3.19
+
+RUN apk add --no-cache ca-certificates wget bash curl jq
+
+COPY build/bin/geth-linux /usr/local/bin/XDC
+
+# Create symlink for compatibility
+RUN ln -s /usr/local/bin/XDC /usr/local/bin/geth
+
+# Create non-root user (available if needed, but run as root for compatibility)
+RUN addgroup -S xdc && adduser -S -G xdc xdc
+
+# Create data directory
+RUN mkdir -p /data/xdcchain && chown -R xdc:xdc /data
+
+# Run as root (matches v51 image behavior — start script writes to /etc/xdc-node)
+# USER xdc
+
+WORKDIR /data
+
+EXPOSE 8545 8546 30303 30303/udp
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+    CMD curl -sf -X POST http://localhost:8545 -H "Content-Type: application/json" \
+    -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' | jq -e '.result' > /dev/null || exit 1
+
+ENTRYPOINT ["XDC"]
