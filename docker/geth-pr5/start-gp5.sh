@@ -243,6 +243,12 @@ netstats="${INSTANCE_NAME}:${STATS_SECRET:-xdc_openscan_stats_2026}@${STATS_SERV
 ARGS="--datadir $DATADIR"
 ARGS="$ARGS --config $CONFIG_FILE"
 ARGS="$ARGS --networkid $NETWORK_ID"
+
+# Add --apothem flag for Apothem testnet (chainId 51)
+if [ "$NETWORK_ID" = "51" ] || [ "$NETWORK" = "testnet" ] || [ "$NETWORK" = "apothem" ]; then
+    ARGS="$ARGS --apothem"
+fi
+
 ARGS="$ARGS --port ${P2P_PORT:-30303}"
 ARGS="$ARGS --syncmode $SYNC_MODE"
 ARGS="$ARGS --gcmode $GC_MODE"
