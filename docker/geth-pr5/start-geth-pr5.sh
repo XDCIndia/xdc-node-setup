@@ -3,7 +3,7 @@ set -e
 
 #==============================================================================
 # XDC Geth PR5 Start Script (POSIX sh compatible)
-# Feature branch: feature/xdpos-consensus  
+# Feature branch: xdc-network  
 # Compatible with geth 1.17+ (new-style flags)
 #==============================================================================
 

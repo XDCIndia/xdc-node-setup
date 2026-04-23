@@ -18,7 +18,7 @@ All XDC client Dockerfiles are adapted from their respective official implementa
 | Aspect | Official | XDC Adaptation |
 |--------|----------|----------------|
 | Go Version | 1.24-alpine | 1.23-alpine (XDC fork requirement) |
-| Clone Source | ethereum/go-ethereum | AnilChinchawale/go-ethereum (feature/xdpos-consensus) |
+| Clone Source | ethereum/go-ethereum | XDCIndia/go-ethereum (xdc-network) |
 | Binary Name | `geth` | `XDC` (XDC naming) |
 | Health Check | Basic grep | jq for JSON parsing |
 | Additional Packages | ca-certificates only | ca-certificates + curl + jq |
@@ -39,7 +39,7 @@ All XDC client Dockerfiles are adapted from their respective official implementa
 RUN go run build/ci.go install -static ./cmd/geth
 
 # XDC adaptation:
-RUN git clone -b feature/xdpos-consensus https://github.com/AnilChinchawale/go-ethereum.git .
+RUN git clone -b xdc-network https://github.com/XDCIndia/go-ethereum.git .
 RUN go run build/ci.go install -static ./cmd/geth
 COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/XDC
 ```
@@ -220,7 +220,7 @@ docker inspect anilchinchawale/gx:stable --format='{{.Os}}/{{.Architecture}}'
 - Erigon: https://github.com/erigontech/erigon
 
 ### XDC Fork Repositories
-- Geth: https://github.com/AnilChinchawale/go-ethereum/tree/feature/xdpos-consensus
+- Geth: https://github.com/XDCIndia/go-ethereum/tree/xdc-network
 - Nethermind: https://github.com/AnilChinchawale/nethermind/tree/build/xdc-unified
 - Erigon: https://github.com/AnilChinchawale/erigon-xdc/tree/feature/xdc-network
 

@@ -4,7 +4,7 @@ RUN apk add --no-cache make gcc musl-dev linux-headers git
 
 WORKDIR /build
 
-RUN git clone -b feature/xdpos-consensus https://github.com/AnilChinchawale/go-ethereum.git . && make geth
+RUN git clone -b xdc-network https://github.com/XDCIndia/go-ethereum.git . && make geth
 
 FROM alpine:3.19
 

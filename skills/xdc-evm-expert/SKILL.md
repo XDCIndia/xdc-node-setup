@@ -27,7 +27,7 @@ Read references/system-prompt.md
 
 | Client | Repo | Branch | Language |
 |--------|------|--------|----------|
-| Geth-XDC (GP5) | `AnilChinchawale/go-ethereum` | `feature/xdpos-consensus` | Go |
+| Geth-XDC (GP5) | `XDCIndia/go-ethereum` | `xdc-network` | Go |
 | Erigon-XDC | `AnilChinchawale/erigon-xdc` | `feature/xdc-network` | Go |
 | Nethermind-XDC | `AnilChinchawale/nethermind` | `build/xdc-unified` | C#/.NET 9 |
 | Reth-XDC | `AnilChinchawale/reth` | `xdcnetwork-rebase` | Rust |
