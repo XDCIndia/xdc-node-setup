@@ -6,7 +6,7 @@
 
 services:
   168-gp5-full-pbss-apothem-168:
-    image: anilchinchawale/gp5-xdc:v36
+    image: anilchinchawale/gp5-xdc:v60
     platform: linux/amd64
     container_name: 168-gp5-full-pbss-apothem-168
     restart: always

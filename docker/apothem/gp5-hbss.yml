@@ -6,7 +6,7 @@
 
 services:
   168-gp5-full-hbss-apothem-168:
-    image: anilchinchawale/gp5-xdc:v52
+    image: anilchinchawale/gp5-xdc:v60
     # platform: linux/amd64  # local Mac ARM64 — use host platform
     pull_policy: never
     container_name: 168-gp5-full-hbss-apothem-168

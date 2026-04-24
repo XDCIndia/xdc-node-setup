@@ -20,11 +20,11 @@
     },
     "gp5-xdc": {
       "repo": "AnilChinchawale/go-ethereum",
-      "current": "v34",
-      "latest": "v34",
+      "current": "v60",
+      "latest": "v60",
       "autoUpdate": false,
       "binary": "geth",
-      "image": "anilchinchawale/gp5-xdc:v34",
+      "image": "anilchinchawale/gp5-xdc:v60",
       "description": "GP5 XDC client with XDPoS v2 support",
       "networks": ["mainnet", "apothem"],
       "defaultPorts": {
