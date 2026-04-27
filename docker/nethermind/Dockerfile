@@ -65,8 +65,7 @@ WORKDIR /nethermind
 EXPOSE 8545 30303 30303/udp
 
 # Copy health check script
-COPY healthcheck.sh /nethermind/healthcheck.sh
-RUN chmod +x /nethermind/healthcheck.sh
+COPY --chmod=755 healthcheck.sh /nethermind/healthcheck.sh
 
 # Health check - use script for better checking
 HEALTHCHECK --interval=30s --timeout=15s --start-period=120s --retries=5 \

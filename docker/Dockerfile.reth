@@ -12,8 +12,7 @@ RUN apt-get update && apt-get install -y \
 RUN mkdir -p /reth/bin /work/xdcchain
 
 # Copy Reth binary to expected location
-COPY xdc-reth /reth/bin/xdc-reth
-RUN chmod +x /reth/bin/xdc-reth
+COPY --chmod=755 xdc-reth /reth/bin/xdc-reth
 
 # Also create symlink in PATH
 RUN ln -s /reth/bin/xdc-reth /usr/local/bin/xdc-reth
