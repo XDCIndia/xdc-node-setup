@@ -1,0 +1,130 @@
+--- /root/xdc-node-setup/docker/docker-compose.gp5-standalone.yml	2026-04-08 23:13:27.864434616 +0530
++++ /tmp/xdc-node-setup/xns/schemas/../out/mainnet_gp5_pbss_125.yaml	2026-04-27 16:50:22.720132594 +0530
+@@ -1,19 +1,53 @@
+-#==============================================================================
+-# XDC Node Docker Compose — Geth PR5 Client (Local Build)
+-# Usage: docker compose -f docker-compose.geth-pr5.yml up -d
+-#==============================================================================
+-
+-services:
+-  xdc-node-gp5:
++node:
++  name: gp5-pbss
++  network: mainnet
++  client: gp5
++  role: full
++  runtime: docker
++  dataRoot: /mnt/data
++  location: prod
++  serverID: "125"
++  image: anilchinchawale/xdc-gp5:latest
++  stateScheme: pbss
++  rpc:
++    bind: 127.0.0.1
++    port: 8582
++    cors:
++      - '*'
++    vhosts:
++      - '*'
++    apis: admin,eth,net,web3,XDPoS
++    auth:
++      required: false
++  ws:
++    enabled: true
++    bind: 127.0.0.1
++    port: 8583
++    origins:
++      - '*'
++  p2p:
++    port: 30303
++    maxPeers: 50
++    bootnodes:
++      - enode://...
++  env:
++    NETWORK: mainnet
++    NETWORK_ID: "50"
++    SYNC_MODE: full
++    GC_MODE: full
++    EXTERNAL_IP: ""
++    INSTANCE_NAME: XDC_GP5
++    HTTP_API: admin,eth,net,web3,XDPoS
++    STATS_SECRET: xdc_openscan_stats_2026
++  composeService:
++    name: prod-gp5-pbss-125
+     image: anilchinchawale/xdc-gp5:latest
+-    platform: linux/amd64
+-    container_name: xdc-node-gp5
+     restart: always
+     ports:
+-      - "${P2P_PORT:-30303}:30303"
+-      - "${P2P_PORT:-30303}:30303/udp"
+-      - "${RPC_BIND:-127.0.0.1}:${RPC_PORT:-8582}:8545"
+-      - "${WS_BIND:-127.0.0.1}:${WS_PORT:-8583}:8546"
++      - "30303:30303"
++      - 30303:30303/udp
++      - "127.0.0.1:8582:8545"
++      - "127.0.0.1:8583:8546"
+     volumes:
+       - ${DATA_DIR:-../mainnet}/xdcchain-gp5:/work/xdcchain
+       - ./mainnet/genesis.json:/work/genesis.json:ro
+@@ -22,44 +56,27 @@
+       - ${DATA_DIR:-../mainnet}/.xdc-node/.pwd:/work/.pwd:ro
+       - /etc/localtime:/etc/localtime:ro
+     environment:
+-      - NETWORK=${NETWORK:-mainnet}
+-      - NETWORK_ID=${NETWORK_ID:-50}
+-      - SYNC_MODE=${SYNC_MODE:-full}
+-      - GC_MODE=${GC_MODE:-full}
+-      - EXTERNAL_IP=${EXTERNAL_IP:-}
+-      - INSTANCE_NAME=${INSTANCE_NAME:-XDC_GP5}
+-      - HTTP_API=${HTTP_API:-admin,eth,net,web3,XDPoS}
+-    entrypoint: ["/bin/sh", "/work/start.sh"]
+-    networks:
+-      - xdc-network
++      NETWORK: mainnet
++      NETWORK_ID: "50"
++      SYNC_MODE: full
++      GC_MODE: full
++      EXTERNAL_IP: ""
++      INSTANCE_NAME: XDC_GP5
++      HTTP_API: admin,eth,net,web3,XDPoS
++      STATS_SECRET: xdc_openscan_stats_2026
++    entrypoint:
++      - /bin/sh
++      - /work/start.sh
+     healthcheck:
+-      test: ["CMD-SHELL", "wget -qO- http://localhost:8545 --post-data='{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' --header='Content-Type: application/json' | grep -q 'result' || exit 1"]
++      test:
++        - CMD-SHELL
++        - 'wget -qO- http://localhost:8545 --post-data=''{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'' --header=''Content-Type: application/json'' | grep -q ''result'' || exit 1'
+       interval: 30s
+       timeout: 10s
+       retries: 5
+       start_period: 180s
+     logging:
+-      driver: "json-file"
++      driver: json-file
+       options:
+-        max-size: "100m"
++        max-size: 100m
+         max-file: "5"
+-
+-  xdc-agent-gp5:
+-    image: anilchinchawale/xdc-agent:v2.6
+-    container_name: xdc-agent-gp5-standalone
+-    restart: always
+-    network_mode: host
+-    depends_on:
+-      xdc-node-gp5:
+-        condition: service_healthy
+-    volumes:
+-      - ${DATA_DIR:-../mainnet}/.xdc-node/skynet.conf:/etc/xdc-node/skynet.conf:ro
+-    environment:
+-      - RPC_URL=http://localhost:${RPC_PORT:-8582}
+-      - NETWORK=${NETWORK:-mainnet}
+-      - NODE_NAME=${NODE_NAME:-xdc-gp5-standalone}
+-      - SKYNET_URL=${SKYNET_URL:-https://net.xdc.network}
+-
+-networks:
+-  xdc-network:
+-    driver: bridge

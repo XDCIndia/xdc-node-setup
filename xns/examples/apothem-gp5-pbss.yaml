@@ -1,0 +1,48 @@
+name: apothem-gp5-pbss
+network: apothem
+client: gp5
+role: fullnode
+version: "v1.0.0"
+image: anilchinchawale/gp5-xdc:v94-amd64
+datadir: ../apothem/xdcchain-gp5
+rpc:
+  enabled: true
+  host: "127.0.0.1"
+  port: 9545
+  vhosts: "*"
+  cors: "*"
+  apis: "admin,eth,net,web3,XDPoS"
+ws:
+  enabled: true
+  host: "127.0.0.1"
+  port: 9546
+  apis: "eth,net,web3"
+ports:
+  rpc: 9545
+  ws: 9546
+  p2p: 30322
+  auth: 8551
+peers:
+  maxPeers: 50
+  bootnodes:
+    - "enode://..."
+restart: unless-stopped
+volumes:
+  ../apothem/xdcchain-gp5: /work/xdcchain
+  ./apothem/genesis.json: /work/genesis.json:ro
+  ./geth-pr5/start-gp5.sh: /work/start.sh:ro
+  ./apothem/bootnodes.list: /work/bootnodes.list:ro
+  ../apothem/.xdc-node/.pwd: /work/.pwd:ro
+  /etc/localtime: /etc/localtime:ro
+env:
+  NETWORK: apothem
+  NETWORK_ID: "51"
+  SYNC_MODE: full
+  GC_MODE: full
+  EXTERNAL_IP: ""
+  INSTANCE_NAME: XDC_GP5_Apothem
+  HTTP_API: admin,eth,net,web3,XDPoS
+  ETHSTATS_ENABLED: "true"
+  STATS_SECRET: ""
+  STATS_SERVER: stats.xdcindia.com:443
+extraHosts: []

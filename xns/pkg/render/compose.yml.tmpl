@@ -1,0 +1,82 @@
+services:
+  {{ .Name }}:
+    image: {{ .Image }}
+    restart: {{ .Restart }}
+    {{- if .ContainerName }}
+    container_name: {{ .ContainerName }}
+    {{- end }}
+    {{- if .Platform }}
+    platform: {{ .Platform }}
+    {{- end }}
+    {{- if .StopGrace }}
+    stop_grace_period: {{ .StopGrace }}
+    {{- end }}
+    {{- if .Ports }}
+    ports:
+      {{- range .Ports }}
+      - "{{ . }}"
+      {{- end }}
+    {{- end }}
+    {{- if .Volumes }}
+    volumes:
+      {{- range .Volumes }}
+      - {{ . }}
+      {{- end }}
+    {{- end }}
+    {{- if .Healthcheck }}
+    healthcheck:
+      test: ["CMD-SHELL", "{{ .Healthcheck.Test }}"]
+      interval: {{ .Healthcheck.Interval }}
+      timeout: {{ .Healthcheck.Timeout }}
+      retries: {{ .Healthcheck.Retries }}
+      start_period: {{ .Healthcheck.StartPeriod }}
+    {{- end }}
+    {{- if .Logging }}
+    logging:
+      driver: "{{ .Logging.Driver }}"
+      options:
+        max-size: "{{ .Logging.MaxSize }}"
+        max-file: "{{ .Logging.MaxFile }}"
+    {{- end }}
+    {{- if .Env }}
+    environment:
+      {{- range .Env }}
+      - {{ . }}
+      {{- end }}
+    {{- end }}
+    {{- if .Entrypoint }}
+    entrypoint:
+      {{- range .Entrypoint }}
+      - {{ . }}
+      {{- end }}
+    {{- end }}
+    {{- if .ExtraHosts }}
+    extra_hosts:
+      {{- range .ExtraHosts }}
+      - {{ . }}
+      {{- end }}
+    {{- end }}
+    {{- if .Command }}
+    command:
+      {{- range .Command }}
+      - {{ . }}
+      {{- end }}
+    {{- end }}
+    {{- if .NetworkMode }}
+    network_mode: {{ .NetworkMode }}
+    {{- end }}
+    {{- if .DependsOn }}
+    depends_on:
+      {{- range $svc, $cond := .DependsOn }}
+      {{ $svc }}:
+        {{- range $k, $v := $cond }}
+        {{ $k }}: {{ $v }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+    {{- if .Networks }}
+    networks:
+      {{- range .Networks }}
+      - {{ . }}
+      {{- end }}
+    {{- end }}

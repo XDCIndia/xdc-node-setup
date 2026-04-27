@@ -1,0 +1,81 @@
+package xns
+
+// ============================================================
+// Example: apothem/v268-168
+// Derived from docker/apothem/v268.yml
+// v2.6.8 uses legacy flags, network_mode: host
+// ============================================================
+
+node: {
+	name:     "v268"
+	network:  "apothem"
+	client:   "xdc2.6.8"
+	role:     "full"
+	runtime:  "docker"
+	dataRoot: "/mnt/data"
+	location: "test"
+	serverID: "168"
+
+	image: "xinfinorg/xdposchain:v2.6.8"
+
+	// v2.6.8 default state scheme
+	stateScheme: "hash"
+
+	rpc: {
+		bind: "0.0.0.0"
+		port: 8650
+		cors: ["*"]
+		vhosts: ["*"]
+		apis: "eth,net,web3,debug,txpool,admin"
+		// OPUS47: bind 0.0.0.0 requires auth
+		auth: required: true
+	}
+
+	ws: {
+		enabled: true
+		bind:    "0.0.0.0"
+		port:    8651
+		origins: ["*"]
+	}
+
+	p2p: {
+		port:     30320
+		maxPeers: 50
+	}
+
+	env: {
+		ETHSTATS_SECRET: "xdc_openscan_stats_2026"
+		ETHSTATS_HOST:   "stats.xdcindia.com:443"
+	}
+
+	composeService: {
+		name:    "test-v268-apothem-168"
+		image:   "xinfinorg/xdposchain:v2.6.8"
+		restart: "unless-stopped"
+		networkMode: "host"
+		volumes: [
+			"${DATA_ROOT:-/mnt/data}/apothem/v268:/work/xdcchain",
+		]
+		entrypoint: ["/usr/bin/XDC-testnet"]
+		command: """
+			--datadir /work/xdcchain --networkid 51
+			--syncmode full --gcmode full
+			--port 30320
+			--cache 4096
+			--rpc --rpcaddr 0.0.0.0 --rpcport 8650
+			--rpccorsdomain "*" --rpcvhosts "*"
+			--rpcapi eth,net,web3,debug,txpool,admin
+			--ws --wsaddr 0.0.0.0 --wsport 8651 --wsorigins "*"
+			--wsapi eth,net,web3
+			--maxpeers 50 --verbosity 3
+			--ethstats "test-v268-apothem-168:xdc_openscan_stats_2026@stats.xdcindia.com:443"
+		"""
+		logging: {
+			driver: "json-file"
+			options: {
+				"max-size": "100m"
+				"max-file": "3"
+			}
+		}
+	}
+}

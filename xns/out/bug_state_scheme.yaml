@@ -1,0 +1,31 @@
+node:
+  name: gp5-pbss
+  network: apothem
+  client: gp5
+  role: full
+  dataRoot: /mnt/data
+  location: test
+  serverID: "168"
+  image: anilchinchawale/xdc-gp5:latest
+  stateScheme: hash
+  rpc:
+    bind: 127.0.0.1
+    port: 8584
+    auth:
+      required: false
+  ws:
+    enabled: true
+    port: 8585
+  p2p:
+    port: 30322
+  env:
+    STATS_SECRET: xdc_openscan_stats_2026
+  composeService:
+    name: test-gp5-pbss-168
+    image: anilchinchawale/xdc-gp5:latest
+    restart: always
+    ports:
+      - "30322:30303"
+    volumes: []
+    environment:
+      STATS_SECRET: xdc_openscan_stats_2026
