@@ -29,20 +29,20 @@ services:
       --chain=xdc
       --datadir=/work/xdcchain
       --http
-      --http.addr=0.0.0.0
+      --http.addr=127.0.0.1
       --http.port=8545
       --http.api=eth,debug,net,trace,web3,erigon
       --http.vhosts=*
       --http.corsdomain=*
-      --authrpc.addr=0.0.0.0
+      --authrpc.addr=127.0.0.1
       --authrpc.port=8551
       --authrpc.vhosts=*
-      --private.api.addr=0.0.0.0:9090
+      --private.api.addr=127.0.0.1:9090
       --metrics
-      --metrics.addr=0.0.0.0
+      --metrics.addr=127.0.0.1
       --metrics.port=6060
       --pprof
-      --pprof.addr=0.0.0.0
+      --pprof.addr=127.0.0.1
       --pprof.port=6060
       --maxpeers=100
       --db.size.limit=8TB

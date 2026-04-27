@@ -14,9 +14,9 @@ The XDC-Node-Setup repository has **partial erigon client support** with the bas
 ### 2. Docker Configuration
 - `docker/docker-compose.erigon.yml` - Compose override file for erigon
 - `docker/erigon/Dockerfile` - Multi-stage build from golang:1.22-alpine
-- `docker/erigon/start-erigon.sh` - Start script with multi-sentry P2P configuration
+- `docker/docker-compose.erigon-apothem.yml` - Compose override file for erigon
 
-### 3. Key Erigon-Specific Settings in docker-compose.erigon.yml:
+### 3. Key Erigon-Specific Settings in docker-compose.erigon-apothem.yml:
 ```yaml
 ports:
   - "${P2P_PORT:-30304}:30304"      # eth/63 (XDC compatible)
@@ -43,7 +43,7 @@ docker compose up -d --remove-orphans
 Instead of:
 ```bash
 case "$CLIENT" in
-    erigon) docker compose -f docker-compose.yml -f docker-compose.erigon.yml up -d ;;
+    erigon) docker compose -f docker-compose.yml -f docker-compose.erigon-apothem.yml up -d ;;
     geth-pr5) docker compose -f docker-compose.yml -f docker-compose.geth-pr5.yml up -d ;;
     *) docker compose up -d ;;
 esac
@@ -51,7 +51,7 @@ esac
 
 **Impact:** Even if user selects erigon during setup, the node starts with the default stable client.
 
-### Issue 2: Path References in docker-compose.erigon.yml
+### Issue 2: Path References in docker-compose.erigon-apothem.yml
 **Problem:** The compose file references paths like:
 ```yaml
 - ./mainnet/genesis.json:/genesis.json:ro

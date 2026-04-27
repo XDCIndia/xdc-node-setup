@@ -3,7 +3,7 @@ services:
     image: anilchinchawale/rethx:latest
     platform: linux/amd64
     container_name: xdc-node-reth
-    restart: always
+    restart: unless-stopped
     ports:
       - "${RETH_P2P_PORT:-40303}:40303"
       - "${RETH_P2P_PORT:-40303}:40303/udp"
@@ -22,7 +22,7 @@ services:
       --datadir /work/xdcchain
       --chain xdc-mainnet
       --http
-      --http.addr 0.0.0.0
+      --http.addr 127.0.0.1
       --http.port 7073
       --http.api "eth,net,web3,admin"
       --port 40303

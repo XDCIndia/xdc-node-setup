@@ -23,7 +23,7 @@ x-skynet-common: &skynet-common
   environment: &skynet-env
     SKYNET_API_KEY: ${SKYNET_API_KEY:-xdc-netown-key-2026-prod}
     SKYNET_MASTER_KEY: ${SKYNET_MASTER_KEY:-xdc-netown-key-2026-prod}
-    SKYNET_API_URL: https://net.xdc.network/api
+    SKYNET_API_URL: https://skynet.xdcindia.com/api
     HOST_IP: "185.180.220.183"
     NETWORK: apothem
     HEARTBEAT_INTERVAL: "60"

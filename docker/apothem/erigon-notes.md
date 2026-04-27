@@ -38,7 +38,7 @@ Geth (XDC client) is running and syncing properly.
 All Erigon configuration files are prepared for when support is available.
 
 ## Files Prepared
-- docker-compose.erigon.yml - Erigon service definition
+- docker-compose.erigon-apothem.yml - Erigon service definition
 - erigon-entrypoint.sh - Network-aware startup script
 - start-erigon.sh - Apothem-specific configuration
 - /root/xdc-node-setup/apothem/erigon/ - Data directory

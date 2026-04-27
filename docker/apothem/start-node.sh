@@ -27,8 +27,8 @@ exec XDC \
   --gcmode full \
   --verbosity 2 \
   --mine \
-  --gasprice 1 \
-  --targetgaslimit 420000000 \
+  --miner.gasprice 1 \
+  --miner.gaslimit 420000000 \
   --ipcpath /tmp/XDC.ipc \
   --nat=any \
   --bootnodes "$BOOTNODES" \

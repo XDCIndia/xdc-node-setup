@@ -19,7 +19,7 @@ x-common-variables: &common-variables
   DASHBOARD_PORT: ${DASHBOARD_PORT:-7070}
   DASHBOARD_REFRESH: ${DASHBOARD_REFRESH:-10}
   SKYNET_ENABLED: ${SKYNET_ENABLED:-true}
-  SKYNET_API_URL: ${SKYNET_API_URL:-https://net.xdc.network/api}
+  SKYNET_API_URL: ${SKYNET_API_URL:-https://skynet.xdcindia.com/api}
   SKYNET_API_KEY: ${SKYNET_API_KEY}
   SKYNET_NODE_NAME: ${SKYNET_NODE_NAME:-xdc-node}
   SKYNET_ROLE: ${SKYNET_ROLE:-fullnode}

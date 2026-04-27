@@ -160,7 +160,7 @@ services:
     container_name: xdc-skyone-gp5
     restart: unless-stopped
     environment:
-      - SKYNET_API_URL=https://net.xdc.network/api
+      - SKYNET_API_URL=https://skynet.xdcindia.com/api
       - SKYNET_NODE_ID=${SKYNET_GP5_NODE_ID}
       - RPC_URL=http://gp5:8545
       - NODE_NAME=xdc-${NETWORK}-gp5
@@ -179,7 +179,7 @@ services:
     container_name: xdc-skyone-erigon
     restart: unless-stopped
     environment:
-      - SKYNET_API_URL=https://net.xdc.network/api
+      - SKYNET_API_URL=https://skynet.xdcindia.com/api
       - SKYNET_NODE_ID=${SKYNET_ERIGON_NODE_ID}
       - RPC_URL=http://erigon:8545
       - NODE_NAME=xdc-${NETWORK}-erigon
@@ -198,7 +198,7 @@ services:
     container_name: xdc-skyone-nm
     restart: unless-stopped
     environment:
-      - SKYNET_API_URL=https://net.xdc.network/api
+      - SKYNET_API_URL=https://skynet.xdcindia.com/api
       - SKYNET_NODE_ID=${SKYNET_NM_NODE_ID}
       - RPC_URL=http://nethermind:8545
       - NODE_NAME=xdc-${NETWORK}-nm
@@ -217,7 +217,7 @@ services:
     container_name: xdc-skyone-reth
     restart: unless-stopped
     environment:
-      - SKYNET_API_URL=https://net.xdc.network/api
+      - SKYNET_API_URL=https://skynet.xdcindia.com/api
       - SKYNET_NODE_ID=${SKYNET_RETH_NODE_ID}
       - RPC_URL=http://reth:8545
       - NODE_NAME=xdc-${NETWORK}-reth

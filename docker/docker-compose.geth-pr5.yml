@@ -9,11 +9,11 @@ services:
     image: anilchinchawale/gx:latest
     platform: linux/amd64
     container_name: xdc-node-geth-pr5
-    restart: always
+    restart: unless-stopped
     ports:
       - "0.0.0.0:${P2P_PORT:-30303}:30303"
       - "0.0.0.0:${P2P_PORT:-30303}:30303/udp"
-      - "${RPC_BIND:-0.0.0.0}:${RPC_PORT:-8545}:8545"
+      - "${RPC_BIND:-127.0.0.1}:${RPC_PORT:-8545}:8545"
       - "${WS_BIND:-127.0.0.1}:${WS_PORT:-8546}:8546"
     volumes:
       - ${DATA_DIR:-../mainnet}/xdcchain:/work/xdcchain
@@ -50,7 +50,7 @@ services:
   xdc-agent:
     image: anilchinchawale/xdc-agent:v2.6
     container_name: xdc-agent-gp5
-    restart: always
+    restart: unless-stopped
     network_mode: host
     depends_on:
       xdc-node:
@@ -59,7 +59,7 @@ services:
       - RPC_URL=http://localhost:${RPC_PORT:-8545}
       - NETWORK=${NETWORK:-mainnet}
       - NODE_NAME=${NODE_NAME:-xdc-geth-pr5}
-      - SKYNET_URL=${SKYNET_URL:-https://net.xdc.network}
+      - SKYNET_URL=${SKYNET_URL:-https://skynet.xdcindia.com}
 
 networks:
   xdc-network:

@@ -47,7 +47,7 @@ fi
 
 # Check for erigon config
 if [[ -d "$PROJECT_ROOT/docker/erigon" ]] || \
-   [[ -f "$PROJECT_ROOT/docker/docker-compose.erigon.yml" ]] || \
+   [[ -f "$PROJECT_ROOT/docker/docker-compose.erigon-apothem.yml" ]] || \
    grep -q "erigon" "$PROJECT_ROOT/docker/docker-compose.yml" 2>/dev/null; then
     pass "Erigon client configuration exists"
     ((clients_found++))
