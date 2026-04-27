@@ -68,7 +68,7 @@ times, and inevitably isn't.
                                       │ typed config (HCL/YAML, schema-validated)
                                       ▼
                      ┌────────────────────────────────────┐
-                     │   xnsctl (Go) — control plane CLI  │
+                     │   xdc (Go) — control plane CLI     │
                      │   • render compose from templates  │
                      │   • plan / apply / rollback        │
                      │   • drift detection                │
@@ -143,7 +143,7 @@ catches typos; CUE catches *semantic* mismatches like
 
 ### 4.3 Templating: **Go `text/template` + `embed.FS`**
 
-Templates ship inside the `xnsctl` binary via `//go:embed`. No separate
+Templates ship inside the `xdc` binary via `//go:embed`. No separate
 template repo, no version skew. Renderers per output type
 (`compose.tmpl`, `systemd.tmpl`, `nginx.tmpl`, `k8s.tmpl`).
 
@@ -248,7 +248,7 @@ CUE constraints encode the OPUS47 lessons:
 ### 5.2 The render pipeline
 
 ```
-node.cue ──► xnsctl validate ──► xnsctl plan ──► xnsctl apply
+node.cue ──► xdc validate ──► xdc plan ──► xdc apply
                   │                   │              │
                   │                   ▼              ▼
                   │             diff vs running   render + reload
@@ -264,7 +264,7 @@ this way.
 Every `apply` writes:
 1. A versioned snapshot of the rendered artifacts (`/var/lib/xns/versions/<ts>/`).
 2. An event row in the API event log.
-3. A symlink swap (`current → <ts>`) so rollback is `xnsctl rollback` →
+3. A symlink swap (`current → <ts>`) so rollback is `xdc rollback` →
    atomic symlink flip + `compose up`.
 
 This is the missing piece from XNS 1.x — there is currently *no* rollback.
@@ -375,7 +375,7 @@ with tests as a first-class artifact, not an afterthought.
 **CI gates:**
 1. `cue vet` — spec must validate.
 2. `go test ./...` — all Go packages.
-3. `xnsctl render --dry-run` for every example spec → diff vs golden.
+3. `xdc render --dry-run` for every example spec → diff vs golden.
 4. `docker compose config` for every rendered output.
 5. Naming validator (already exists) — file vs container name.
 6. `shellcheck` on remaining bash.
@@ -388,18 +388,18 @@ with tests as a first-class artifact, not an afterthought.
 "freeze the fleet for 3 months" migration.
 
 ### Phase 0 — Foundations (4 weeks, 2026-Q3 start)
-- Stand up `xns/` Go module: `pkg/spec`, `pkg/render`, `cmd/xnsctl`.
+- Stand up `xns/` Go module: `pkg/spec`, `pkg/render`, `cmd/xdc`.
 - Author CUE schema covering existing 41 compose files.
 - Generate the 41 compose files from CUE; diff against current; reconcile.
-- Deliverable: `xnsctl render` produces byte-identical output to today's
+- Deliverable: `xdc render` produces byte-identical output to today's
   hand-edited files. **No fleet change yet.**
 
 ### Phase 1 — Generated config rollout (6 weeks)
 - Replace hand-edited compose files with generated ones, file-by-file,
   PR-by-PR. Each PR: regenerate, diff = empty, merge.
-- Add `xnsctl plan` / `apply` / `rollback`. Wrap existing scripts.
+- Add `xdc plan` / `apply` / `rollback`. Wrap existing scripts.
 - Deliverable: 41 → 0 hand-edited compose files. `bash`-driven deploys
-  still work; they now call `xnsctl` under the hood.
+  still work; they now call `xdc` under the hood.
 
 ### Phase 2 — API + dashboard wiring (6 weeks)
 - Ship `xns-api` Go service (single VM, Postgres). Define protobufs.
@@ -419,7 +419,7 @@ with tests as a first-class artifact, not an afterthought.
 - Secrets migration to `age`.
 - mTLS rollout for agent ↔ API.
 - Rollback tested end-to-end on staging.
-- Drift-detection cron (`xnsctl plan` on every node nightly; alerts on diff).
+- Drift-detection cron (`xdc plan` on every node nightly; alerts on diff).
 - Deliverable: XNS 2.0 GA.
 
 ### Phase 5 — Decommission (ongoing)
@@ -428,7 +428,7 @@ with tests as a first-class artifact, not an afterthought.
   tuning) — Go offers no advantage there.
 
 **Cutover safety:** every phase preserves XNS 1.x behavior. A 2.0 rollback
-is `apt-get install xns-agent=1.x`; a config rollback is `xnsctl rollback`.
+is `apt-get install xns-agent=1.x`; a config rollback is `xdc rollback`.
 
 ---
 
@@ -440,7 +440,7 @@ is `apt-get install xns-agent=1.x`; a config rollback is `xnsctl rollback`.
 | Render output drifts from current behavior | Phase 0 acceptance is byte-identical diff; CI enforces it. |
 | API becomes a single point of failure | Phase 4 adds hot-standby; agent's offline buffer means API outage ≠ data loss. |
 | Multi-client coverage (5 clients × 3 networks) explodes spec matrix | CUE composition (network × client → spec) keeps the matrix DRY. |
-| Operators on bare metal balk at "yet another binary" | `xnsctl` is one static binary; agent is one static binary. No runtime to install. |
+| Operators on bare metal balk at "yet another binary" | `xdc` is one static binary; agent is one static binary. No runtime to install. |
 | Backward compatibility bugs during 1.x↔2.0 coexistence | Contract tests: bash 1.x scripts run against 2.0 API in CI. |
 | K8s operator falls behind compose generator | Both consume `pkg/spec` — they cannot diverge by construction. |
 
@@ -467,12 +467,12 @@ Calling these out so they don't creep in:
 XNS 2.0 GA is achieved when:
 
 1. Zero hand-edited compose files in the repo.
-2. `xnsctl validate` catches every OPUS47-class regression in CI before merge.
+2. `xdc validate` catches every OPUS47-class regression in CI before merge.
 3. Dashboard loads exclusively from the API (no direct RPC reads).
 4. Bash Skynet agent removed from production fleet.
 5. Rollback drill on staging completes in <60 seconds.
 6. Fleet config drift detection runs nightly and pages on diff.
-7. Onboarding a new node = 1 spec file + `xnsctl apply`. No editing YAML.
+7. Onboarding a new node = 1 spec file + `xdc apply`. No editing YAML.
 8. Operators report shipping a config change in <10 min, end-to-end, with rollback available.
 
 ---
@@ -493,7 +493,7 @@ XNS 2.0 GA is achieved when:
 xdc-node-setup/
 ├── xns/                           # NEW — Go monorepo
 │   ├── cmd/
-│   │   ├── xnsctl/                # operator CLI
+│   │   ├── xdc/                   # operator CLI
 │   │   ├── xns-api/               # control-plane API
 │   │   └── xns-agent/             # on-node agent
 │   ├── pkg/
