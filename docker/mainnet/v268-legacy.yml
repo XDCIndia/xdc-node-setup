@@ -18,10 +18,10 @@ services:
       --syncmode full --gcmode full
       --port ${V268_MAINNET_P2P:-30300}
       --cache ${CACHE:-4096}
-      --rpc --rpcaddr 127.0.0.1 --rpcport ${V268_MAINNET_RPC:-8745}
-      --rpccorsdomain "${V268_MAINNET_CORS:-localhost,127.0.0.1}" --rpcvhosts "${V268_MAINNET_VHOSTS:-localhost,127.0.0.1}"
-      --rpcapi eth,net,web3,debug,txpool
-      --ws --wsaddr 127.0.0.1 --wsport ${V268_MAINNET_WS:-8746} --wsorigins "${V268_MAINNET_WS_ORIGINS:-localhost,127.0.0.1}"
+      --rpc --rpcaddr 0.0.0.0 --rpcport ${V268_MAINNET_RPC:-8745}
+      --rpccorsdomain "*" --rpcvhosts "*"
+      --rpcapi eth,net,web3,debug,txpool,admin
+      --ws --wsaddr 0.0.0.0 --wsport ${V268_MAINNET_WS:-8746} --wsorigins "*"
       --wsapi eth,net,web3
       --maxpeers 50 --verbosity 3
       --bootnodes "${BOOTNODES:-}"
