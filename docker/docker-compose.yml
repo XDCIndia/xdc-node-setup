@@ -12,7 +12,7 @@ services:
     image: xinfinorg/xdposchain:v2.6.8
     platform: linux/amd64
     container_name: xdc-node
-    restart: always
+    restart: unless-stopped
     ports:
       - "0.0.0.0:${P2P_PORT:-30303}:30303"
       - "0.0.0.0:${P2P_PORT:-30303}:30303/udp"

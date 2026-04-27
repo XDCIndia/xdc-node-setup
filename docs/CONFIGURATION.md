@@ -145,7 +145,7 @@ services:
 ### Erigon-XDC
 
 ```yaml
-# docker-compose.erigon.yml
+# docker-compose.erigon-apothem.yml
 services:
   xdc-erigon:
     image: anilchinchawale/erix:latest

@@ -145,8 +145,8 @@ args=(
     --verbosity "$LOG_LEVEL"
     --password /work/.pwd
     --mine
-    --gasprice 1
-    --targetgaslimit 420000000
+    --miner.gasprice 1
+    --miner.gaslimit 420000000
     --ipcpath /tmp/XDC.ipc
 )
 

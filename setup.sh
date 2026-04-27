@@ -1740,7 +1740,7 @@ start_services() {
             docker network create xdc-network 2>/dev/null || true
             docker compose -f docker-compose.erigon-standalone.yml up -d
         else
-            docker compose -f docker-compose.yml -f docker-compose.erigon.yml up -d --remove-orphans
+            docker compose -f docker-compose.yml -f docker-compose.erigon-apothem.yml up -d --remove-orphans
         fi
     elif [[ "$CLIENT" == "nethermind" ]]; then
         if [[ -f "docker-compose.nethermind-standalone.yml" ]]; then

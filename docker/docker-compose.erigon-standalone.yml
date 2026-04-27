@@ -13,7 +13,7 @@ services:
     image: anilchinchawale/erix:latest
     platform: linux/amd64
     container_name: xdc-node-erigon
-    restart: always
+    restart: unless-stopped
     ports:
       - "${ERIGON_RPC_PORT:-8547}:8547"              # HTTP-RPC (erigon default)
       - "${ERIGON_AUTHRPC_PORT:-8561}:8561"          # Auth RPC port

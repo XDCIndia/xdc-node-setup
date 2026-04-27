@@ -64,7 +64,7 @@ services:
       - RPC_URL=http://localhost:${RPC_PORT:-9545}
       - NETWORK=apothem
       - NODE_NAME=${NODE_NAME:-xdc-gp5-apothem}
-      - SKYNET_URL=${SKYNET_URL:-https://net.xdc.network}
+      - SKYNET_URL=${SKYNET_URL:-https://skynet.xdcindia.com}
 
 networks:
   docker_xdc-network:

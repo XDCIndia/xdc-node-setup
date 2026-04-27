@@ -30,7 +30,7 @@ docker-compose up -d xdc-node
 
 ```bash
 # Using Docker
-docker-compose -f docker-compose.erigon.yml up -d
+docker-compose -f docker-compose.erigon-apothem.yml up -d
 
 # Using setup script
 ./setup.sh --client=erigon
@@ -107,7 +107,7 @@ services:
 ### Erigon-XDC
 
 ```yaml
-# docker-compose.erigon.yml
+# docker-compose.erigon-apothem.yml
 services:
   erigon:
     image: xinfinorg/erigon-xdc:latest

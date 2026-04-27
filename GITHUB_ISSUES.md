@@ -63,7 +63,7 @@ Erigon should start successfully with valid bootnodes.
 4. Use static bootnodes embedded in XDC Erigon binary
 
 ### Files Affected
-- docker/docker-compose.erigon.yml
+- docker/docker-compose.erigon-apothem.yml
 - docker/erigon-entrypoint.sh
 
 ### Labels

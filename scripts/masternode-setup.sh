@@ -561,10 +561,10 @@ ExecStart=/usr/local/bin/XDC \\
     --datadir ${XDC_DATADIR} \\
     --networkid 50 \\
     --port 30303 \\
-    --rpc --rpcaddr 127.0.0.1 --rpcport 8545 \\
-    --rpccorsdomain "*" \\
-    --rpcapi "eth,net,web3,txpool,XDPoS" \\
-    --ws --wsaddr 127.0.0.1 --wsport 8546 \\
+    --http --http.addr 127.0.0.1 --http.port 8545 \
+    --http.corsdomain "*" \
+    --http.api "eth,net,web3,txpool,XDPoS" \\
+    --ws --ws.addr 127.0.0.1 --ws.port 8546 \\\
     --mine --unlock "${coinbase}" \\
     --password "${XDC_DATADIR}/.password" \\
     --gasprice 1 \\

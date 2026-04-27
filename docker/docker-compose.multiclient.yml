@@ -2,7 +2,7 @@ services:
   xdc-erigon:
     image: docker-xdc-erigon:latest
     container_name: xdc-erigon
-    restart: always
+    restart: unless-stopped
     ports:
       - "0.0.0.0:30304:30304"
       - "0.0.0.0:30304:30304/udp"
@@ -19,10 +19,10 @@ services:
       --chain=xdc-apothem
       --networkid=51
       --port=30304
-      --http --http.addr=0.0.0.0 --http.port=8555
+      --http --http.addr=127.0.0.1 --http.port=8555
       --http.vhosts=* --http.corsdomain=*
       --http.api=eth,net,web3,txpool,debug,erigon
-      --metrics --metrics.addr=0.0.0.0 --metrics.port=6060
+      --metrics --metrics.addr=127.0.0.1 --metrics.port=6060
     networks:
       - xdc-network
     healthcheck:
@@ -34,7 +34,7 @@ services:
   xdc-nethermind:
     image: nethermind/nethermind:latest
     container_name: xdc-nethermind
-    restart: always
+    restart: unless-stopped
     ports:
       - "0.0.0.0:30305:30305"
       - "0.0.0.0:30305:30305/udp"

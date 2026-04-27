@@ -10,7 +10,7 @@ services:
     image: anilchinchawale/gx:latest
     platform: linux/amd64
     container_name: xdc-node-geth-pr5
-    restart: always
+    restart: unless-stopped
     ports:
       - "${GP5_P2P_PORT:-30307}:30307"
       - "${GP5_P2P_PORT:-30307}:30307/udp"
@@ -30,13 +30,13 @@ services:
       - --networkid=${NETWORK_ID:-50}
       - --port=30307
       - --http
-      - --http.addr=0.0.0.0
+      - --http.addr=127.0.0.1
       - --http.port=8557
       - --http.vhosts=*
       - --http.corsdomain=*
       - --http.api=eth,net,web3,txpool,debug,admin
       - --ws
-      - --ws.addr=0.0.0.0
+      - --ws.addr=127.0.0.1
       - --ws.port=8560
       - --ws.origins=*
       - --syncmode=full
@@ -79,7 +79,7 @@ services:
     environment:
       - RPC_URL=http://xdc-node-geth-pr5:8557
       - SKYNET_NODE_NAME=${SKYNET_NODE_NAME:-xdc-geth-pr5}
-      - SKYNET_API_URL=https://net.xdc.network/api
+      - SKYNET_API_URL=https://skynet.xdcindia.com/api
       - SKYNET_MASTER_KEY=${SKYNET_MASTER_KEY:-xdc-netown-key-2026-prod}
       - XDC_CONTAINER_NAME=xdc-node-geth-pr5
     networks:

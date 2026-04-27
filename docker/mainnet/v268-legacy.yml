@@ -1,8 +1,4 @@
 version: '3.8'
-
-# v2.6.8 Official Reference Node — Mainnet
-# Binary: XDC-mainnet (NOT XDC)
-# v2.6.8 uses legacy flags: --rpc/--rpcaddr (NOT --http/--http.addr)
 services:
   v268-mainnet:
     container_name: ${LOCATION:-test}-v268-mainnet-${SERVER_ID:-168}
@@ -11,23 +7,31 @@ services:
     stop_grace_period: 3m
     network_mode: host
     volumes:
-      - ${DATA_ROOT:-/mnt/data}/mainnet/v268:/work/xdcchain
-    entrypoint: ["/usr/bin/XDC-mainnet"]
-    command: >
-      --datadir /work/xdcchain --networkid 50
-      --syncmode full --gcmode full
-      --port ${V268_MAINNET_P2P:-30300}
-      --cache ${CACHE:-4096}
-      --rpc --rpcaddr 0.0.0.0 --rpcport ${V268_MAINNET_RPC:-8745}
-      --rpccorsdomain "*" --rpcvhosts "*"
-      --rpcapi eth,net,web3,debug,txpool,admin
-      --ws --wsaddr 0.0.0.0 --wsport ${V268_MAINNET_WS:-8746} --wsorigins "*"
-      --wsapi eth,net,web3
-      --maxpeers 50 --verbosity 3
-      --bootnodes "${BOOTNODES:-}"
-      --ethstats "${LOCATION:-test}-v268-mainnet-${SERVER_ID:-168}:${ETHSTATS_SECRET:-xdc_openscan_stats_2026}@${ETHSTATS_HOST:-stats.xdcindia.com:443}"
+    - ${DATA_ROOT:-/mnt/data}/mainnet/v268:/work/xdcchain
+    entrypoint:
+    - /usr/bin/XDC-mainnet
+    command: '--datadir /work/xdcchain --networkid 50 --syncmode full --gcmode full
+      --port ${V268_MAINNET_P2P:-30300} --cache ${CACHE:-4096} --rpc --rpcaddr 127.0.0.1
+      --rpcport ${V268_MAINNET_RPC:-8745} --rpccorsdomain "*" --rpcvhosts "*" --rpcapi
+      eth,net,web3,debug,txpool,admin --ws --wsaddr 127.0.0.1 --wsport ${V268_MAINNET_WS:-8746}
+      --wsorigins "*" --wsapi eth,net,web3 --maxpeers 50 --verbosity 3 --bootnodes
+      "${BOOTNODES:-}" --ethstats "${LOCATION:-test}-v268-mainnet-${SERVER_ID:-168}:${ETHSTATS_SECRET:-xdc_openscan_stats_2026}@${ETHSTATS_HOST:-stats.xdcindia.com:443}"
+
+      '
     logging:
       driver: json-file
       options:
-        max-size: "100m"
-        max-file: "3"
+        max-size: 100m
+        max-file: '3'
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G
+        reservations:
+          cpus: '2.0'
+          memory: 4G
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL

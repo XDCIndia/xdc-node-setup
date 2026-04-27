@@ -9,7 +9,7 @@ services:
     image: anilchinchawale/rethx:latest
     platform: linux/amd64
     container_name: xdc-node-reth
-    restart: always
+    restart: unless-stopped
     ports:
       - "0.0.0.0:${RETH_P2P_PORT:-40303}:40303"
       - "0.0.0.0:${RETH_P2P_PORT:-40303}:40303/udp"

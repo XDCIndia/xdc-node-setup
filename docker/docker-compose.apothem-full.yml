@@ -12,8 +12,8 @@ services:
     container_name: xdc-node-apothem
     restart: unless-stopped
     ports:
-      - "0.0.0.0:8545:8545"      # HTTP RPC - exposed on all interfaces
-      - "0.0.0.0:8546:8546"      # WebSocket  
+      - "127.0.0.1:8545:8545"      # HTTP RPC - exposed on all interfaces
+      - "127.0.0.1:8546:8546"      # WebSocket  
       - "30303:30303"            # P2P TCP - enode port
       - "30303:30303/udp"        # P2P UDP
     volumes:
@@ -33,7 +33,7 @@ services:
           --port 30303 \
           --rpc --rpcaddr 0.0.0.0 --rpcport 8545 \
           --rpccorsdomain "*" --rpcvhosts "*" \
-          --rpcapi eth,net,web3,txpool,debug,admin \
+          --rpcapi eth,net,web3,debug,txpool,admin \
           --ws --wsaddr 0.0.0.0 --wsport 8546 --wsorigins "*" \
           --syncmode full \
           --apothem \
@@ -54,8 +54,8 @@ services:
     container_name: xdc-node-gx-apothem
     restart: unless-stopped
     ports:
-      - "9545:9545"      # HTTP RPC - XNS Standard port
-      - "9546:9546"      # WebSocket - XNS Standard port
+      - "127.0.0.1:9545:9545"      # HTTP RPC - XNS Standard port
+      - "127.0.0.1:9546:9546"      # WebSocket - XNS Standard port
       - "30307:30307"    # P2P TCP
       - "30307:30307/udp"  # P2P UDP
     volumes:
@@ -68,13 +68,13 @@ services:
       - --networkid=51
       - --port=30307
       - --http
-      - --http.addr=127.0.0.1
+      - --http.addr=0.0.0.0
       - --http.port=9545
       - --http.vhosts=*
       - --http.corsdomain=*
       - --http.api=eth,net,web3,txpool,debug,admin
       - --ws
-      - --ws.addr=127.0.0.1
+      - --ws.addr=0.0.0.0
       - --ws.port=9546
       - --ws.origins=*
       - --syncmode=full
@@ -87,7 +87,7 @@ services:
       xdc-node-apothem:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf -X POST http://localhost:8557 -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' | grep -q result || exit 1"]
+      test: ["CMD-SHELL", "curl -sf -X POST http://localhost:9545 -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' | grep -q result || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -100,12 +100,12 @@ services:
     container_name: xdc-node-erigon-apothem
     restart: unless-stopped
     ports:
-      - "0.0.0.0:8556:8556"      # HTTP RPC - exposed on all interfaces
-      - "0.0.0.0:8559:8559"      # WebSocket
+      - "127.0.0.1:8556:8556"      # HTTP RPC - exposed on all interfaces
+      - "127.0.0.1:8560:8559"      # WebSocket
       - "30306:30306"            # P2P TCP - enode port
       - "30306:30306/udp"        # P2P UDP
-      - "9090:9090"              # Private API
-      - "6060:6060"              # Metrics
+      - "127.0.0.1:9090:9090"              # Private API
+      - "127.0.0.1:6060:6060"              # Metrics
     volumes:
       - xdc-erigon-apothem-data:/data/erigon
     environment:
@@ -146,8 +146,8 @@ services:
     container_name: xdc-node-nethermind-apothem
     restart: unless-stopped
     ports:
-      - "0.0.0.0:8558:8558"      # HTTP RPC - exposed on all interfaces
-      - "0.0.0.0:8559:8559"      # WebSocket
+      - "127.0.0.1:8558:8558"      # HTTP RPC - exposed on all interfaces
+      - "127.0.0.1:8560:8559"      # WebSocket
       - "30308:30308"            # P2P TCP - enode port
       - "30308:30308/udp"        # P2P UDP
     volumes:
@@ -190,7 +190,7 @@ services:
     environment:
       - RPC_URL=http://xdc-node-apothem:8545
       - SKYNET_NODE_NAME=local-apothem-geth
-      - SKYNET_API_URL=https://net.xdc.network/api/v1
+      - SKYNET_API_URL=https://skynet.xdcindia.com/api/v1
       - SKYNET_MASTER_KEY=xdc-netown-key-2026-prod
       - XDC_CONTAINER_NAME=xdc-node-apothem
     networks:
@@ -207,9 +207,9 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      - RPC_URL=http://xdc-node-gx-apothem:8557
+      - RPC_URL=http://xdc-node-gx-apothem:9545
       - SKYNET_NODE_NAME=local-apothem-gx
-      - SKYNET_API_URL=https://net.xdc.network/api/v1
+      - SKYNET_API_URL=https://skynet.xdcindia.com/api/v1
       - SKYNET_MASTER_KEY=xdc-netown-key-2026-prod
       - XDC_CONTAINER_NAME=xdc-node-gx-apothem
     networks:
@@ -228,7 +228,7 @@ services:
     environment:
       - RPC_URL=http://xdc-node-erigon-apothem:8556
       - SKYNET_NODE_NAME=local-apothem-erigon
-      - SKYNET_API_URL=https://net.xdc.network/api/v1
+      - SKYNET_API_URL=https://skynet.xdcindia.com/api/v1
       - SKYNET_MASTER_KEY=xdc-netown-key-2026-prod
       - XDC_CONTAINER_NAME=xdc-node-erigon-apothem
     networks:
@@ -247,7 +247,7 @@ services:
     environment:
       - RPC_URL=http://xdc-node-nethermind-apothem:8558
       - SKYNET_NODE_NAME=local-apothem-nethermind
-      - SKYNET_API_URL=https://net.xdc.network/api/v1
+      - SKYNET_API_URL=https://skynet.xdcindia.com/api/v1
       - SKYNET_MASTER_KEY=xdc-netown-key-2026-prod
       - XDC_CONTAINER_NAME=xdc-node-nethermind-apothem
     networks:
@@ -261,7 +261,7 @@ services:
     image: alpine/curl:latest
     platform: linux/amd64
     container_name: peer-connector
-    restart: "no"
+    restart: unless-stopped
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -275,7 +275,7 @@ services:
         echo "Geth enode: $$GETH_ENODE"
         
         # Add geth as peer to GP5
-        curl -sf -X POST http://xdc-node-gx-apothem:8557 -H 'Content-Type: application/json' \
+        curl -sf -X POST http://xdc-node-gx-apothem:9545 -H 'Content-Type: application/json' \
           -d "{\"jsonrpc\":\"2.0\",\"method\":\"admin_addPeer\",\"params\":[\"$$GETH_ENODE\"],\"id\":1}" || true
         
         # Add geth as trusted peer to erigon
@@ -286,7 +286,7 @@ services:
         # Keep running and re-add peers every 5 minutes
         while true; do
           sleep 300
-          curl -sf -X POST http://xdc-node-gx-apothem:8557 -H 'Content-Type: application/json' \
+          curl -sf -X POST http://xdc-node-gx-apothem:9545 -H 'Content-Type: application/json' \
             -d "{\"jsonrpc\":\"2.0\",\"method\":\"admin_addPeer\",\"params\":[\"$$GETH_ENODE\"],\"id\":1}" > /dev/null 2>&1 || true
           curl -sf -X POST http://xdc-node-erigon-apothem:8556 -H 'Content-Type: application/json' \
             -d "{\"jsonrpc\":\"2.0\",\"method\":\"admin_addTrustedPeer\",\"params\":[\"$$GETH_ENODE\"],\"id\":1}" > /dev/null 2>&1 || true

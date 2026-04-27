@@ -71,10 +71,10 @@ docker run -d \
     xinfinorg/xdposchain:v2.6.8 \
     --datadir /work/xdcchain --networkid "$NETWORK_ID" \
     --port "$XDC_P2P" --syncmode full --gcmode full --cache 4096 \
-    --rpc --rpcaddr 0.0.0.0 --rpcport "$XDC_RPC" \
-    --rpccorsdomain "*" --rpcvhosts "*" \
-    --rpcapi eth,net,web3,debug,txpool,admin \
-    --ws --wsaddr 0.0.0.0 --wsport "$XDC_WS" --wsorigins "*" --wsapi eth,net,web3 \
+    --http --http.addr 127.0.0.1 --http.port "$XDC_RPC" \
+    --http.corsdomain "*" --http.vhosts "*" \
+    --http.api eth,net,web3,debug,txpool,admin \
+    --ws --ws.addr 127.0.0.1 --ws.port "$XDC_WS" --ws.origins "*" --ws.api eth,net,web3 \
     --maxpeers 50 --verbosity 3 \
     --ethstats "${XDC_NAME}:${ETHSTATS_SECRET}@${ETHSTATS_HOST}" >/dev/null
 

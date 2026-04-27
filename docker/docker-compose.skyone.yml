@@ -25,7 +25,7 @@ services:
       
       # SkyNet Configuration
       - SKYNET_ENABLED=true
-      - SKYNET_API_URL=${SKYNET_API_URL:-https://net.xdc.network/api}
+      - SKYNET_API_URL=${SKYNET_API_URL:-https://skynet.xdcindia.com/api}
       - SKYNET_API_KEY=${SKYNET_API_KEY}
       - SKYNET_NODE_NAME=${SKYNET_NODE_NAME:-xdc-external-monitor}
       - SKYNET_ROLE=monitor
@@ -84,7 +84,7 @@ services:
       
       # SkyNet Configuration
       - SKYNET_ENABLED=true
-      - SKYNET_API_URL=${SKYNET_API_URL:-https://net.xdc.network/api}
+      - SKYNET_API_URL=${SKYNET_API_URL:-https://skynet.xdcindia.com/api}
       - SKYNET_API_KEY=${SKYNET_API_KEY}
       - SKYNET_NODE_NAME=${SKYNET_NODE_NAME:-$(hostname)}
       - SKYNET_ROLE=${SKYNET_ROLE:-fullnode}

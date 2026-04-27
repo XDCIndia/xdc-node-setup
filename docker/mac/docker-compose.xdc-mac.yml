@@ -21,13 +21,13 @@ services:
       --networkid=51
       --port=30303
       --http
-      --http.addr=0.0.0.0
+      --http.addr=127.0.0.1
       --http.port=8545
       --http.vhosts="*"
       --http.corsdomain="*"
       --http.api=eth,net,web3,txpool,debug
       --ws
-      --ws.addr=0.0.0.0
+      --ws.addr=127.0.0.1
       --ws.port=8546
       --ws.origins="*"
     networks:
@@ -69,14 +69,14 @@ services:
       --networkid=51
       --port=30304
       --http
-      --http.addr=0.0.0.0
+      --http.addr=127.0.0.1
       --http.port=8555
       --http.vhosts="*"
       --http.corsdomain="*"
       --http.api=eth,net,web3,txpool,debug,erigon
       --ws
       --metrics
-      --metrics.addr=0.0.0.0
+      --metrics.addr=127.0.0.1
       --metrics.port=6060
     networks:
       - xdc-network

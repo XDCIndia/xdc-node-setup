@@ -22,8 +22,8 @@ services:
     ports:
       - "8545:8545"
       - "8546:8546"
-      - "0.0.0.0:30303:30303"
-      - "0.0.0.0:30303:30303/udp"
+      - "127.0.0.1:30303:30303"
+      - "127.0.0.1:30303:30303/udp"
     volumes:
       - xdc-apo-stable-data:/work/xdcchain
     entrypoint: ["/bin/sh", "-c"]
@@ -38,7 +38,7 @@ services:
           --rpc --rpcaddr 0.0.0.0 --rpcport 8545 \
           --rpccorsdomain "*" --rpcvhosts "*" \
           --rpcapi eth,net,web3,txpool,debug,admin,XDPoS \
-          --ws --wsaddr 0.0.0.0 --wsport 8546 --wsorigins "*" \
+          --ws --wsaddr 127.0.0.1 --wsport 8546 --wsorigins "*" \
           --syncmode full --gcmode full \
           --apothem \
           --bootnodes "enode://ee1e11e3f56b015b2b391eb9c45292159713583b4adfe29d24675238f73d33e6ec0a62397847823e2bca622c91892075c517fc383c9355d43a89bb7532e834a0@157.173.120.219:30312,enode://729d763db071595bacbbf33037a8e7639d8e9a97bfcfcda3afe963435d919cb95634f27375f0aadf6494dad47e506c888bf15cb5633d5f81dbb793b05b27e676@207.90.192.100:30312,enode://49c7586c221250cac7070df41c1b6c77180c5d9051e20d1d2b77dfa0dc80b8dc48a8e3c7ca068ac757429223530d6445a06a32ab4af20819cfaa1d47282a0401@80.243.180.121:30312"
@@ -60,8 +60,8 @@ services:
     user: root
     ports:
       - "8556:8556"
-      - "0.0.0.0:30306:30306"
-      - "0.0.0.0:30306:30306/udp"
+      - "127.0.0.1:30306:30306"
+      - "127.0.0.1:30306:30306/udp"
     volumes:
       - xdc-apo-erigon-data:/data/erigon
     environment:
@@ -100,8 +100,8 @@ services:
     ports:
       - "8558:8558"
       - "8559:8559"
-      - "0.0.0.0:30308:30308"
-      - "0.0.0.0:30308:30308/udp"
+      - "127.0.0.1:30308:30308"
+      - "127.0.0.1:30308:30308/udp"
     volumes:
       - xdc-apo-nm-data:/nethermind/data
     entrypoint: ["/nethermind/nethermind"]
@@ -139,8 +139,8 @@ services:
     ports:
       - "8548:7073"
       - "8551:8551"
-      - "0.0.0.0:40303:40303"
-      - "0.0.0.0:40303:40303/udp"
+      - "127.0.0.1:40303:40303"
+      - "127.0.0.1:40303:40303/udp"
     volumes:
       - xdc-apo-reth-data:/work/xdcchain
       - /root/workspace/xdc-node-setup/data/reth/jwt.hex:/work/jwt.hex:ro
@@ -266,7 +266,7 @@ services:
     environment:
       SKYNET_API_KEY: xdc-netown-key-2026-prod
       SKYNET_MASTER_KEY: xdc-netown-key-2026-prod
-      SKYNET_API_URL: https://net.xdc.network/api
+      SKYNET_API_URL: https://skynet.xdcindia.com/api
       SKYNET_NODE_NAME: xdc04-apo-stable
       RPC_URL: http://127.0.0.1:8545
       NODE_RPC_PORT: "8545"
@@ -283,7 +283,7 @@ services:
     environment:
       SKYNET_API_KEY: xdc-netown-key-2026-prod
       SKYNET_MASTER_KEY: xdc-netown-key-2026-prod
-      SKYNET_API_URL: https://net.xdc.network/api
+      SKYNET_API_URL: https://skynet.xdcindia.com/api
       SKYNET_NODE_NAME: xdc04-apo-erigon
       RPC_URL: http://127.0.0.1:8556
       NODE_RPC_PORT: "8556"
@@ -300,7 +300,7 @@ services:
     environment:
       SKYNET_API_KEY: xdc-netown-key-2026-prod
       SKYNET_MASTER_KEY: xdc-netown-key-2026-prod
-      SKYNET_API_URL: https://net.xdc.network/api
+      SKYNET_API_URL: https://skynet.xdcindia.com/api
       SKYNET_NODE_NAME: xdc04-apo-nm
       RPC_URL: http://127.0.0.1:8558
       NODE_RPC_PORT: "8558"
@@ -317,7 +317,7 @@ services:
     environment:
       SKYNET_API_KEY: xdc-netown-key-2026-prod
       SKYNET_MASTER_KEY: xdc-netown-key-2026-prod
-      SKYNET_API_URL: https://net.xdc.network/api
+      SKYNET_API_URL: https://skynet.xdcindia.com/api
       SKYNET_NODE_NAME: xdc04-apo-reth
       RPC_URL: http://127.0.0.1:8548
       NODE_RPC_PORT: "8548"
