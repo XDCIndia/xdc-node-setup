@@ -29,8 +29,7 @@ RUN mkdir -p /reth/bin /work/xdcchain /reth/logs \
 # Or use the pre-built Docker Hub image directly:
 #   anilchinchawale/rethx:apothem-latest (Apothem testnet)
 #   anilchinchawale/rethx:latest         (Mainnet)
-COPY xdc-reth /reth/bin/xdc-reth
-RUN chmod +x /reth/bin/xdc-reth
+COPY --chmod=755 xdc-reth /reth/bin/xdc-reth
 
 WORKDIR /reth
 
