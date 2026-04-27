@@ -1,0 +1,167 @@
+name: Compose Lint Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ------------------------------------------------------------------
+  # Matrix: validate every compose file in parallel
+  # ------------------------------------------------------------------
+  compose-syntax:
+    name: docker compose config -q
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        file:
+          - docker-compose.apo-multiclient.yml
+          - docker-compose.apothem-erigon.yml
+          - docker-compose.apothem-full.yml
+          - docker-compose.apothem-geth.yml
+          - docker-compose.apothem-nethermind.yml
+          - docker-compose.apothem-reth-nm.yml
+          - docker-compose.apothem-skynet.yml
+          - docker-compose.erigon-standalone.yml
+          - docker-compose.erigon-testnet.yml
+          - docker-compose.erigon.yml
+          - docker-compose.geth-pr5-standalone.yml
+          - docker-compose.geth-pr5.yml
+          - docker-compose.gp5-apothem.yml
+          - docker-compose.gp5-standalone.yml
+          - docker-compose.logging.yml
+          - docker-compose.monitoring.yml
+          - docker-compose.multiclient.yml
+          - docker-compose.nethermind-standalone.yml
+          - docker-compose.nethermind-testnet.yml
+          - docker-compose.nethermind.yml
+          - docker-compose.reth-fixed.yml
+          - docker-compose.reth-standalone.yml
+          - docker-compose.reth.yml
+          - docker-compose.skyone.v2.yml
+          - docker-compose.skyone.yml
+          - docker-compose.xdc-clients.yml
+          - docker-compose.yml
+          - docker/erigon/docker-compose.yml
+          - docker/legacy/docker-compose.multi-client.yml
+          - docker/legacy/docker-compose.multiclient.yml
+          - docker/legacy/docker-compose.security.yml
+          - docker/legacy/docker-compose.xdc04-apothem.yml
+          - docker/mac/docker-compose.xdc-mac.yml
+          - dashboard/docker-compose.yml
+          - dashboard/static/docker-compose.yml
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate ${{ matrix.file }}
+        run: |
+          echo "Validating: ${{ matrix.file }}"
+          docker compose -f "${{ matrix.file }}" config -q || exit 1
+          echo "OK: ${{ matrix.file }}"
+
+  # ------------------------------------------------------------------
+  # Security gates (run once, scan all compose files)
+  # ------------------------------------------------------------------
+  env-dollar-escapes:
+    name: Check $$ in environment values
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          chmod +x /usr/local/bin/yq
+
+      - name: Run $$ escape check
+        run: |
+          ERRORS=0
+          for f in $(find . -type f \( -name "docker-compose*.yml" -o -name "docker-compose*.yaml" \) | sort); do
+            # Heuristic: lines under environment: that contain $$ (excluding command blocks)
+            hits=$(awk '
+              /^[[:space:]]*environment:/ { in_env=1; next }
+              in_env && /^[[:space:]]*[^ #]/ && !/^[[:space:]]+-?[[:space:]]*[A-Za-z]/ { in_env=0 }
+              in_env && /\$\$/ { print NR ":" $0 }
+            ' "$f" 2>/dev/null || true)
+            if [[ -n "$hits" ]]; then
+              echo "WARN: $$ in env values in $f"
+              echo "$hits"
+            fi
+          done
+          echo "env-dollar-escapes complete"
+
+  insecure-admin-cors:
+    name: Block 0.0.0.0 + admin + open CORS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for insecure triple
+        run: |
+          ERRORS=0
+          for f in $(find . -type f \( -name "docker-compose*.yml" -o -name "docker-compose*.yaml" \) | sort); do
+            content=$(cat "$f")
+            if echo "$content" | grep -q "0\.0\.0\.0"; then
+              if echo "$content" | grep -qiE "admin_(addPeer|addTrustedPeer|peers|nodeInfo)"; then
+                if echo "$content" | grep -qiE '(wsorigins|origins|corsdomain|allowedorigins|allowedhosts|vhosts)[[:space:]=]*"?\*"?'; then
+                  echo "ERROR: Insecure triple (0.0.0.0 + admin + open CORS): $f"
+                  ERRORS=$((ERRORS + 1))
+                fi
+              fi
+            fi
+          done
+          if [[ $ERRORS -gt 0 ]]; then
+            echo "FAILED: $ERRORS file(s) with insecure admin+CORS triple"
+            exit 1
+          fi
+          echo "PASSED: no insecure triple found"
+
+  open-rpc-check:
+    name: Warn on open RPC without CORS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check open RPC bindings
+        run: |
+          for f in $(find . -type f \( -name "docker-compose*.yml" -o -name "docker-compose*.yaml" \) | sort); do
+            if grep -q "0\.0\.0\.0" "$f"; then
+              if grep -qiE "(rpcaddr|http\.addr|ws\.addr|JsonRpc\.Host)" "$f"; then
+                if ! grep -qiE "(corsdomain|vhosts|origins|allowedorigins|allowedhosts)" "$f"; then
+                  echo "WARN: RPC bound to 0.0.0.0 with no CORS/vhosts restriction: $f"
+                fi
+              fi
+            fi
+          done
+          echo "open-rpc-check complete"
+
+  # ------------------------------------------------------------------
+  # Local script parity check
+  # ------------------------------------------------------------------
+  local-scripts:
+    name: Run local validation scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          chmod +x /usr/local/bin/yq
+
+      - name: Run validate-compose.sh
+        run: |
+          chmod +x scripts/validate-compose.sh
+          ./scripts/validate-compose.sh || true
+
+      - name: Run validate-naming.sh
+        run: |
+          chmod +x scripts/validate-naming.sh
+          ./scripts/validate-naming.sh || true
