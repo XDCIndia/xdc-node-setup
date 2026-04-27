@@ -3,10 +3,12 @@
 # naming.sh — Node Naming Standard Library
 # Issue: #141 — Enhanced naming with sync type and state scheme
 # Issue: #151 — 6-part XNS standard with backward compatibility
+# Issue: #261 — XNS v2: 8-part with Docker image version
 # ============================================================
-# Pattern: {location}-{client}-{sync}-{scheme}-{network}-{server_id}
-# Example: xdc01-xdc-full-hbss-mainnet-125
-#          xdc01-geth-full-pbss-mainnet-125
+# XNS v1 (6-part): {location}-{client}-{sync}-{scheme}-{network}-{server_id}
+# XNS v2 (8-part): {location}-{client}-{sync}-{scheme}-{network}-{server_id}-{image_tag}-{container_seq}
+# Example v1: xdc01-xdc-full-hbss-mainnet-125
+# Example v2: xdc01-geth-full-pbss-mainnet-125-v94-01
 #
 # Client mapping:
 #   v2.6.8 official  → xdc
@@ -65,14 +67,16 @@ get_client_name() {
     echo "${_CLIENT_MAP[$input]:-$input}"
 }
 
-# Build full node name (6-part XNS standard)
-# Usage: build_node_name <client> <network> [sync_mode] [state_scheme] [server_id]
+# Build full node name (XNS v2 — 8-part with optional image tag)
+# Usage: build_node_name <client> <network> [sync_mode] [state_scheme] [server_id] [image_tag] [container_seq]
 build_node_name() {
     local client="$(get_client_name "${1:?client required}")"
     local network="${2:?network required}"
     local sync="${3:-full}"
     local scheme="${4:-hbss}"
     local sid="${5:-$(get_server_id)}"
+    local image_tag="${6:-}"
+    local container_seq="${7:-01}"
     local location="$(get_location "$sid")"
 
     # Default scheme per client
@@ -87,7 +91,14 @@ build_node_name() {
         esac
     fi
 
-    echo "${location}-${client}-${sync}-${scheme}-${network}-${sid}"
+    local name="${location}-${client}-${sync}-${scheme}-${network}-${sid}"
+    
+    # Append image tag and container sequence if provided (XNS v2)
+    if [[ -n "$image_tag" ]]; then
+        name="${name}-${image_tag}-${container_seq}"
+    fi
+    
+    echo "$name"
 }
 
 # Build container name (same as node name)
@@ -116,9 +127,10 @@ generate_node_name() {
 # Parse a node name into components.
 # Usage: parse_node_name <name>
 # Sets: NODE_NAME_LOCATION, NODE_NAME_CLIENT, NODE_NAME_SYNC,
-#       NODE_NAME_SCHEME, NODE_NAME_NETWORK, NODE_NAME_SERVER_ID
+#       NODE_NAME_SCHEME, NODE_NAME_NETWORK, NODE_NAME_SERVER_ID,
+#       NODE_NAME_IMAGE_TAG, NODE_NAME_CONTAINER_SEQ
 # Returns: 0 on success, 1 on failure
-# Supports both 6-part XNS and 4-part legacy names.
+# Supports 8-part XNS v2, 6-part XNS v1, and 4-part legacy names.
 parse_node_name() {
     local name="$1"
     local parts
@@ -131,9 +143,22 @@ parse_node_name() {
     NODE_NAME_SCHEME=""
     NODE_NAME_NETWORK=""
     NODE_NAME_SERVER_ID=""
+    NODE_NAME_IMAGE_TAG=""
+    NODE_NAME_CONTAINER_SEQ=""
 
-    if [[ ${#parts[@]} -eq 6 ]]; then
-        # 6-part XNS: location-client-sync-scheme-network-server_id
+    if [[ ${#parts[@]} -eq 8 ]]; then
+        # 8-part XNS v2: location-client-sync-scheme-network-server_id-image_tag-container_seq
+        NODE_NAME_LOCATION="${parts[0]}"
+        NODE_NAME_CLIENT="${parts[1]}"
+        NODE_NAME_SYNC="${parts[2]}"
+        NODE_NAME_SCHEME="${parts[3]}"
+        NODE_NAME_NETWORK="${parts[4]}"
+        NODE_NAME_SERVER_ID="${parts[5]}"
+        NODE_NAME_IMAGE_TAG="${parts[6]}"
+        NODE_NAME_CONTAINER_SEQ="${parts[7]}"
+        return 0
+    elif [[ ${#parts[@]} -eq 6 ]]; then
+        # 6-part XNS v1: location-client-sync-scheme-network-server_id
         NODE_NAME_LOCATION="${parts[0]}"
         NODE_NAME_CLIENT="${parts[1]}"
         NODE_NAME_SYNC="${parts[2]}"
@@ -149,7 +174,7 @@ parse_node_name() {
         NODE_NAME_SERVER_ID="${parts[3]}"
         return 0
     else
-        echo "parse_node_name: expected 4 or 6 hyphen-separated parts, got ${#parts[@]}" >&2
+        echo "parse_node_name: expected 4, 6, or 8 hyphen-separated parts, got ${#parts[@]}" >&2
         return 1
     fi
 }
@@ -157,12 +182,13 @@ parse_node_name() {
 # Validate a node name conforms to XNS standard.
 # Usage: validate_node_name <name>
 # Returns: 0 if valid, 1 if invalid
-# Accepts both 6-part XNS and 4-part legacy names.
+# Accepts 8-part XNS v2, 6-part XNS v1, and 4-part legacy names.
 validate_node_name() {
     local name="$1"
     if ! parse_node_name "$name"; then
         echo "validate_node_name: invalid node name: $name" >&2
-        echo "  Expected 6-part: {location}-{client}-{sync}-{scheme}-{network}-{server_id}" >&2
+        echo "  Expected 8-part (v2): {location}-{client}-{sync}-{scheme}-{network}-{server_id}-{image_tag}-{container_seq}" >&2
+        echo "  or 6-part (v1): {location}-{client}-{sync}-{scheme}-{network}-{server_id}" >&2
         echo "  or 4-part (legacy): {location}-{client}-{network}-{server_id}" >&2
         return 1
     fi
@@ -222,7 +248,95 @@ validate_node_name() {
 }
 
 # ============================================================
-# Snapshot Naming Standard (XNS 8-Part Extension)
+# XNS v2 — PWD-Relative Directory Layout
+# ============================================================
+
+# Build PWD-relative datadir path for a node.
+# Usage: build_datadir_path <node_name> [base_dir]
+# Returns: ./mainnet/nodes/xdc01-geth-full-pbss-mainnet-125-v94-01/datadir
+build_datadir_path() {
+    local node_name="${1:?node_name required}"
+    local base_dir="${2:-.}"
+    
+    # Parse node name to get network
+    if ! parse_node_name "$node_name" 2>/dev/null; then
+        # Fallback: assume mainnet if parsing fails
+        NODE_NAME_NETWORK="mainnet"
+    fi
+    
+    local network="${NODE_NAME_NETWORK:-mainnet}"
+    echo "${base_dir}/${network}/nodes/${node_name}/datadir"
+}
+
+# Build full PWD-relative node directory structure.
+# Usage: build_node_layout <node_name> [base_dir]
+# Creates: datadir/, config/, logs/, snapshots/
+build_node_layout() {
+    local node_name="${1:?node_name required}"
+    local base_dir="${2:-.}"
+    
+    if ! parse_node_name "$node_name" 2>/dev/null; then
+        NODE_NAME_NETWORK="mainnet"
+    fi
+    
+    local network="${NODE_NAME_NETWORK:-mainnet}"
+    local node_dir="${base_dir}/${network}/nodes/${node_name}"
+    
+    mkdir -p "${node_dir}/datadir" \
+             "${node_dir}/config" \
+             "${node_dir}/logs" \
+             "${node_dir}/snapshots"
+    
+    echo "${node_dir}"
+}
+
+# Get Docker image tag from running container.
+# Usage: get_image_tag <container_name>
+get_image_tag() {
+    local container="${1:?container_name required}"
+    docker inspect --format='{{.Config.Image}}' "$container" 2>/dev/null | \
+        sed 's/.*://' || echo "unknown"
+}
+
+# ============================================================
+# Skynet Telemetry Helpers
+# ============================================================
+
+# Get chaindata size for a node.
+# Usage: get_chaindata_size <datadir_path>
+# Returns: size in bytes (or "unknown" if path doesn't exist)
+get_chaindata_size() {
+    local datadir="${1:?datadir_path required}"
+    if [[ -d "$datadir" ]]; then
+        du -sb "$datadir" 2>/dev/null | cut -f1 || echo "unknown"
+    else
+        echo "unknown"
+    fi
+}
+
+# Get chaindata size breakdown.
+# Usage: get_chaindata_breakdown <datadir_path>
+# Returns: JSON with total, chaindata, snapshots, logs sizes
+get_chaindata_breakdown() {
+    local datadir="${1:?datadir_path required}"
+    local total="unknown" chaindata="unknown" snapshots="unknown" logs="unknown"
+    
+    if [[ -d "$datadir" ]]; then
+        total=$(du -sb "$datadir" 2>/dev/null | cut -f1 || echo "unknown")
+        chaindata=$(du -sb "${datadir}/xdcchain" 2>/dev/null | cut -f1 || echo "unknown")
+        snapshots=$(du -sb "${datadir}/../snapshots" 2>/dev/null | cut -f1 || echo "unknown")
+        logs=$(du -sb "${datadir}/../logs" 2>/dev/null | cut -f1 || echo "unknown")
+    fi
+    
+    cat <<EOF
+{
+  "total": ${total},
+  "chaindata": ${chaindata},
+  "snapshots": ${snapshots},
+  "logs": ${logs}
+}
+EOF
+}
 # Pattern: {location}-{client}-{sync}-{scheme}-{network}-{server_id}-{image_digest}-{timestamp}.{ext}
 # Minimal required: {client}-{sync}-{scheme}-{network}-{timestamp}.{ext}
 # Full standard:     {location}-{client}-{sync}-{scheme}-{network}-{server_id}-{image_digest}-{timestamp}.{ext}

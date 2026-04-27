@@ -264,8 +264,8 @@ services:
     <<: *restart
     network_mode: host
     environment:
-      SKYNET_API_KEY: xdc-netown-key-2026-prod
-      SKYNET_MASTER_KEY: xdc-netown-key-2026-prod
+      SKYNET_API_KEY: ${SKYNET_MASTER_KEY}
+      SKYNET_MASTER_KEY: ${SKYNET_MASTER_KEY}
       SKYNET_API_URL: https://skynet.xdcindia.com/api
       SKYNET_NODE_NAME: xdc04-apo-stable
       RPC_URL: http://127.0.0.1:8545
@@ -281,8 +281,8 @@ services:
     <<: *restart
     network_mode: host
     environment:
-      SKYNET_API_KEY: xdc-netown-key-2026-prod
-      SKYNET_MASTER_KEY: xdc-netown-key-2026-prod
+      SKYNET_API_KEY: ${SKYNET_MASTER_KEY}
+      SKYNET_MASTER_KEY: ${SKYNET_MASTER_KEY}
       SKYNET_API_URL: https://skynet.xdcindia.com/api
       SKYNET_NODE_NAME: xdc04-apo-erigon
       RPC_URL: http://127.0.0.1:8556
@@ -298,8 +298,8 @@ services:
     <<: *restart
     network_mode: host
     environment:
-      SKYNET_API_KEY: xdc-netown-key-2026-prod
-      SKYNET_MASTER_KEY: xdc-netown-key-2026-prod
+      SKYNET_API_KEY: ${SKYNET_MASTER_KEY}
+      SKYNET_MASTER_KEY: ${SKYNET_MASTER_KEY}
       SKYNET_API_URL: https://skynet.xdcindia.com/api
       SKYNET_NODE_NAME: xdc04-apo-nm
       RPC_URL: http://127.0.0.1:8558
@@ -315,8 +315,8 @@ services:
     <<: *restart
     network_mode: host
     environment:
-      SKYNET_API_KEY: xdc-netown-key-2026-prod
-      SKYNET_MASTER_KEY: xdc-netown-key-2026-prod
+      SKYNET_API_KEY: ${SKYNET_MASTER_KEY}
+      SKYNET_MASTER_KEY: ${SKYNET_MASTER_KEY}
       SKYNET_API_URL: https://skynet.xdcindia.com/api
       SKYNET_NODE_NAME: xdc04-apo-reth
       RPC_URL: http://127.0.0.1:8548

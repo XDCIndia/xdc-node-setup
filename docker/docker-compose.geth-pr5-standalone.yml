@@ -80,7 +80,7 @@ services:
       - RPC_URL=http://xdc-node-geth-pr5:8557
       - SKYNET_NODE_NAME=${SKYNET_NODE_NAME:-xdc-geth-pr5}
       - SKYNET_API_URL=https://skynet.xdcindia.com/api
-      - SKYNET_MASTER_KEY=${SKYNET_MASTER_KEY:-xdc-netown-key-2026-prod}
+      - SKYNET_MASTER_KEY=${SKYNET_MASTER_KEY}
       - XDC_CONTAINER_NAME=xdc-node-geth-pr5
     networks:
       - docker_xdc-network

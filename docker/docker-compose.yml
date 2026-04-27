@@ -102,7 +102,7 @@ services:
       # Dashboard authentication settings (disabled by default for localhost-only access)
       - DASHBOARD_AUTH_ENABLED=${DASHBOARD_AUTH_ENABLED:-false}
       - DASHBOARD_USER=${DASHBOARD_USER:-admin}
-      - DASHBOARD_PASS=${DASHBOARD_PASS:-xdc-skyone}
+      - DASHBOARD_PASS=${DASHBOARD_PASS}
     networks:
       - xdc-network
     depends_on:
