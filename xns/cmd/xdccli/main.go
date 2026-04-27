@@ -11,9 +11,9 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "xdc",
+	Use:   "xdccli",
 	Short: "XDC Node Setup 2.0 control plane CLI",
-	Long:  `xdc manages XDC node specifications and renders deployment configs.`,
+	Long:  `xdccli manages XDC node specifications and renders deployment configs.`,
 }
 
 var validateCmd = &cobra.Command{

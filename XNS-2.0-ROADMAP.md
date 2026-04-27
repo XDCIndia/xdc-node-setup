@@ -68,7 +68,7 @@ times, and inevitably isn't.
                                       │ typed config (HCL/YAML, schema-validated)
                                       ▼
                      ┌────────────────────────────────────┐
-                     │   xdc (Go) — control plane CLI     │
+                     │   xdccli (Go) — control plane CLI  │
                      │   • render compose from templates  │
                      │   • plan / apply / rollback        │
                      │   • drift detection                │
@@ -248,7 +248,7 @@ CUE constraints encode the OPUS47 lessons:
 ### 5.2 The render pipeline
 
 ```
-node.cue ──► xdc validate ──► xdc plan ──► xdc apply
+node.cue ──► xdccli validate ──► xdccli plan ──► xdccli apply
                   │                   │              │
                   │                   ▼              ▼
                   │             diff vs running   render + reload
@@ -264,7 +264,7 @@ this way.
 Every `apply` writes:
 1. A versioned snapshot of the rendered artifacts (`/var/lib/xns/versions/<ts>/`).
 2. An event row in the API event log.
-3. A symlink swap (`current → <ts>`) so rollback is `xdc rollback` →
+3. A symlink swap (`current → <ts>`) so rollback is `xdccli rollback` →
    atomic symlink flip + `compose up`.
 
 This is the missing piece from XNS 1.x — there is currently *no* rollback.
@@ -375,7 +375,7 @@ with tests as a first-class artifact, not an afterthought.
 **CI gates:**
 1. `cue vet` — spec must validate.
 2. `go test ./...` — all Go packages.
-3. `xdc render --dry-run` for every example spec → diff vs golden.
+3. `xdccli render --dry-run` for every example spec → diff vs golden.
 4. `docker compose config` for every rendered output.
 5. Naming validator (already exists) — file vs container name.
 6. `shellcheck` on remaining bash.
@@ -388,7 +388,7 @@ with tests as a first-class artifact, not an afterthought.
 "freeze the fleet for 3 months" migration.
 
 ### Phase 0 — Foundations (4 weeks, 2026-Q3 start)
-- Stand up `xns/` Go module: `pkg/spec`, `pkg/render`, `cmd/xdc`.
+- Stand up `xns/` Go module: `pkg/spec`, `pkg/render`, `cmd/xdccli`.
 - Author CUE schema covering existing 41 compose files.
 - Generate the 41 compose files from CUE; diff against current; reconcile.
 - Deliverable: `xdc render` produces byte-identical output to today's
@@ -397,7 +397,7 @@ with tests as a first-class artifact, not an afterthought.
 ### Phase 1 — Generated config rollout (6 weeks)
 - Replace hand-edited compose files with generated ones, file-by-file,
   PR-by-PR. Each PR: regenerate, diff = empty, merge.
-- Add `xdc plan` / `apply` / `rollback`. Wrap existing scripts.
+- Add `xdccli plan` / `apply` / `rollback`. Wrap existing scripts.
 - Deliverable: 41 → 0 hand-edited compose files. `bash`-driven deploys
   still work; they now call `xdc` under the hood.
 
@@ -419,7 +419,7 @@ with tests as a first-class artifact, not an afterthought.
 - Secrets migration to `age`.
 - mTLS rollout for agent ↔ API.
 - Rollback tested end-to-end on staging.
-- Drift-detection cron (`xdc plan` on every node nightly; alerts on diff).
+- Drift-detection cron (`xdccli plan` on every node nightly; alerts on diff).
 - Deliverable: XNS 2.0 GA.
 
 ### Phase 5 — Decommission (ongoing)
@@ -428,7 +428,7 @@ with tests as a first-class artifact, not an afterthought.
   tuning) — Go offers no advantage there.
 
 **Cutover safety:** every phase preserves XNS 1.x behavior. A 2.0 rollback
-is `apt-get install xns-agent=1.x`; a config rollback is `xdc rollback`.
+is `apt-get install xns-agent=1.x`; a config rollback is `xdccli rollback`.
 
 ---
 
@@ -467,12 +467,12 @@ Calling these out so they don't creep in:
 XNS 2.0 GA is achieved when:
 
 1. Zero hand-edited compose files in the repo.
-2. `xdc validate` catches every OPUS47-class regression in CI before merge.
+2. `xdccli validate` catches every OPUS47-class regression in CI before merge.
 3. Dashboard loads exclusively from the API (no direct RPC reads).
 4. Bash Skynet agent removed from production fleet.
 5. Rollback drill on staging completes in <60 seconds.
 6. Fleet config drift detection runs nightly and pages on diff.
-7. Onboarding a new node = 1 spec file + `xdc apply`. No editing YAML.
+7. Onboarding a new node = 1 spec file + `xdccli apply`. No editing YAML.
 8. Operators report shipping a config change in <10 min, end-to-end, with rollback available.
 
 ---
