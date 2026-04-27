@@ -1,0 +1,49 @@
+# GP5 Multi-Architecture Dockerfile
+# Supports AMD64 and ARM64 builds
+#
+# Usage:
+#   docker build -f docker/Dockerfile.gp5 --platform linux/amd64 -t xdcindia/gp5:vXX-amd64 .
+#   docker build -f docker/Dockerfile.gp5 --platform linux/arm64 -t xdcindia/gp5:vXX-arm64 .
+#
+# Issue: https://github.com/XDCIndia/xdc-node-setup/issues/250
+
+# =============================================================================
+# Runtime stage — Ubuntu 24.04 for glibc compatibility
+# =============================================================================
+FROM ubuntu:24.04
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    jq \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create xdc user (use next available GID/UID if 1000 taken)
+RUN groupadd -r xdc || true && \
+    useradd -r -g xdc -s /bin/bash -m xdc || \
+    useradd -u 1001 -g xdc -s /bin/bash -m xdc
+
+# Copy pre-built binary (built externally from go-ethereum fork)
+ARG BINARY_PATH=./build/XDC
+COPY --chmod=755 "${BINARY_PATH}" /usr/local/bin/XDC
+
+# Create data directory
+RUN mkdir -p /xdcchain/XDPoS && \
+    chown -R xdc:xdc /xdcchain
+
+# Switch to xdc user
+USER xdc
+
+# Set working directory
+WORKDIR /xdcchain
+
+# Expose ports
+EXPOSE 8545 8546 30303 30303/udp 6060
+
+# Entry point
+ENTRYPOINT ["XDC"]
+
+# Default command
+CMD ["--help"]
