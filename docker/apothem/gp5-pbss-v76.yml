@@ -1,3 +1,5 @@
+version: '3.8'
+
 #==============================================================================
 # XDC Node Docker Compose — GP5 Client v76 (PBSS) on Apothem (Testnet)
 # Built from XDCIndia/go-ethereum xdc-network branch, commit cce8e8f10
@@ -10,7 +12,8 @@ services:
     image: anilchinchawale/gp5-xdc:v76
     platform: linux/amd64
     container_name: 168-gp5-full-pbss-apothem-168
-    restart: always
+    restart: unless-stopped
+    stop_grace_period: 3m
     network_mode: host
     volumes:
       - /mnt/data/xdc-nodes/apothem/gp5-pbss/xdcchain:/work/xdcchain
@@ -24,19 +27,19 @@ services:
       - NETWORK_ID=51
       - SYNC_MODE=full
       - GC_MODE=full
-      - STATE_SCHEME=hash
+      - STATE_SCHEME=path
       - CACHE=4096
       - MAXPEERS=50
       - HTTP_PORT=9645
       - WS_PORT=9646
-      - AUTHRPC_PORT=8551
+      - AUTHRPC_PORT=${AUTHRPC_PORT:-9651}
       - P2P_PORT=30322
       - EXTERNAL_IP=${EXTERNAL_IP:-}
       - INSTANCE_NAME=${INSTANCE_NAME:-168-gp5-full-pbss-apothem-168}
       - HTTP_API=admin,eth,net,web3,xdpos
-      - ETHSTATS_ENABLED=$${ETHSTATS_ENABLED:-true}
-      - STATS_SECRET=$${STATS_SECRET:-xdc_openscan_stats_2026}
-      - STATS_SERVER=$${STATS_SERVER:-stats.xdcindia.com:443}
+      - ETHSTATS_ENABLED=${ETHSTATS_ENABLED:-true}
+      - STATS_SECRET=${STATS_SECRET:-xdc_openscan_stats_2026}
+      - STATS_SERVER=${STATS_SERVER:-stats.xdcindia.com:443}
       - NO_DISCOVER=true
       - STATIC_NODES=enode://4e5812c5766b68efbf999e4db4372cbe251ff98ea24cb587da0e00f7a3a53a4aa17e8855ca87131aba8ca5f9d1c5d0beda64d734beb9a6032290179fa2dde691@95.217.56.168:30323,enode://a0a511bdc939cf15dcff2220234f4b4422e8f9c41565c13a8af9348b691b19168695b205c47dad2f27784188e45a539583f2bd79ca71f14d9000f5b87ac9830f@167.235.13.113:30320
       - TRUSTED_NODES=enode://4e5812c5766b68efbf999e4db4372cbe251ff98ea24cb587da0e00f7a3a53a4aa17e8855ca87131aba8ca5f9d1c5d0beda64d734beb9a6032290179fa2dde691@95.217.56.168:30323,enode://a0a511bdc939cf15dcff2220234f4b4422e8f9c41565c13a8af9348b691b19168695b205c47dad2f27784188e45a539583f2bd79ca71f14d9000f5b87ac9830f@167.235.13.113:30320
@@ -56,7 +59,7 @@ services:
   skyone-168-gp5-full-pbss-apothem-168:
     image: anilchinchawale/xdc-agent:v2.6
     container_name: skyone-168-gp5-full-pbss-apothem-168
-    restart: always
+    restart: unless-stopped
     network_mode: host
     depends_on:
       168-gp5-full-pbss-apothem-168:

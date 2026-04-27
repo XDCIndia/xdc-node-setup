@@ -1,3 +1,5 @@
+version: '3.8'
+
 #==============================================================================
 # XDC Node Docker Compose — GP5 Client (HBSS) on Mainnet
 # Hash-based state scheme, no-discover, static peer to local v268
@@ -9,7 +11,8 @@ services:
     image: anilchinchawale/gp5-xdc:v94-amd64
     platform: linux/amd64
     container_name: 168-gp5-full-hbss-mainnet-168
-    restart: always
+    restart: unless-stopped
+    stop_grace_period: 3m
     network_mode: host
     volumes:
       - ${DATA_DIR:-./data/mainnet/gp5-hbss}/xdcchain:/work/xdcchain
@@ -28,7 +31,7 @@ services:
       - MAXPEERS=50
       - HTTP_PORT=9745
       - WS_PORT=9746
-      - AUTHRPC_PORT=8555
+      - AUTHRPC_PORT=${AUTHRPC_PORT:-9751}
       - P2P_PORT=30325
       - EXTERNAL_IP=${EXTERNAL_IP:-}
       - INSTANCE_NAME=${INSTANCE_NAME:-168-gp5-full-hbss-mainnet-168}
@@ -55,7 +58,7 @@ services:
   skyone-168-gp5-full-hbss-mainnet-168:
     image: anilchinchawale/xdc-agent:v2.6
     container_name: skyone-168-gp5-full-hbss-mainnet-168
-    restart: always
+    restart: unless-stopped
     network_mode: host
     depends_on:
       168-gp5-full-hbss-mainnet-168:

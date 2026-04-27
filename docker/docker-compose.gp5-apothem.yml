@@ -1,3 +1,5 @@
+version: '3.8'
+
 #==============================================================================
 # XDC Node Docker Compose — GP5 Client on Apothem (Testnet)
 # Uses GP5 v34 image with XNS standard ports
@@ -8,7 +10,8 @@ services:
     image: anilchinchawale/gp5-xdc:v94-amd64
     platform: linux/amd64
     container_name: xdc-node-gp5-apothem
-    restart: always
+    restart: unless-stopped
+    stop_grace_period: 3m
     ports:
       - "${P2P_PORT:-30322}:30303"
       - "${P2P_PORT:-30322}:30303/udp"
@@ -50,7 +53,7 @@ services:
   xdc-agent-gp5-apothem:
     image: anilchinchawale/xdc-agent:v2.6
     container_name: xdc-agent-gp5-apothem
-    restart: always
+    restart: unless-stopped
     network_mode: host
     depends_on:
       xdc-node-gp5-apothem:
