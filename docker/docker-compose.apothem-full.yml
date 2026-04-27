@@ -49,7 +49,7 @@ services:
 
   # ==================== GETH PR5 APOTHEM (v34 with geth binary) ====================
   xdc-node-gx-apothem:
-    image: anilchinchawale/gp5-xdc:v60
+    image: anilchinchawale/gp5-xdc:v94-amd64
     platform: linux/amd64
     container_name: xdc-node-gx-apothem
     restart: unless-stopped
