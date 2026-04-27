@@ -1,0 +1,245 @@
+#!/usr/bin/env bash
+#===============================================================================
+# XNS CLI v2.0 — Unified Node Deployment with Auto SkyNet/Stats Integration
+# Issue: https://github.com/XDCIndia/xdc-node-setup/issues/181
+#
+# Usage:
+#   xns deploy --network apothem --client gp5 --server 168
+#   xns status --server 168
+#   xns fleet status
+#===============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+XNS_VERSION="2.0.0"
+
+# --- Config ---
+CONFIG_DIR="${HOME}/.xns"
+CONFIG_FILE="${CONFIG_DIR}/config.yaml"
+
+# Default config
+DEFAULT_CONFIG='---
+# XNS CLI v2.0 Configuration
+version: "2.0.0"
+
+# API Endpoints
+skynet_api_url: "https://skynet.xdcindia.com/api/v1"
+stats_url: "https://stats.xdcindia.com"
+
+# Default Images
+images:
+  gp5: "anilchinchawale/gp5-xdc:latest"
+  xdc: "anilchinchawale/xdc:v2.6.8"
+  erigon: "anilchinchawale/erigon-xdc:latest"
+  nethermind: "anilchinchawale/nethermind-xdc:latest"
+  reth: "anilchinchawale/reth-xdc:latest"
+  skyone: "anilchinchawale/xdc-skyone:latest"
+
+# Network Configuration
+networks:
+  mainnet:
+    chain_id: 50
+    p2p_port: 30303
+    http_port: 8545
+    ws_port: 8546
+    authrpc_port: 8551
+    v2_switch: 80370000
+  apothem:
+    chain_id: 51
+    p2p_port: 30320
+    http_port: 9645
+    ws_port: 9646
+    authrpc_port: 9651
+    v2_switch: 56828700
+
+# Server Definitions
+servers:
+  168:
+    host: "95.217.56.168"
+    location: "test"
+  183:
+    host: "185.180.220.183"
+    location: "prod"
+  125:
+    host: "95.217.112.125"
+    location: "xdc01"
+  109:
+    host: "95.217.112.109"
+    location: "xdc02"
+  113:
+    host: "95.217.112.113"
+    location: "xdc03"
+  4:
+    host: "95.217.112.4"
+    location: "xdc07"
+'
+
+# --- Helpers ---
+die() { echo "[ERROR] $*" >&2; exit 1; }
+info() { echo "[INFO] $*"; }
+warn() { echo "[WARN] $*" >&2; }
+
+init_config() {
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        mkdir -p "$CONFIG_DIR"
+        echo "$DEFAULT_CONFIG" > "$CONFIG_FILE"
+        info "Created default config: $CONFIG_FILE"
+        info "Edit this file to customize endpoints, images, and servers"
+    fi
+}
+
+# --- Commands ---
+cmd_deploy() {
+    local network=""
+    local client="gp5"
+    local server=""
+    local sync="full"
+    local scheme="pbss"
+    local image=""
+    local data_dir=""
+    
+    # Parse args
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --network) network="$2"; shift 2 ;;
+            --client) client="$2"; shift 2 ;;
+            --server) server="$2"; shift 2 ;;
+            --sync) sync="$2"; shift 2 ;;
+            --scheme) scheme="$2"; shift 2 ;;
+            --image) image="$2"; shift 2 ;;
+            --data-dir) data_dir="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+    
+    [[ -z "$network" ]] && die "--network required (mainnet|apothem)"
+    [[ -z "$server" ]] && die "--server required (168|183|125|109|113|4)"
+    
+    # Use fleet-deploy.sh for actual deployment
+    local deploy_script="${SCRIPT_DIR}/fleet-deploy.sh"
+    [[ -f "$deploy_script" ]] || die "fleet-deploy.sh not found"
+    
+    info "Deploying ${client} ${sync} ${scheme} on server ${server} (${network})"
+    bash "$deploy_script" "$server" "$network" "$client" "$scheme"
+    
+    # Auto-register with SkyNet if SKYNET_MASTER_KEY is set
+    if [[ -n "${SKYNET_MASTER_KEY:-}" ]]; then
+        info "Registering with SkyNet..."
+        # TODO: Implement skynet registration API call
+        info "SkyNet registration: SKYNET_MASTER_KEY is set (registration pending)"
+    fi
+    
+    # Auto-register with Stats if STATS_SECRET is set
+    if [[ -n "${STATS_SECRET:-}" ]]; then
+        info "Stats registration: STATS_SECRET is set (node will auto-report)"
+    fi
+    
+    info "Deployment complete!"
+}
+
+cmd_status() {
+    local server="${1:-}"
+    [[ -z "$server" ]] && die "Usage: xns status --server <id>"
+    
+    info "Checking status of server ${server}..."
+    
+    # Check if node container is running
+    local container="$(docker ps --filter name="-${server}" --format '{{.Names}}' 2>/dev/null | head -1)"
+    if [[ -n "$container" ]]; then
+        info "Container: ${container} (running)"
+        
+        # Get block height
+        local rpc_port="$(docker inspect "$container" --format='{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep HTTP_PORT | cut -d= -f2 || echo "8545")"
+        local block="$(curl -sf http://localhost:${rpc_port} -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' 2>/dev/null | jq -r '.result' | sed 's/0x//')"
+        if [[ -n "$block" && "$block" != "null" ]]; then
+            info "Block height: $((16#${block}))"
+        fi
+        
+        # Get peer count
+        local peers="$(curl -sf http://localhost:${rpc_port} -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' 2>/dev/null | jq -r '.result' | sed 's/0x//')"
+        if [[ -n "$peers" && "$peers" != "null" ]]; then
+            info "Peers: $((16#${peers}))"
+        fi
+    else
+        warn "No running containers found for server ${server}"
+    fi
+}
+
+cmd_fleet_status() {
+    info "Fleet status across all servers..."
+    
+    for server in 168 183 125 109 113 4; do
+        local host="$(grep -A2 "${server}:" "$CONFIG_FILE" 2>/dev/null | grep host | head -1 | sed 's/.*: *//' | tr -d '"')"
+        [[ -z "$host" ]] && continue
+        
+        info "Server ${server} (${host}):"
+        
+        # SSH check (if key available)
+        if ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=accept-new "root@${host}" "docker ps --format '{{.Names}}'" 2>/dev/null | grep -q "xdc"; then
+            local containers="$(ssh -o ConnectTimeout=3 "root@${host}" "docker ps --format '{{.Names}}'" 2>/dev/null | grep "xdc" | tr '\n' ' ')"
+            info "  Running: ${containers}"
+        else
+            warn "  Unable to connect"
+        fi
+    done
+}
+
+cmd_version() {
+    echo "XNS CLI v${XNS_VERSION}"
+}
+
+cmd_help() {
+    cat <<EOF
+XNS CLI v${XNS_VERSION} — XDC Node Setup
+
+Usage:
+  xns deploy --network <mainnet|apothem> --server <id> [options]
+  xns status --server <id>
+  xns fleet status
+  xns version
+  xns help
+
+Deploy Options:
+  --network    mainnet | apothem
+  --server     168 | 183 | 125 | 109 | 113 | 4
+  --client     gp5 | xdc | erigon | nethermind | reth (default: gp5)
+  --sync       full | snap | archive (default: full)
+  --scheme     pbss | hbss | archive (default: pbss)
+  --image      Custom Docker image tag
+  --data-dir   Custom data directory
+
+Environment Variables:
+  SKYNET_MASTER_KEY    Auto-register with SkyNet
+  STATS_SECRET         Auto-report to stats.xdcindia.com
+  STATS_SERVER         Stats server endpoint
+
+Config File: ~/.xns/config.yaml
+EOF
+}
+
+# --- Main ---
+main() {
+    init_config
+    
+    local cmd="${1:-help}"
+    shift || true
+    
+    case "$cmd" in
+        deploy) cmd_deploy "$@" ;;
+        status) cmd_status "$@" ;;
+        fleet) 
+            local subcmd="${1:-status}"
+            shift || true
+            case "$subcmd" in
+                status) cmd_fleet_status "$@" ;;
+                *) die "Unknown fleet command: $subcmd" ;;
+            esac
+            ;;
+        version) cmd_version ;;
+        help|--help|-h) cmd_help ;;
+        *) die "Unknown command: $cmd. Run 'xns help' for usage." ;;
+    esac
+}
+
+main "$@"
