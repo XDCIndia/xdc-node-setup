@@ -191,7 +191,7 @@ fi
 
 # Also write legacy static-nodes.json and trusted-nodes.json for backward compatibility
 if [ -n "${STATIC_NODES:-}" ]; then
-    static_nodes_file="$DATADIR/geth/static-nodes.json"
+    static_nodes_file="$DATADIR/${CHAIN_SUBDIR:-geth}/static-nodes.json"
     mkdir -p "$(dirname "$static_nodes_file")"
     json_nodes="["
     first=true
@@ -214,7 +214,7 @@ if [ -n "${STATIC_NODES:-}" ]; then
 fi
 
 if [ -n "${TRUSTED_NODES:-}" ]; then
-    trusted_nodes_file="$DATADIR/geth/trusted-nodes.json"
+    trusted_nodes_file="$DATADIR/${CHAIN_SUBDIR:-geth}/trusted-nodes.json"
     mkdir -p "$(dirname "$trusted_nodes_file")"
     json_nodes="["
     first=true
