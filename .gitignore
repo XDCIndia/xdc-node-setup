@@ -50,6 +50,7 @@ reports/*
 
 # Backup files
 *.backup
+*.backup-*
 *.bak
 *.tar.gz
 *.tar.gz.enc
