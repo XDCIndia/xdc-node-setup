@@ -1,286 +1,226 @@
-#!/usr/bin/env bash
-# ============================================================
-# fleet.sh — Fleet Management
-# Issue: https://github.com/XDCIndia/xdc-node-setup/issues/93
-# ============================================================
-# Manages XDC node fleet across multiple servers.
-#
-# Usage:
-#   fleet.sh status                         — block heights across all servers
-#   fleet.sh deploy <client> <network>      — deploy client to all servers
-#   fleet.sh rolling-update <client>        — rolling restart across fleet
-#   fleet.sh exec <command>                 — run command on all servers
-#
-# Uses configs/servers.env for server list.
-# ============================================================
+#!/bin/bash
+#===============================================================================
+# XDC Fleet Inventory and Deployment Helpers
+# SSH port 12141 support for XDCIndia fleet
+#===============================================================================
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# Default fleet configuration
+FLEET_INVENTORY="${FLEET_INVENTORY:-${HOME}/.config/xdc/fleet.ini}"
+SSH_PORT="${SSH_PORT:-12141}"
+SSH_USER="${SSH_USER:-ubuntu}"
+SSH_KEY="${SSH_KEY:-${HOME}/.ssh/xdc_fleet_rsa}"
 
-# Load servers
-SERVERS_ENV="${REPO_ROOT}/configs/servers.env"
-[[ -f "${SERVERS_ENV}" ]] && source "${SERVERS_ENV}"
+# Colors
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 
-# Load ports
-[[ -f "${REPO_ROOT}/configs/ports.env" ]] && source "${REPO_ROOT}/configs/ports.env"
+die() { echo -e "${RED}ERROR: $1${NC}" >&2; exit 1; }
+info() { echo -e "${GREEN}INFO: $1${NC}"; }
+warn() { echo -e "${YELLOW}WARN: $1${NC}"; }
+log() { echo -e "${BLUE}→ $1${NC}"; }
 
-# Load naming lib
-[[ -f "${SCRIPT_DIR}/lib/naming.sh" ]] && source "${SCRIPT_DIR}/lib/naming.sh"
-
-# --- Config ---
-SSH_OPTS="-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
-DEPLOY_DIR="/root/XDC-Node-Setup"
-
-# --- Client RPC ports ---
-declare -A CLIENT_PORTS=(
-    [gp5]="${GP5_MAINNET_RPC:-8545}"
-    [erigon]="${ERIGON_MAINNET_RPC:-8547}"
-    [nethermind]="${NM_MAINNET_RPC:-8558}"
-    [reth]="${RETH_MAINNET_RPC:-8548}"
-    [v268]="${V268_MAINNET_RPC:-8550}"
-)
-
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
-error() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] $*" >&2; }
-
-# --- Get server list from servers.env ---
-get_servers() {
-    if [[ -z "${SERVERS:-}" ]]; then
-        error "SERVERS not defined in configs/servers.env"
-        exit 1
-    fi
-    echo "${SERVERS}"
-}
-
-# --- SSH to server ---
-ssh_server() {
-    local server_id="$1"
-    shift
-    local host_var="SERVER_${server_id}_HOST"
-    local user_var="SERVER_${server_id}_USER"
-    local host="${!host_var:-}"
-    local user="${!user_var:-root}"
-
-    if [[ -z "${host}" ]]; then
-        error "No host defined for server ${server_id} (set ${host_var} in servers.env)"
-        return 1
-    fi
-
-    # shellcheck disable=SC2086
-    ssh ${SSH_OPTS} "${user}@${host}" "$@"
-}
-
-# --- Get block height from remote server ---
-remote_block_height() {
-    local server_id="$1"
-    local port="$2"
-    ssh_server "${server_id}" "curl -sf --max-time 5 -X POST http://127.0.0.1:${port} \
-        -H 'Content-Type: application/json' \
-        -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' \
-        | jq -r '.result // empty'" 2>/dev/null || echo ""
-}
-
-# ============================================================
-# Commands
-# ============================================================
-
-# --- fleet status ---
-cmd_status() {
-    local servers
-    servers=$(get_servers)
-
-    printf "%-25s %-12s %-12s %s\n" "NODE" "CLIENT" "BLOCK" "STATUS"
-    printf "%s\n" "$(printf '%.0s-' {1..65})"
-
-    for server_id in ${servers}; do
-        local loc_var="SERVER_${server_id}_LOCATION"
-        local location="${!loc_var:-unknown}"
-
-        for client in "${!CLIENT_PORTS[@]}"; do
-            local port="${CLIENT_PORTS[${client}]}"
-            local node_name="${location}-${client}-mainnet-${server_id}"
-            local hex_height status block
-
-            hex_height=$(remote_block_height "${server_id}" "${port}" 2>/dev/null) || hex_height=""
-
-            if [[ -n "${hex_height}" && "${hex_height}" != "null" ]]; then
-                block=$(printf '%d' "${hex_height}" 2>/dev/null) || block="?"
-                status="✓ syncing"
-            else
-                block="-"
-                status="✗ down/unreachable"
-            fi
-
-            printf "%-25s %-12s %-12s %s\n" "${node_name}" "${client}" "${block}" "${status}"
-        done
-    done
-}
-
-# --- fleet deploy ---
-cmd_deploy() {
-    local client="${1:-}"
-    local network="${2:-mainnet}"
-
-    if [[ -z "${client}" ]]; then
-        error "Usage: fleet.sh deploy <client> <network>"
-        exit 1
-    fi
-
-    local servers
-    servers=$(get_servers)
-
-    log "=== Deploying ${client} (${network}) to fleet ==="
-
-    for server_id in ${servers}; do
-        local label_var="SERVER_${server_id}_LABEL"
-        local label="${!label_var:-Server ${server_id}}"
-        log "Deploying to ${label} (${server_id})..."
-
-        # Sync repo
-        ssh_server "${server_id}" "
-            cd ${DEPLOY_DIR} 2>/dev/null || { git clone https://github.com/XDCIndia/xdc-node-setup.git ${DEPLOY_DIR} && cd ${DEPLOY_DIR}; }
-            git pull --ff-only origin main 2>/dev/null || true
-        " || { error "Failed to sync repo on ${server_id}"; continue; }
-
-        # Run volume check
-        ssh_server "${server_id}" "
-            cd ${DEPLOY_DIR}
-            bash scripts/volume-check.sh --clients ${client} --network ${network}
-        " || { error "Volume check failed on ${server_id}"; continue; }
-
-        # Start client
-        local compose_file="docker/docker-compose.${client}.yml"
-        if [[ "${client}" == "gp5" ]]; then
-            compose_file="docker/docker-compose.geth-pr5.yml"
-        fi
-
-        ssh_server "${server_id}" "
-            cd ${DEPLOY_DIR}
-            export SERVER_ID=${server_id}
-            docker compose --env-file docker/shared/.env.mainnet -f ${compose_file} up -d
-        " || { error "Failed to start ${client} on ${server_id}"; continue; }
-
-        log "  ✓ ${client} deployed on ${server_id}"
-    done
-
-    log "=== Deploy complete ==="
-}
-
-# --- fleet rolling-update ---
-cmd_rolling_update() {
-    local client="${1:-}"
-
-    if [[ -z "${client}" ]]; then
-        error "Usage: fleet.sh rolling-update <client>"
-        exit 1
-    fi
-
-    local servers
-    servers=$(get_servers)
-    local server_count
-    server_count=$(echo "${servers}" | wc -w)
-
-    log "=== Rolling update: ${client} across ${server_count} servers ==="
-
-    for server_id in ${servers}; do
-        local label_var="SERVER_${server_id}_LABEL"
-        local label="${!label_var:-Server ${server_id}}"
-        log "Updating ${label} (${server_id})..."
-
-        # Pull latest image
-        ssh_server "${server_id}" "
-            cd ${DEPLOY_DIR}
-            git pull --ff-only origin main 2>/dev/null || true
-        " || { error "Git pull failed on ${server_id}"; continue; }
-
-        # Find and restart container
-        local container
-        container=$(ssh_server "${server_id}" "docker ps --format '{{.Names}}' | grep -i '${client}' | head -1" 2>/dev/null) || container=""
-
-        if [[ -n "${container}" ]]; then
-            log "  Restarting ${container}..."
-            ssh_server "${server_id}" "docker restart ${container}" || {
-                error "Failed to restart ${container} on ${server_id}"
-                continue
-            }
-
-            # Wait for node to start responding
-            log "  Waiting for RPC to come up..."
-            local port="${CLIENT_PORTS[${client}]:-8545}"
-            local attempts=0
-            while [[ ${attempts} -lt 12 ]]; do
-                local hex
-                hex=$(remote_block_height "${server_id}" "${port}" 2>/dev/null) || hex=""
-                if [[ -n "${hex}" && "${hex}" != "null" ]]; then
-                    local block
-                    block=$(printf '%d' "${hex}" 2>/dev/null) || block="?"
-                    log "  ✓ ${server_id} back online at block ${block}"
-                    break
-                fi
-                sleep 10
-                attempts=$((attempts + 1))
-            done
-
-            if [[ ${attempts} -ge 12 ]]; then
-                error "  ✗ ${server_id} RPC not responding after 120s — continuing anyway"
-            fi
-        else
-            log "  No running ${client} container on ${server_id} — skipping"
-        fi
-
-        # Brief pause between servers
-        if [[ "${server_id}" != "$(echo "${servers}" | awk '{print $NF}')" ]]; then
-            log "  Pausing 30s before next server..."
-            sleep 30
-        fi
-    done
-
-    log "=== Rolling update complete ==="
-}
-
-# --- fleet exec ---
-cmd_exec() {
-    local cmd="$*"
-    if [[ -z "${cmd}" ]]; then
-        error "Usage: fleet.sh exec <command>"
-        exit 1
-    fi
-
-    local servers
-    servers=$(get_servers)
-
-    for server_id in ${servers}; do
-        local label_var="SERVER_${server_id}_LABEL"
-        local label="${!label_var:-Server ${server_id}}"
-        echo "=== ${label} (${server_id}) ==="
-        ssh_server "${server_id}" "${cmd}" 2>&1 || error "Failed on ${server_id}"
-        echo ""
-    done
-}
-
-# ============================================================
-# CLI Router
-# ============================================================
 usage() {
-    echo "Usage: fleet.sh <command> [args...]"
-    echo ""
-    echo "Commands:"
-    echo "  status                     Show block heights across all servers"
-    echo "  deploy <client> <network>  Deploy client to all servers"
-    echo "  rolling-update <client>    Rolling restart across fleet"
-    echo "  exec <command>             Run command on all servers"
-    echo ""
-    echo "Servers defined in: configs/servers.env"
+    cat << 'EOF'
+Usage: fleet.sh <command> [options]
+
+Commands:
+  list                  List all fleet nodes from inventory
+  add <name> <ip>       Add a node to inventory
+  remove <name>         Remove a node from inventory
+  ssh <name>            SSH into a fleet node (port 12141)
+  deploy <name> <dir>   Deploy XNS to a fleet node via rsync+ssh
+  status                Check status of all fleet nodes
+  cmd <name> <command>  Run a command on a fleet node
+  sync-peers <name>     Sync peer list from one node to others
+
+Environment:
+  FLEET_INVENTORY       Path to fleet.ini (default: ~/.config/xdc/fleet.ini)
+  SSH_PORT              SSH port (default: 12141)
+  SSH_USER              SSH user (default: ubuntu)
+  SSH_KEY               SSH private key path
+
+Examples:
+  fleet.sh list
+  fleet.sh add xdc07 95.217.112.125
+  fleet.sh ssh xdc07
+  fleet.sh deploy xdc07 /data/apothem/gp5-pbss-125
+  fleet.sh status
+EOF
     exit 1
 }
 
+# Ensure inventory directory exists
+ensure_inventory() {
+    local dir
+    dir=$(dirname "$FLEET_INVENTORY")
+    [ -d "$dir" ] || mkdir -p "$dir"
+    [ -f "$FLEET_INVENTORY" ] || touch "$FLEET_INVENTORY"
+}
+
+# Parse inventory file
+list_nodes() {
+    ensure_inventory
+    if [ ! -s "$FLEET_INVENTORY" ]; then
+        echo "No nodes in inventory. Add one with: fleet.sh add <name> <ip>"
+        return
+    fi
+    printf "%-15s %-20s %-15s\n" "NAME" "IP" "STATUS"
+    echo "─────────────────────────────────────────────────────────────"
+    while IFS='=' read -r name ip; do
+        [ -z "$name" ] && continue
+        [ "${name:0:1}" = "#" ] && continue
+        # Quick status check
+        if timeout 5 bash -c "</dev/tcp/${ip}/${SSH_PORT}" 2>/dev/null; then
+            status="online"
+        else
+            status="offline"
+        fi
+        printf "%-15s %-20s %-15s\n" "$name" "$ip" "$status"
+    done < "$FLEET_INVENTORY"
+}
+
+# Add node
+add_node() {
+    local name="$1" ip="$2"
+    ensure_inventory
+    # Remove existing entry if present
+    grep -v "^${name}=" "$FLEET_INVENTORY" > "${FLEET_INVENTORY}.tmp" 2>/dev/null || true
+    mv "${FLEET_INVENTORY}.tmp" "$FLEET_INVENTORY"
+    echo "${name}=${ip}" >> "$FLEET_INVENTORY"
+    info "Added ${name} (${ip}) to fleet inventory"
+}
+
+# Remove node
+remove_node() {
+    local name="$1"
+    ensure_inventory
+    if ! grep -q "^${name}=" "$FLEET_INVENTORY"; then
+        die "Node '${name}' not found in inventory"
+    fi
+    grep -v "^${name}=" "$FLEET_INVENTORY" > "${FLEET_INVENTORY}.tmp"
+    mv "${FLEET_INVENTORY}.tmp" "$FLEET_INVENTORY"
+    info "Removed ${name} from fleet inventory"
+}
+
+# Get IP for node
+get_ip() {
+    local name="$1"
+    ensure_inventory
+    local ip
+    ip=$(grep "^${name}=" "$FLEET_INVENTORY" | cut -d= -f2)
+    [ -z "$ip" ] && die "Node '${name}' not found in inventory"
+    echo "$ip"
+}
+
+# SSH into node
+ssh_node() {
+    local name="$1"
+    local ip
+    ip=$(get_ip "$name")
+    log "Connecting to ${name} (${ip}:${SSH_PORT})..."
+    ssh -p "$SSH_PORT" -i "$SSH_KEY" "${SSH_USER}@${ip}"
+}
+
+# Run command on node
+cmd_node() {
+    local name="$1"
+    shift
+    local ip
+    ip=$(get_ip "$name")
+    log "Running on ${name}: $*"
+    ssh -p "$SSH_PORT" -i "$SSH_KEY" "${SSH_USER}@${ip}" "$@"
+}
+
+# Deploy XNS to node
+deploy_node() {
+    local name="$1" local_dir="$2"
+    local ip
+    ip=$(get_ip "$name")
+    
+    [ -d "$local_dir" ] || die "Local directory not found: $local_dir"
+    [ -f "$local_dir/docker-compose.yml" ] || warn "No docker-compose.yml in $local_dir"
+    
+    log "Deploying to ${name} (${ip})..."
+    
+    # Create remote directory
+    ssh -p "$SSH_PORT" -i "$SSH_KEY" "${SSH_USER}@${ip}" "mkdir -p /data/xdc-nodes/$(basename "$local_dir")"
+    
+    # Rsync files
+    rsync -avz -e "ssh -p ${SSH_PORT} -i ${SSH_KEY}" \
+        --exclude='xdcchain/' \
+        --exclude='*.log' \
+        "$local_dir/" "${SSH_USER}@${ip}:/data/xdc-nodes/$(basename "$local_dir")/"
+    
+    info "Deployed to ${name}. Start with: fleet.sh cmd ${name} 'cd /data/xdc-nodes/$(basename "$local_dir") && docker compose up -d'"
+}
+
+# Check status of all nodes
+status_all() {
+    ensure_inventory
+    info "Checking fleet status..."
+    while IFS='=' read -r name ip; do
+        [ -z "$name" ] && continue
+        [ "${name:0:1}" = "#" ] && continue
+        
+        printf "%-15s %-20s " "$name" "$ip"
+        
+        # SSH check
+        if timeout 5 ssh -p "$SSH_PORT" -i "$SSH_KEY" -o ConnectTimeout=3 "${SSH_USER}@${ip}" "echo OK" >/dev/null 2>&1; then
+            # Check if XDC node is running
+            if ssh -p "$SSH_PORT" -i "$SSH_KEY" "${SSH_USER}@${ip}" "docker ps --format '{{.Names}}' | grep -q xdc" >/dev/null 2>&1; then
+                # Get block height - parse hex result from RPC
+                block_hex=$(ssh -p "$SSH_PORT" -i "$SSH_KEY" "${SSH_USER}@${ip}" "curl -s -X POST http://localhost:8545 -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}'" 2>/dev/null | sed -n 's/.*"result":"\([^"]*\)".*/\1/p')
+                if [ -n "$block_hex" ] && [ "$block_hex" != "0x" ]; then
+                    block=$(printf '%d' "$block_hex" 2>/dev/null || echo "N/A")
+                else
+                    block="N/A"
+                fi
+                echo "online | block: ${block}"
+            else
+                echo "online (no node)"
+            fi
+        else
+            echo -e "${RED}offline${NC}"
+        fi
+    done < "$FLEET_INVENTORY"
+}
+
+# Sync peers from one node to others
+sync_peers() {
+    local source_name="$1"
+    local source_ip
+    source_ip=$(get_ip "$source_name")
+    
+    log "Getting peers from ${source_name}..."
+    local peers
+    peers=$(ssh -p "$SSH_PORT" -i "$SSH_KEY" "${SSH_USER}@${source_ip}" "curl -s -X POST http://localhost:8545 -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"admin_peers\",\"params\":[],\"id\":1}'" 2>/dev/null)
+    
+    [ -z "$peers" ] && die "Could not get peers from ${source_name}"
+    
+    info "Found peers on ${source_name}, syncing to fleet..."
+    while IFS='=' read -r name ip; do
+        [ -z "$name" ] && continue
+        [ "${name:0:1}" = "#" ] && continue
+        [ "$name" = "$source_name" ] && continue
+        
+        log "Syncing to ${name}..."
+        printf '%s' "$peers" | ssh -p "$SSH_PORT" -i "$SSH_KEY" "${SSH_USER}@${ip}" "cat > /tmp/peers.json" || warn "Failed to sync to ${name}"
+    done < "$FLEET_INVENTORY"
+    
+    info "Peer sync complete. Peers saved to /tmp/peers.json on each node."
+    info "To apply: fleet.sh cmd <name> 'jq \"[.result[].enode]\" /tmp/peers.json > /work/xdcchain/\${CHAIN_SUBDIR:-geth}/static-nodes.json'"
+}
+
+# Main
 case "${1:-}" in
-    status)         cmd_status ;;
-    deploy)         shift; cmd_deploy "$@" ;;
-    rolling-update) shift; cmd_rolling_update "$@" ;;
-    exec)           shift; cmd_exec "$@" ;;
-    -h|--help|"")   usage ;;
-    *)              error "Unknown command: $1"; usage ;;
+    list) list_nodes ;;
+    add) [ $# -ge 3 ] || usage; add_node "$2" "$3" ;;
+    remove) [ $# -ge 2 ] || usage; remove_node "$2" ;;
+    ssh) [ $# -ge 2 ] || usage; ssh_node "$2" ;;
+    cmd) [ $# -ge 3 ] || usage; shift; cmd_node "$@" ;;
+    deploy) [ $# -ge 3 ] || usage; deploy_node "$2" "$3" ;;
+    status) status_all ;;
+    sync-peers) [ $# -ge 2 ] || usage; sync_peers "$2" ;;
+    *) usage ;;
 esac
