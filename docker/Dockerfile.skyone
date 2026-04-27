@@ -65,17 +65,18 @@ COPY --from=dashboard-builder /build/dashboard/nginx.conf /etc/nginx/nginx.conf
 # =============================================================================
 # Copy Scripts
 # =============================================================================
-COPY scripts/lib /app/scripts/lib
-COPY docker/skynet-agent.sh /app/agent/skynet-agent.sh
-COPY docker/entrypoint.sh /app/entrypoint.sh
-COPY dashboard/combined-start.sh /app/combined-start.sh
+COPY --chmod=0755 scripts/lib /app/scripts/lib
+COPY --chmod=0755 docker/skynet-agent.sh /app/agent/skynet-agent.sh
+COPY --chmod=0755 docker/entrypoint.sh /app/entrypoint.sh
+COPY --chmod=0755 dashboard/combined-start.sh /app/combined-start.sh
 
 # Make scripts executable
-RUN chmod +x \
-    /app/agent/skynet-agent.sh \
-    /app/entrypoint.sh \
-    /app/combined-start.sh \
-    /app/scripts/lib/*.sh
+# (COPY --chmod=0755 handles the above; healthcheck.sh is generated below)
+# RUN chmod +x \
+#     /app/agent/skynet-agent.sh \
+#     /app/entrypoint.sh \
+#     /app/combined-start.sh \
+#     /app/scripts/lib/*.sh
 
 # =============================================================================
 # Supervisor Configuration

@@ -22,8 +22,7 @@ COPY --chown=node:node . .
 RUN npm run build
 
 # Copy startup script
-COPY --chown=node:node combined-start.sh /combined-start.sh
-RUN chmod +x /combined-start.sh
+COPY --chown=node:node --chmod=0755 combined-start.sh /combined-start.sh
 
 EXPOSE 3000
 

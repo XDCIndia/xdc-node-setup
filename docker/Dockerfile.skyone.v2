@@ -103,8 +103,8 @@ RUN mkdir -p \
     && chown -R nobody:nobody /var/log/xdc /run/nginx
 
 # Copy XDC binary
-COPY --from=xdc-downloader /download/xdc /app/xdc/xdc
-RUN chmod +x /app/xdc/xdc && ln -sf /app/xdc/xdc /usr/local/bin/xdc
+COPY --chmod=0755 --from=xdc-downloader /download/xdc /app/xdc/xdc
+RUN ln -sf /app/xdc/xdc /usr/local/bin/xdc
 
 # Copy dashboard build (only necessary files)
 COPY --from=dashboard-builder /build/.next/standalone /app/dashboard/
@@ -112,16 +112,17 @@ COPY --from=dashboard-builder /build/public /app/dashboard/public
 COPY --from=dashboard-builder /build/.next/static /app/dashboard/.next/static
 
 # Copy scripts
-COPY docker/skynet-agent.sh /app/agent/skynet-agent.sh
-COPY docker/entrypoint.sh /app/entrypoint.sh
-COPY docker/xdc-start.sh /app/xdc-start.sh
-COPY scripts/lib /app/scripts/lib
+COPY --chmod=0755 docker/skynet-agent.sh /app/agent/skynet-agent.sh
+COPY --chmod=0755 docker/entrypoint.sh /app/entrypoint.sh
+COPY --chmod=0755 docker/xdc-start.sh /app/xdc-start.sh
+COPY --chmod=0755 scripts/lib /app/scripts/lib
 
-RUN chmod +x \
-    /app/agent/skynet-agent.sh \
-    /app/entrypoint.sh \
-    /app/xdc-start.sh \
-    /app/scripts/lib/*.sh 2>/dev/null || true
+# (COPY --chmod=0755 handles the above; healthcheck.sh is generated below)
+# RUN chmod +x \
+#     /app/agent/skynet-agent.sh \
+#     /app/entrypoint.sh \
+#     /app/xdc-start.sh \
+#     /app/scripts/lib/*.sh 2>/dev/null || true
 
 # Generate supervisor config
 RUN cat > /etc/supervisor.d/xdc-skyone.ini << 'SUPERVISOR_EOF'
