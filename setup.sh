@@ -1820,7 +1820,58 @@ start_services() {
     
     # Check status
     if docker_compose ps | grep -q "Up"; then
-        log "Services started successfully"
+        log "Containers started — waiting for node to begin syncing..."
+        
+        # Issue #315: Verify node is actually syncing before declaring success
+        local sync_check_attempts=0
+        local max_attempts=30
+        local is_syncing="unknown"
+        local peer_count=0
+        
+        while [[ $sync_check_attempts -lt $max_attempts ]]; do
+            sleep 2
+            sync_check_attempts=$((sync_check_attempts + 1))
+            
+            # Check if node is syncing
+            local sync_response
+            sync_response=$(curl -s -m 3 -X POST http://127.0.0.1:${RPC_PORT:-9545} \
+                -H "Content-Type: application/json" \
+                -d '{"jsonrpc":"2.0","method":"eth_syncing","params":[],"id":1}' 2>/dev/null || echo '{}')
+            
+            is_syncing=$(echo "$sync_response" | jq -r '.result // "unknown"' 2>/dev/null || echo "unknown")
+            
+            # Check peer count
+            local peer_response
+            peer_response=$(curl -s -m 3 -X POST http://127.0.0.1:${RPC_PORT:-9545} \
+                -H "Content-Type: application/json" \
+                -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' 2>/dev/null || echo '{}')
+            
+            local peer_hex
+            peer_hex=$(echo "$peer_response" | jq -r '.result // "0x0"' 2>/dev/null || echo "0x0")
+            peer_count=$((16#${peer_hex#0x})) 2>/dev/null || peer_count=0
+            
+            # Success conditions: either syncing OR synced with peers
+            if [[ "$is_syncing" != "false" && "$is_syncing" != "unknown" && "$is_syncing" != "null" ]]; then
+                # Node is actively syncing
+                log "Node is syncing (attempt $sync_check_attempts/$max_attempts, peers: $peer_count)"
+                break
+            elif [[ "$is_syncing" == "false" && "$peer_count" -gt 0 ]]; then
+                # Node is synced and has peers
+                log "Node is synced with $peer_count peers"
+                break
+            fi
+            
+            if [[ $((sync_check_attempts % 5)) -eq 0 ]]; then
+                info "Still waiting for node to start syncing... (peers: $peer_count)"
+            fi
+        done
+        
+        if [[ $sync_check_attempts -ge $max_attempts ]]; then
+            warn "Node started but may not be syncing after ${max_attempts} attempts"
+            warn "Peers: $peer_count — check logs with: docker_compose logs"
+        else
+            log "Services started successfully"
+        fi
         
         # Auto-add peers if node has 0 peers after startup
         info "Checking peer connectivity..."
