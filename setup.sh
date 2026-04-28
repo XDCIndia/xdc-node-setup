@@ -34,16 +34,16 @@ detect_docker_environment() {
     docker_bin=$(command -v docker 2>/dev/null || true)
     
     if [[ -n "$docker_bin" && "$docker_bin" == /snap/* ]]; then
-        warn "Snap Docker detected at $docker_bin"
-        warn "Snap sandboxing may prevent compose from finding files in /tmp"
-        info "Workarounds:"
-        info "  1. Install Docker from official repo (not snap): https://docs.docker.com/engine/install/"
-        info "  2. Run setup from a non-snap path like /opt or /var/lib"
-        info "  3. Use sudo snap remove docker && install via apt"
+        echo "WARNING: Snap Docker detected at $docker_bin" >&2
+        echo "WARNING: Snap sandboxing may prevent compose from finding files in /tmp" >&2
+        echo "INFO: Workarounds:" >&2
+        echo "  1. Install Docker from official repo (not snap): https://docs.docker.com/engine/install/" >&2
+        echo "  2. Run setup from a non-snap path like /opt or /var/lib" >&2
+        echo "  3. Use sudo snap remove docker && install via apt" >&2
         
         # Check if we can find a non-snap docker
         if [[ -x /usr/bin/docker ]]; then
-            info "Found non-snap Docker at /usr/bin/docker — will prefer this"
+            echo "INFO: Found non-snap Docker at /usr/bin/docker — will prefer this" >&2
             export DOCKER_BIN="/usr/bin/docker"
         else
             export DOCKER_BIN="$docker_bin"
