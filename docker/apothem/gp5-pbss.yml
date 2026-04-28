@@ -8,7 +8,7 @@ version: '3.8'
 
 services:
   168-gp5-full-pbss-apothem-168:
-    image: anilchinchawale/gp5-xdc:v94-amd64
+    image: anilchinchawale/gp5-xdc:v105-amd64
     platform: linux/amd64
     container_name: 168-gp5-full-pbss-apothem-168
     restart: unless-stopped

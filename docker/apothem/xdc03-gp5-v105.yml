@@ -1,0 +1,73 @@
+version: '3.8'
+
+#==============================================================================
+# XDC Node Docker Compose — GP5 Client v105 (PBSS) on Apothem (Testnet)
+# Second GP5 node on xdc03 for parallel sync testing
+# Path-based state scheme, static/trusted peers
+# XNS naming: xdc03-gp5-v105-apothem-113
+#==============================================================================
+
+services:
+  xdc03-gp5-v105-apothem-113:
+    image: anilchinchawale/gp5-xdc:v105-amd64
+    platform: linux/amd64
+    container_name: xdc03-gp5-v105-apothem-113
+    restart: unless-stopped
+    stop_grace_period: 3m
+    network_mode: host
+    volumes:
+      - /mnt/data/xdc-nodes/apothem/gp5-v105/xdcchain:/work/xdcchain
+      - ./genesis.json:/work/genesis.json:ro
+      - ../geth-pr5/start-gp5.sh:/work/start.sh:ro
+      - ./bootnodes.list:/work/bootnodes.list:ro
+      - /mnt/data/xdc-nodes/apothem/gp5-v105/.pwd:/work/.pwd:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - NETWORK=apothem
+      - NETWORK_ID=51
+      - SYNC_MODE=full
+      - GC_MODE=full
+      - STATE_SCHEME=path
+      - CACHE=4096
+      - MAXPEERS=50
+      - HTTP_PORT=9647
+      - WS_PORT=9648
+      - AUTHRPC_PORT=9652
+      - P2P_PORT=30324
+      - EXTERNAL_IP=167.235.13.113
+      - INSTANCE_NAME=xdc03-gp5-v105-apothem-113
+      - HTTP_API=admin,eth,net,web3,xdpos
+      - ETHSTATS_ENABLED=true
+      - STATS_SECRET=xdc_op...2026
+      - STATS_SERVER=stats.xdcindia.com:443
+      - NO_DISCOVER=false
+      - STATIC_NODES=enode://a0a511bdc939cf15dcff2220234f4b4422e8f9c41565c13a8af9348b691b19168695b205c47dad2f27784188e45a539583f2bd79ca71f14d9000f5b87ac9830f@127.0.0.1:30320,enode://4e5812c5766b68efbf999e4db4372cbe251ff98ea24cb587da0e00f7a3a53a4aa17e8855ca87131aba8ca5f9d1c5d0beda64d734beb9a6032290179fa2dde691@95.217.56.168:30323
+      - TRUSTED_NODES=enode://a0a511bdc939cf15dcff2220234f4b4422e8f9c41565c13a8af9348b691b19168695b205c47dad2f27784188e45a539583f2bd79ca71f14d9000f5b87ac9830f@127.0.0.1:30320,enode://4e5812c5766b68efbf999e4db4372cbe251ff98ea24cb587da0e00f7a3a53a4aa17e8855ca87131aba8ca5f9d1c5d0beda64d734beb9a6032290179fa2dde691@95.217.56.168:30323
+    entrypoint: ["/bin/sh", "/work/start.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9647 --post-data='{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' --header='Content-Type: application/json' | grep -q 'result' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  skyone-xdc03-gp5-v105-apothem-113:
+    image: anilchinchawale/xdc-agent:v2.6
+    container_name: skyone-xdc03-gp5-v105-apothem-113
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      xdc03-gp5-v105-apothem-113:
+        condition: service_healthy
+    volumes:
+      - /mnt/data/xdc-nodes/apothem/gp5-v105/skynet.conf:/etc/xdc-node/skynet.conf:ro
+    environment:
+      - RPC_URL=http://localhost:9647
+      - NETWORK=apothem
+      - NODE_NAME=xdc03-gp5-v105-apothem-113
+      - SKYNET_URL=https://net.xdc.network
