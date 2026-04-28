@@ -38,7 +38,9 @@ detect_docker_environment() {
         echo "WARNING: Snap sandboxing prevents compose from accessing /tmp" >&2
         
         # Abort if running from /tmp with snap Docker
-        if [[ "$PROJECT_ROOT" == /tmp/* ]]; then
+        local script_dir
+        script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        if [[ "$script_dir" == /tmp/* ]]; then
             echo "ERROR: Cannot run XNS from /tmp with snap Docker" >&2
             echo "ERROR: Snap sandbox blocks access to /tmp paths" >&2
             echo "INFO: Solutions:" >&2
