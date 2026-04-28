@@ -35,7 +35,19 @@ detect_docker_environment() {
     
     if [[ -n "$docker_bin" && "$docker_bin" == /snap/* ]]; then
         echo "WARNING: Snap Docker detected at $docker_bin" >&2
-        echo "WARNING: Snap sandboxing may prevent compose from finding files in /tmp" >&2
+        echo "WARNING: Snap sandboxing prevents compose from accessing /tmp" >&2
+        
+        # Abort if running from /tmp with snap Docker
+        if [[ "$PROJECT_ROOT" == /tmp/* ]]; then
+            echo "ERROR: Cannot run XNS from /tmp with snap Docker" >&2
+            echo "ERROR: Snap sandbox blocks access to /tmp paths" >&2
+            echo "INFO: Solutions:" >&2
+            echo "  1. Move to /opt:  cd /opt && bash $0" >&2
+            echo "  2. Move to /var/lib: cd /var/lib && bash $0" >&2
+            echo "  3. Remove snap docker: sudo snap remove docker && install via apt" >&2
+            exit 1
+        fi
+        
         echo "INFO: Workarounds:" >&2
         echo "  1. Install Docker from official repo (not snap): https://docs.docker.com/engine/install/" >&2
         echo "  2. Run setup from a non-snap path like /opt or /var/lib" >&2
