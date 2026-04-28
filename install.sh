@@ -437,6 +437,10 @@ run_setup() {
                 cp -r "$temp_dir/xdc-node-setup/docker" "$temp_dir/docker" 2>/dev/null || true
                 cp -r "$temp_dir/xdc-node-setup/monitoring" "$temp_dir/monitoring" 2>/dev/null || true
                 cp -r "$temp_dir/xdc-node-setup/dashboard" "$temp_dir/dashboard" 2>/dev/null || true
+                cp -r "$temp_dir/xdc-node-setup/apothem" "$temp_dir/apothem" 2>/dev/null || true
+                cp -r "$temp_dir/xdc-node-setup/mainnet" "$temp_dir/mainnet" 2>/dev/null || true
+                cp -r "$temp_dir/xdc-node-setup/testnet" "$temp_dir/testnet" 2>/dev/null || true
+                cp -r "$temp_dir/xdc-node-setup/xns" "$temp_dir/xns" 2>/dev/null || true
                 download_ok=true
                 log "Cloned repository successfully"
             fi
@@ -462,6 +466,10 @@ run_setup() {
     cp -r "$temp_dir/docker" "$INSTALL_TARGET/" 2>/dev/null || true
     cp -r "$temp_dir/monitoring" "$INSTALL_TARGET/" 2>/dev/null || true
     cp -r "$temp_dir/dashboard" "$INSTALL_TARGET/" 2>/dev/null || true
+    cp -r "$temp_dir/apothem" "$INSTALL_TARGET/" 2>/dev/null || true
+    cp -r "$temp_dir/mainnet" "$INSTALL_TARGET/" 2>/dev/null || true
+    cp -r "$temp_dir/testnet" "$INSTALL_TARGET/" 2>/dev/null || true
+    cp -r "$temp_dir/xns" "$INSTALL_TARGET/" 2>/dev/null || true
 
     log "Setup files copied to $INSTALL_TARGET"
 
@@ -480,18 +488,7 @@ run_setup() {
             warn "Cannot install xns to PATH — add $INSTALL_TARGET/cli to your PATH manually"
         fi
     fi
-        if [ -w /usr/local/bin ]; then
-            ln -sf "$INSTALL_TARGET/cli/xdc" /usr/local/bin/xdc
-            log "xdc CLI installed to /usr/local/bin/xdc"
-        elif [ -d "$HOME/.local/bin" ]; then
-            mkdir -p "$HOME/.local/bin"
-            ln -sf "$INSTALL_TARGET/cli/xdc" "$HOME/.local/bin/xdc"
-            log "xdc CLI installed to ~/.local/bin/xdc (add to PATH if needed)"
-        else
-            warn "Could not install xdc CLI to PATH. Run: ln -sf $INSTALL_TARGET/cli/xdc /usr/local/bin/xdc"
-        fi
-    fi
-    
+
     # Cleanup temp directory
     rm -rf "$temp_dir"
     
