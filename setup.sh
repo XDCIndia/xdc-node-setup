@@ -1614,11 +1614,7 @@ start_services() {
     
     # Pull images
     info "Pulling Docker images..."
-    if [[ "${DOCKER_COMPOSE_USE_ARRAY:-false}" == "true" ]]; then
-        docker_compose pull &
-    else
-        "${DOCKER_COMPOSE_BIN}" pull &
-    fi
+    docker_compose pull &
     run_with_spinner "Pulling XDC Docker image..." wait $! || true
     
     # Check for conflicting container names and remove them
