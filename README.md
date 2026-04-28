@@ -39,33 +39,39 @@
 
 ## 🚀 Quick Start
 
-### One-Liner Install (Recommended)
+### One-Command Node Setup (XNS CLI v2.0)
+
+```bash
+# Single command: init spec + render compose + start container
+xns node init --network apothem --client gp5 --name mynode --up
+
+# With snapshot restore (fastest path to sync)
+xns node init --network apothem --client gp5 --name mynode --up \
+  --snapshot https://snapshots.xdcindia.com/apothem-latest.tar.zst
+```
+
+### What happens:
+1. `init` — Creates `mynode.yaml` with XNS-standard ports (30313/8645/8649)
+2. `render` — Generates `docker-compose.mynode.yml` from spec
+3. `up` — Starts container with correct bootnodes, no `--nodiscover`
+4. `health` — Waits 60s, verifies `net.peerCount > 0`
+
+### Fleet Setup (multi-server)
+
+```bash
+# Deploy to entire fleet from config
+xns fleet deploy --config ~/.xns/fleet.yaml
+
+# Rolling update with abort conditions
+xns fleet rolling-update --fleet apothem \
+  --abort-on validators-not-legit,epoch-stuck,state-root-mismatch
+```
+
+### Legacy One-Liner Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/install.sh | sudo bash
 ```
-
-### Manual Installation
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/AnilChinchawale/xdc-node-setup.git
-cd xdc-node-setup
-
-# 2. Run the installer
-sudo ./install.sh
-
-# 3. Start your node
-xdc start
-
-# 4. Check status
-xdc status
-
-# 5. Validate snapshot before starting (optional but recommended)
-xdc snapshot validate --quick
-```
-
-Your node will be running and syncing within 5 minutes.
 
 ---
 
