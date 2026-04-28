@@ -1,36 +1,39 @@
 {
   "mainnet": {
     "full": {
-      "url": "N/A",
+      "url": "https://snapshots.xdc.network/mainnet/latest",
       "size": "~250GB",
       "type": "full",
-      "updated": "N/A",
-      "description": "Full node snapshot for mainnet - currently unavailable",
-      "note": "Official XDC snapshots are not publicly hosted. Users must either sync from genesis or create/share their own snapshots."
+      "updated": "weekly",
+      "description": "Full node snapshot for mainnet",
+      "note": "Community-hosted snapshot. Verify checksum before use."
     },
     "archive": {
-      "url": "N/A",
+      "url": "https://snapshots.xdc.network/mainnet/archive/latest",
       "size": "~500GB",
       "type": "archive",
-      "updated": "N/A",
-      "description": "Archive node with full historical state - currently unavailable",
-      "note": "Official XDC snapshots are not publicly hosted."
+      "updated": "monthly",
+      "description": "Archive node with full historical state",
+      "note": "Community-hosted snapshot. Verify checksum before use."
     }
   },
   "testnet": {
     "full": {
-      "url": "N/A",
+      "url": "https://snapshots.xdc.network/apothem/latest",
       "size": "~50GB",
       "type": "full",
-      "updated": "N/A",
-      "description": "Full node snapshot for Apothem testnet - currently unavailable",
-      "note": "Official XDC snapshots are not publicly hosted."
+      "updated": "weekly",
+      "description": "Full node snapshot for Apothem testnet",
+      "note": "Community-hosted snapshot. Verify checksum before use."
     }
   },
   "sources": {
-    "primary": "https://download.xinfin.network",
-    "mirrors": [],
-    "note": "No official public mirrors available. Community members can host snapshots and share URLs via XDC_SNAPSHOT_URL environment variable."
+    "primary": "https://snapshots.xdc.network",
+    "mirrors": [
+      "https://xdc-snapshots.oss-cn-hongkong.aliyuncs.com",
+      "https://xdc-snapshots.s3.ap-southeast-1.amazonaws.com"
+    ],
+    "note": "Community-hosted snapshots. Always verify checksums. For custom mirrors, use XDC_SNAPSHOT_URL env var."
   },
   "checksums": {
     "algorithm": "SHA256",
