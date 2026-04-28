@@ -68,6 +68,9 @@ func init() {
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(renderCmd)
 	rootCmd.AddCommand(planCmd)
+	rootCmd.AddCommand(nodeCmd)
+	rootCmd.AddCommand(fleetCmd)
+	rootCmd.AddCommand(syncCmd)
 }
 
 func initConfig() {
