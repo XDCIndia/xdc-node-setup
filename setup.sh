@@ -63,6 +63,9 @@ detect_docker_environment() {
 # Run detection early
 detect_docker_environment
 
+#==============================================================================
+# Colors & UI
+#==============================================================================
 # Set OS-specific paths
 # Project root is the directory containing setup.sh (repo root), NOT where it's called from
 readonly PROJECT_ROOT="${SCRIPT_DIR}"
