@@ -24,6 +24,45 @@ if [[ -z "${OS:-}" ]]; then
     readonly OS=$(detect_os)
 fi
 
+#==============================================================================
+# Docker Environment Detection
+#==============================================================================
+# Issue: Snap-installed Docker has sandboxing that prevents access to /tmp
+# and other paths. Detect and warn, or use alternative docker binary.
+detect_docker_environment() {
+    local docker_bin
+    docker_bin=$(command -v docker 2>/dev/null || true)
+    
+    if [[ -n "$docker_bin" && "$docker_bin" == /snap/* ]]; then
+        warn "Snap Docker detected at $docker_bin"
+        warn "Snap sandboxing may prevent compose from finding files in /tmp"
+        info "Workarounds:"
+        info "  1. Install Docker from official repo (not snap): https://docs.docker.com/engine/install/"
+        info "  2. Run setup from a non-snap path like /opt or /var/lib"
+        info "  3. Use sudo snap remove docker && install via apt"
+        
+        # Check if we can find a non-snap docker
+        if [[ -x /usr/bin/docker ]]; then
+            info "Found non-snap Docker at /usr/bin/docker — will prefer this"
+            export DOCKER_BIN="/usr/bin/docker"
+        else
+            export DOCKER_BIN="$docker_bin"
+        fi
+    else
+        export DOCKER_BIN="${docker_bin:-docker}"
+    fi
+    
+    # Also check for docker-compose binary
+    if command -v docker-compose &>/dev/null; then
+        export DOCKER_COMPOSE_BIN="$(command -v docker-compose)"
+    else
+        export DOCKER_COMPOSE_BIN="${DOCKER_BIN} compose"
+    fi
+}
+
+# Run detection early
+detect_docker_environment
+
 # Set OS-specific paths
 # Project root is the directory containing setup.sh (repo root), NOT where it's called from
 readonly PROJECT_ROOT="${SCRIPT_DIR}"
@@ -1570,7 +1609,7 @@ start_services() {
     
     # Pull images
     info "Pulling Docker images..."
-    docker compose pull &
+    ${DOCKER_COMPOSE_BIN} pull &
     run_with_spinner "Pulling XDC Docker image..." wait $! || true
     
     # Check for conflicting container names and remove them
@@ -1683,32 +1722,32 @@ start_services() {
         if [[ ("$NETWORK" == "apothem" || "$NETWORK" == "testnet") ]]; then
             if [[ -f "docker-compose.apothem-full.yml" ]]; then
                 info "Multi-client mode (Apothem): starting all 4 clients from docker-compose.apothem-full.yml..."
-                docker compose -f docker-compose.apothem-full.yml up -d
+                ${DOCKER_COMPOSE_BIN} -f docker-compose.apothem-full.yml up -d
             else
                 warn "docker-compose.apothem-full.yml not found in $(pwd), falling back to individual clients..."
                 # Fall through to individual client startup below
                 docker network create docker_xdc-network 2>/dev/null || true
                 export NETWORK="$NETWORK" NETWORK_ID="$NETWORK_ID" APOTHEM_FLAG="$APOTHEM_FLAG"
                 # Start geth v2.6.8 with apothem
-                docker compose up -d --remove-orphans
+                ${DOCKER_COMPOSE_BIN} up -d --remove-orphans
                 for f in docker-compose.geth-pr5-standalone.yml docker-compose.erigon-standalone.yml docker-compose.nethermind-standalone.yml; do
-                    [[ -f "$f" ]] && docker compose -f "$f" up -d || true
+                    [[ -f "$f" ]] && ${DOCKER_COMPOSE_BIN} -f "$f" up -d || true
                 done
             fi
         else
             # Multi-client: start geth first, then others standalone
             info "Multi-client mode: starting geth + geth-pr5 + erigon + nethermind..."
-            docker compose up -d --remove-orphans
+            ${DOCKER_COMPOSE_BIN} up -d --remove-orphans
             docker network create docker_xdc-network 2>/dev/null || true
             export NETWORK_ID="${NETWORK_ID:-50}" APOTHEM_FLAG="${APOTHEM_FLAG:-}" NETWORK="${NETWORK:-mainnet}"
             if [[ -f "docker-compose.geth-pr5-standalone.yml" ]]; then
-                docker compose -f docker-compose.geth-pr5-standalone.yml up -d || warn "Failed to start Geth PR5"
+                ${DOCKER_COMPOSE_BIN} -f docker-compose.geth-pr5-standalone.yml up -d || warn "Failed to start Geth PR5"
             fi
             if [[ -f "docker-compose.erigon-standalone.yml" ]]; then
-                docker compose -f docker-compose.erigon-standalone.yml up -d || warn "Failed to start Erigon"
+                ${DOCKER_COMPOSE_BIN} -f docker-compose.erigon-standalone.yml up -d || warn "Failed to start Erigon"
             fi
             if [[ -f "docker-compose.nethermind-standalone.yml" ]]; then
-                docker compose -f docker-compose.nethermind-standalone.yml up -d || warn "Failed to start Nethermind"
+                ${DOCKER_COMPOSE_BIN} -f docker-compose.nethermind-standalone.yml up -d || warn "Failed to start Nethermind"
             fi
         fi
     elif [[ "$CLIENT" == "geth-pr5" ]]; then
@@ -1717,9 +1756,9 @@ start_services() {
         export NETWORK_ID="${NETWORK_ID:-50}" APOTHEM_FLAG="${APOTHEM_FLAG:-}"
         export NETWORK="${NETWORK:-mainnet}"
         if [[ -f "docker-compose.geth-pr5-standalone.yml" ]]; then
-            docker compose -f docker-compose.geth-pr5-standalone.yml up -d
+            ${DOCKER_COMPOSE_BIN} -f docker-compose.geth-pr5-standalone.yml up -d
         elif [[ -f "docker-compose.geth-pr5.yml" ]]; then
-            docker compose -f docker-compose.geth-pr5.yml up -d
+            ${DOCKER_COMPOSE_BIN} -f docker-compose.geth-pr5.yml up -d
         else
             # Fallback: run directly from Docker Hub image
             docker run -d --name xdc-node-geth-pr5 \
@@ -1738,26 +1777,26 @@ start_services() {
     elif [[ "$CLIENT" == "erigon" ]]; then
         if [[ -f "docker-compose.erigon-standalone.yml" ]]; then
             docker network create xdc-network 2>/dev/null || true
-            docker compose -f docker-compose.erigon-standalone.yml up -d
+            ${DOCKER_COMPOSE_BIN} -f docker-compose.erigon-standalone.yml up -d
         else
-            docker compose -f docker-compose.yml -f docker-compose.erigon-apothem.yml up -d --remove-orphans
+            ${DOCKER_COMPOSE_BIN} -f docker-compose.yml -f docker-compose.erigon-apothem.yml up -d --remove-orphans
         fi
     elif [[ "$CLIENT" == "nethermind" ]]; then
         if [[ -f "docker-compose.nethermind-standalone.yml" ]]; then
             docker network create xdc-network 2>/dev/null || true
-            docker compose -f docker-compose.nethermind-standalone.yml up -d
+            ${DOCKER_COMPOSE_BIN} -f docker-compose.nethermind-standalone.yml up -d
         else
-            docker compose -f docker-compose.yml -f docker-compose.nethermind.yml up -d --remove-orphans
+            ${DOCKER_COMPOSE_BIN} -f docker-compose.yml -f docker-compose.nethermind.yml up -d --remove-orphans
         fi
     else
-        docker compose up -d --remove-orphans
+        ${DOCKER_COMPOSE_BIN} up -d --remove-orphans
     fi
     
     # Wait for startup
     sleep 5
     
     # Check status
-    if docker compose ps | grep -q "Up"; then
+    if ${DOCKER_COMPOSE_BIN} ps | grep -q "Up"; then
         log "Services started successfully"
         
         # Auto-add peers if node has 0 peers after startup
@@ -1800,7 +1839,7 @@ start_services() {
             log "Connected to $peer_count peers"
         fi
     else
-        warn "Some services may not have started properly. Check logs with: docker compose logs"
+        warn "Some services may not have started properly. Check logs with: ${DOCKER_COMPOSE_BIN} logs"
     fi
 }
 
@@ -1884,7 +1923,7 @@ show_status() {
         echo "  xdc health  - Health check"
     elif [[ "$status" == "installed" ]]; then
         echo -e "${YELLOW}Node is installed but not running.${NC}"
-        echo "Start with: (cd $PROJECT_ROOT/docker && docker compose up -d)"
+        echo "Start with: (cd $PROJECT_ROOT/docker && ${DOCKER_COMPOSE_BIN} up -d)"
     else
         echo -e "${RED}XDC node is not installed.${NC}"
         echo "Run this script to install: $0"
@@ -1907,7 +1946,7 @@ uninstall_node() {
     
     # Stop and remove containers
     if [[ -f "$PROJECT_ROOT/docker/docker-compose.yml" ]]; then
-        (cd "$PROJECT_ROOT/docker" && docker compose down -v 2>/dev/null) || true
+        (cd "$PROJECT_ROOT/docker" && ${DOCKER_COMPOSE_BIN} down -v 2>/dev/null) || true
     fi
     
     # Remove systemd service
@@ -2140,8 +2179,8 @@ EOF
         # Start xdc-monitoring container for heartbeat reporting
         if [[ -f "$PROJECT_ROOT/docker/skynet-agent.sh" ]]; then
             if grep -q "xdc-monitoring:" "$PROJECT_ROOT/docker/docker-compose.yml" 2>/dev/null; then
-                (cd "$PROJECT_ROOT/docker" && docker compose up -d xdc-monitoring 2>/dev/null) || \
-                    warn "Could not start xdc-monitoring container. Start manually with: cd $PROJECT_ROOT/docker && docker compose up -d xdc-monitoring"
+                (cd "$PROJECT_ROOT/docker" && ${DOCKER_COMPOSE_BIN} up -d xdc-monitoring 2>/dev/null) || \
+                    warn "Could not start xdc-monitoring container. Start manually with: cd $PROJECT_ROOT/docker && ${DOCKER_COMPOSE_BIN} up -d xdc-monitoring"
             fi
             
             log "SkyNet agent running as Docker container (heartbeat every 60s)"
