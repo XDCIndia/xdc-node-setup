@@ -20,21 +20,21 @@ CONFIG_FILE="${CONFIG_DIR}/config.yaml"
 
 # Default config
 DEFAULT_CONFIG='---
-# XNS CLI v2.0 Configuration
-version: "2.0.0"
+# XNS CLI v2.1 Configuration
+version: "2.1.0"
 
 # API Endpoints
 skynet_api_url: "https://skynet.xdcindia.com/api/v1"
 stats_url: "https://stats.xdcindia.com"
 
-# Default Images
+# Pinned Image Versions (NOT :latest — reproducible builds)
 images:
-  gp5: "anilchinchawale/gp5-xdc:latest"
+  gp5: "anilchinchawale/gp5-xdc:v2.1.0"
   xdc: "anilchinchawale/xdc:v2.6.8"
-  erigon: "anilchinchawale/erigon-xdc:latest"
-  nethermind: "anilchinchawale/nethermind-xdc:latest"
-  reth: "anilchinchawale/reth-xdc:latest"
-  skyone: "anilchinchawale/xdc-skyone:latest"
+  erigon: "anilchinchawale/erigon-xdc:v1.0.0"
+  nethermind: "anilchinchawale/nethermind-xdc:v1.0.0"
+  reth: "anilchinchawale/reth-xdc:v0.1.0"
+  skyone: "anilchinchawale/xdc-skyone:v1.0.0"
 
 # Network Configuration
 networks:

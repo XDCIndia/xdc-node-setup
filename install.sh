@@ -1,49 +1,23 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #===============================================================================
-# Universal XDC Node Setup Installer
-# Works on Linux (Ubuntu/Debian/CentOS), macOS, and WSL2
-#===============================================================================
-
-# Security Warning (#507): curl|bash MITM protection
-if [ "${SKIP_SECURITY_CHECK:-}" != "1" ]; then
-  echo "WARNING: This script downloads and executes code from the internet."
-  echo "Review the script at https://github.com/AnilChinchawale/xdc-node-setup/blob/main/install.sh"
-  echo "Or run with SKIP_SECURITY_CHECK=1 to bypass this warning."
-  read -p "Continue? [y/N] " -n 1 -r
-  echo
-  [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
-fi
-
-#===============================================================================
-# SECURITY WARNING (#507): This script downloads and executes code from the internet.
-# For your security, you should:
-#   1. Review this script before execution: https://github.com/AnilChinchawale/xdc-node-setup/blob/main/install.sh
-#   2. Use the safer git clone method instead of curl | bash:
-#      git clone https://github.com/AnilChinchawale/xdc-node-setup.git
-#      cd xdc-node-setup && bash setup.sh
-#
-# Safer Usage (recommended):
-#   git clone https://github.com/AnilChinchawale/xdc-node-setup.git
-#   cd xdc-node-setup && bash install.sh --verify
-#
-# Traditional Usage (convenient but less secure):
-#   curl -sSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/install.sh | bash
-#
-# With verification:
-#   curl -sSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/install.sh | bash -s -- --verify
+# XNS (XDC Node Setup) Installer v2.1
+# One-line installer: curl -fsSL https://install.xdc.network | bash
+# Non-interactive by default. Use --interactive for prompts.
+# Fixes: #314 (no prompts), #316 (rollback), #324 (integrity check)
 #===============================================================================
 
 set -euo pipefail
 
-# Script version - used for verification
-readonly INSTALLER_VERSION="1.0.0"
-readonly REPO_URL="https://github.com/AnilChinchawale/xdc-node-setup"
-readonly RAW_URL="https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main"
+readonly INSTALLER_VERSION="2.1.0"
+readonly REPO_URL="https://github.com/XDCIndia/xdc-node-setup"
+readonly RAW_URL="https://raw.githubusercontent.com/XDCIndia/xdc-node-setup/feat/xns-2.0-roadmap"
 
-# Expected SHA256 checksum of the install script (update on each release)
-# SECURITY: This is a self-check mechanism. In production, this should be
-# updated by the CI/CD pipeline for each release.
-readonly EXPECTED_CHECKSUM="${INSTALLER_CHECKSUM:-}"  # Set by CI/CD
+# Expected SHA256 checksum — updated by CI/CD on each release
+readonly EXPECTED_CHECKSUM="${INSTALLER_CHECKSUM:-}"
+
+# Rollback state directory
+readonly ROLLBACK_DIR="${HOME}/.xns-rollback"
+readonly ROLLBACK_MANIFEST="${ROLLBACK_DIR}/manifest.json"
 
 # Colors
 if [[ -t 1 ]]; then
@@ -63,6 +37,79 @@ else
     readonly BOLD=''
     readonly NC=''
 fi
+
+#==============================================================================
+# Logging Functions
+#==============================================================================
+log() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+info() {
+    echo -e "${BLUE}ℹ${NC} $1"
+}
+
+warn() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
+
+error() {
+    echo -e "${RED}✗${NC} $1" >&2
+}
+
+#==============================================================================
+# Rollback System (#316)
+#==============================================================================
+rollback_init() {
+    mkdir -p "$ROLLBACK_DIR"
+    echo '{"actions":[],"timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$ROLLBACK_MANIFEST"
+}
+
+rollback_record() {
+    local action="$1"
+    local detail="$2"
+    local tmp_manifest
+    tmp_manifest=$(mktemp)
+    jq --arg action "$action" --arg detail "$detail" '.actions += [{"action":$action,"detail":$detail,"time":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}]' "$ROLLBACK_MANIFEST" > "$tmp_manifest" 2>/dev/null || true
+    if [[ -f "$tmp_manifest" ]]; then
+        mv "$tmp_manifest" "$ROLLBACK_MANIFEST"
+    fi
+}
+
+rollback_execute() {
+    error "Installation failed. Rolling back changes..."
+    if [[ -f "$ROLLBACK_MANIFEST" ]]; then
+        # Reverse order: last action first
+        local actions
+        actions=$(jq -r '.actions | reverse | .[] | "\(.action)|\(.detail)"' "$ROLLBACK_MANIFEST" 2>/dev/null || true)
+        while IFS='|' read -r action detail; do
+            case "$action" in
+                "docker_install")
+                    info "Rollback: Docker was installed — not removing (system package)"
+                    ;;
+                "user_docker_group")
+                    info "Rollback: Removing user from docker group..."
+                    local user="$detail"
+                    sudo gpasswd -d "$user" docker 2>/dev/null || true
+                    ;;
+                "dir_created")
+                    info "Rollback: Removing created directory $detail..."
+                    rm -rf "$detail"
+                    ;;
+                "file_copied")
+                    info "Rollback: Removing copied file $detail..."
+                    rm -f "$detail"
+                    ;;
+                "symlink_created")
+                    info "Rollback: Removing symlink $detail..."
+                    rm -f "$detail"
+                    ;;
+            esac
+        done <<< "$actions"
+    fi
+    info "Rollback complete. System restored to pre-install state."
+    exit 1
+}
 
 #==============================================================================
 # OS Detection
@@ -85,25 +132,6 @@ detect_os() {
 readonly OS=$(detect_os)
 
 #==============================================================================
-# Logging Functions
-#==============================================================================
-log() {
-    echo -e "${GREEN}✓${NC} $1"
-}
-
-info() {
-    echo -e "${BLUE}ℹ${NC} $1"
-}
-
-warn() {
-    echo -e "${YELLOW}⚠${NC} $1"
-}
-
-error() {
-    echo -e "${RED}✗${NC} $1" >&2
-}
-
-#==============================================================================
 # Banner
 #==============================================================================
 show_banner() {
@@ -119,8 +147,8 @@ show_banner() {
 
 EOF
     echo -e "${NC}"
-    echo -e "${BOLD}Universal XDC Node Installer v${INSTALLER_VERSION}${NC}"
-    echo -e "${BLUE}One-line installer for Linux, macOS, and WSL2${NC}"
+    echo -e "${BOLD}XNS Installer v${INSTALLER_VERSION}${NC}"
+    echo -e "${BLUE}One-line XDC node installer — non-interactive by default${NC}"
     echo ""
 }
 
@@ -131,7 +159,6 @@ check_os_compatibility() {
     case "$OS" in
         linux|wsl2)
             if [[ -f /etc/os-release ]]; then
-                # shellcheck source=/dev/null
                 . /etc/os-release
                 case "$ID" in
                     ubuntu)
@@ -173,7 +200,6 @@ check_os_compatibility() {
         windows)
             error "Windows is not directly supported"
             info "Please use WSL2 with Docker Desktop"
-            info "See: $REPO_URL/blob/main/docs/WINDOWS-SETUP.md"
             return 1
             ;;
         *)
@@ -184,27 +210,25 @@ check_os_compatibility() {
 }
 
 #===============================================================================
-# SECURITY FUNCTIONS (#507): Checksum and Verification
+# SECURITY: Checksum and Verification (#324)
 #===============================================================================
-
-# Verify SHA256 checksum of a file
 verify_checksum() {
     local file="$1"
     local expected_checksum="${2:-$EXPECTED_CHECKSUM}"
-    
+
     if [[ -z "$expected_checksum" ]]; then
-        warn "No expected checksum provided for verification"
-        return 0  # Don't fail if no checksum is set (development mode)
+        warn "No expected checksum provided — skipping verification (dev mode)"
+        return 0
     fi
-    
+
     if ! command -v sha256sum >/dev/null 2>&1; then
         warn "sha256sum not available, skipping checksum verification"
         return 0
     fi
-    
+
     local actual_checksum
     actual_checksum=$(sha256sum "$file" | cut -d' ' -f1)
-    
+
     if [[ "$actual_checksum" == "$expected_checksum" ]]; then
         log "SHA256 checksum verification passed"
         return 0
@@ -222,9 +246,9 @@ download_with_verification() {
     local url="$1"
     local output="$2"
     local verify="${3:-false}"
-    
+
     info "Downloading from $url..."
-    
+
     if command -v curl >/dev/null 2>&1; then
         curl -fsSL "$url" -o "$output" 2>/dev/null
     elif command -v wget >/dev/null 2>&1; then
@@ -233,60 +257,31 @@ download_with_verification() {
         error "Neither curl nor wget available"
         return 1
     fi
-    
+
     if [[ ! -f "$output" ]]; then
         error "Download failed: $url"
         return 1
     fi
-    
-    # If verification is requested, try to fetch and verify checksum
+
     if [[ "$verify" == "true" ]]; then
-        info "Verification requested — checking download integrity..."
-        
-        # Try to fetch checksums file from repo
+        info "Verifying download integrity..."
         local checksums_url="${RAW_URL}/checksums.sha256"
-        local checksums_file=$(mktemp)
-        
+        local checksums_file
+        checksums_file=$(mktemp)
+
         if curl -fsSL "$checksums_url" -o "$checksums_file" 2>/dev/null || \
            wget -q "$checksums_url" -O "$checksums_file" 2>/dev/null; then
-            
-            local filename=$(basename "$output")
-            local expected=$(grep "  $filename$" "$checksums_file" 2>/dev/null | cut -d' ' -f1)
-            
+            local filename
+            filename=$(basename "$output")
+            local expected
+            expected=$(grep "  $filename$" "$checksums_file" 2>/dev/null | cut -d' ' -f1)
             if [[ -n "$expected" ]]; then
                 verify_checksum "$output" "$expected"
-            else
-                warn "No checksum found for $filename in checksums file"
             fi
-        else
-            warn "Could not fetch checksums file for verification"
         fi
-        
         rm -f "$checksums_file"
     fi
-    
     return 0
-}
-
-# Print security banner before installation
-print_security_banner() {
-    echo ""
-    echo -e "${YELLOW}╔════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${YELLOW}║  SECURITY NOTICE                                               ║${NC}"
-    echo -e "${YELLOW}╠════════════════════════════════════════════════════════════════╣${NC}"
-    echo -e "${YELLOW}║  This script will:                                             ║${NC}"
-    echo -e "${YELLOW}║  • Install Docker (if not present)                             ║${NC}"
-    echo -e "${YELLOW}║  • Download XDC node software                                  ║${NC}"
-    echo -e "${YELLOW}║  • Configure your system                                       ║${NC}"
-    echo -e "${YELLOW}║                                                                ║${NC}"
-    echo -e "${YELLOW}║  For security, review the source at:                           ║${NC}"
-    echo -e "${YELLOW}║  https://github.com/AnilChinchawale/xdc-node-setup             ║${NC}"
-    echo -e "${YELLOW}║                                                                ║${NC}"
-    echo -e "${YELLOW}║  Safer alternative:                                            ║${NC}"
-    echo -e "${YELLOW}║  git clone ${REPO_URL}.git              ║${NC}"
-    echo -e "${YELLOW}║  cd xdc-node-setup && bash install.sh                          ║${NC}"
-    echo -e "${YELLOW}╚════════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
 }
 
 #==============================================================================
@@ -294,8 +289,7 @@ print_security_banner() {
 #==============================================================================
 check_prerequisites() {
     info "Checking prerequisites..."
-    
-    # Check architecture
+
     local arch
     arch=$(uname -m)
     case "$arch" in
@@ -303,13 +297,12 @@ check_prerequisites() {
         arm64|aarch64) log "Architecture: ARM64 (Apple Silicon/ARM)" ;;
         *) warn "Architecture $arch may not be fully supported" ;;
     esac
-    
-    # Check for curl or wget
+
     if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
         error "Neither curl nor wget found. Please install one of them."
         return 1
     fi
-    
+
     log "Prerequisites check passed"
 }
 
@@ -318,30 +311,28 @@ check_prerequisites() {
 #==============================================================================
 install_docker_linux() {
     if command -v docker >/dev/null 2>&1; then
-        log "Docker already installed"
-        docker --version
+        log "Docker already installed: $(docker --version)"
         return 0
     fi
-    
+
     info "Installing Docker..."
-    
-    # Install using official Docker script
+
     curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
     sh /tmp/get-docker.sh
     rm /tmp/get-docker.sh
-    
-    # Start Docker
+
     if command -v systemctl >/dev/null 2>&1; then
         sudo systemctl enable docker
         sudo systemctl start docker
     fi
-    
-    # Add user to docker group
+
     if [[ -n "${SUDO_USER:-}" ]]; then
         sudo usermod -aG docker "$SUDO_USER"
+        rollback_record "user_docker_group" "$SUDO_USER"
         warn "Please log out and back in for Docker permissions to take effect"
     fi
-    
+
+    rollback_record "docker_install" "get.docker.com"
     log "Docker installed successfully"
 }
 
@@ -351,19 +342,17 @@ install_docker_macos() {
         docker --version
         return 0
     fi
-    
+
     if [[ -d "/Applications/Docker.app" ]]; then
         warn "Docker Desktop found but not in PATH"
         warn "Please start Docker Desktop from Applications"
         return 1
     fi
-    
-    info "Please install Docker Desktop for Mac:"
+
+    error "Please install Docker Desktop for Mac manually"
     info "  Apple Silicon: https://desktop.docker.com/mac/main/arm64/Docker.dmg"
     info "  Intel Macs:    https://desktop.docker.com/mac/main/amd64/Docker.dmg"
-    info ""
-    info "After installation, re-run this installer."
-    exit 1
+    return 1
 }
 
 install_docker() {
@@ -378,7 +367,7 @@ install_docker() {
 #==============================================================================
 install_dependencies_linux() {
     info "Installing dependencies..."
-    
+
     if command -v apt-get >/dev/null 2>&1; then
         sudo apt-get update -qq
         sudo apt-get install -y -qq curl wget jq git
@@ -397,8 +386,6 @@ install_dependencies_macos() {
         info "Installing Homebrew..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
-    
-    info "Installing dependencies..."
     brew update
     brew install curl wget jq git
 }
@@ -414,20 +401,18 @@ install_dependencies() {
 # Download and Run Setup
 #==============================================================================
 run_setup() {
-    # Check if user is already in the cloned repo
     if [[ -f "setup.sh" ]] && [[ -d "scripts" ]] && grep -q "XDC Node Setup Script" setup.sh 2>/dev/null; then
         log "Running from existing XDC Node Setup repository"
         bash setup.sh "$@"
         return 0
     fi
-    
+
     info "Downloading XDC Node Setup..."
-    
+
     local temp_dir
     temp_dir=$(mktemp -d)
     local download_ok=false
-    
-    # Try downloading setup script via curl/wget first (works for public repos)
+
     if command -v curl >/dev/null 2>&1; then
         if curl -fsSL "${RAW_URL}/setup.sh" -o "$temp_dir/setup.sh" 2>/dev/null; then
             download_ok=true
@@ -437,13 +422,12 @@ run_setup() {
             download_ok=true
         fi
     fi
-    
-    # If download failed (404 / private repo), fall back to git clone
+
     if [ "$download_ok" = false ]; then
-        warn "Direct download failed (repo may be private). Falling back to git clone..."
+        warn "Direct download failed. Falling back to git clone..."
         rm -rf "$temp_dir"
         temp_dir=$(mktemp -d)
-        
+
         if command -v git >/dev/null 2>&1; then
             if git clone --depth 1 "${REPO_URL}.git" "$temp_dir/xdc-node-setup" 2>/dev/null; then
                 cp "$temp_dir/xdc-node-setup/setup.sh" "$temp_dir/setup.sh"
@@ -455,36 +439,22 @@ run_setup() {
                 cp -r "$temp_dir/xdc-node-setup/dashboard" "$temp_dir/dashboard" 2>/dev/null || true
                 download_ok=true
                 log "Cloned repository successfully"
-            else
-                # Try SSH if HTTPS fails
-                if git clone --depth 1 "git@github.com:AnilChinchawale/xdc-node-setup.git" "$temp_dir/xdc-node-setup" 2>/dev/null; then
-                    cp "$temp_dir/xdc-node-setup/setup.sh" "$temp_dir/setup.sh"
-                    cp -r "$temp_dir/xdc-node-setup/scripts" "$temp_dir/scripts" 2>/dev/null || true
-                    cp -r "$temp_dir/xdc-node-setup/configs" "$temp_dir/configs" 2>/dev/null || true
-                    cp -r "$temp_dir/xdc-node-setup/cli" "$temp_dir/cli" 2>/dev/null || true
-                    cp -r "$temp_dir/xdc-node-setup/docker" "$temp_dir/docker" 2>/dev/null || true
-                    cp -r "$temp_dir/xdc-node-setup/monitoring" "$temp_dir/monitoring" 2>/dev/null || true
-                    cp -r "$temp_dir/xdc-node-setup/dashboard" "$temp_dir/dashboard" 2>/dev/null || true
-                    download_ok=true
-                    log "Cloned repository via SSH"
-                fi
             fi
         fi
     fi
-    
+
     if [ "$download_ok" = false ]; then
         error "Failed to download XDC Node Setup. Please clone manually:\n  git clone ${REPO_URL}.git\n  cd xdc-node-setup && bash setup.sh"
         exit 1
     fi
-    
+
     chmod +x "$temp_dir/setup.sh"
-    
-    # Create install directory in user's current working directory
+
     INSTALL_TARGET="${PWD}/xdc-node"
     log "Creating install directory: $INSTALL_TARGET"
     mkdir -p "$INSTALL_TARGET"
-    
-    # Copy all needed files there
+    rollback_record "dir_created" "$INSTALL_TARGET"
+
     cp "$temp_dir/setup.sh" "$INSTALL_TARGET/"
     cp -r "$temp_dir/scripts" "$INSTALL_TARGET/" 2>/dev/null || true
     cp -r "$temp_dir/configs" "$INSTALL_TARGET/" 2>/dev/null || true
@@ -492,12 +462,24 @@ run_setup() {
     cp -r "$temp_dir/docker" "$INSTALL_TARGET/" 2>/dev/null || true
     cp -r "$temp_dir/monitoring" "$INSTALL_TARGET/" 2>/dev/null || true
     cp -r "$temp_dir/dashboard" "$INSTALL_TARGET/" 2>/dev/null || true
-    
+
     log "Setup files copied to $INSTALL_TARGET"
-    
-    # Install xdc CLI to PATH
-    if [ -f "$INSTALL_TARGET/cli/xdc" ]; then
-        chmod +x "$INSTALL_TARGET/cli/xdc"
+
+    # Install xns CLI to PATH
+    if [ -f "$INSTALL_TARGET/cli/xns" ]; then
+        chmod +x "$INSTALL_TARGET/cli/xns"
+        rollback_record "file_copied" "$INSTALL_TARGET/cli/xns"
+
+        # Create symlink in /usr/local/bin
+        local bin_dir="/usr/local/bin"
+        if [[ -w "$bin_dir" ]] || sudo -n true 2>/dev/null; then
+            sudo ln -sf "$INSTALL_TARGET/cli/xns" "$bin_dir/xns" 2>/dev/null || true
+            rollback_record "symlink_created" "$bin_dir/xns"
+            log "xns CLI installed to $bin_dir/xns"
+        else
+            warn "Cannot install xns to PATH — add $INSTALL_TARGET/cli to your PATH manually"
+        fi
+    fi
         if [ -w /usr/local/bin ]; then
             ln -sf "$INSTALL_TARGET/cli/xdc" /usr/local/bin/xdc
             log "xdc CLI installed to /usr/local/bin/xdc"
@@ -516,7 +498,6 @@ run_setup() {
     # Change to install directory and run setup
     cd "$INSTALL_TARGET"
     log "Running setup from $INSTALL_TARGET"
-    
     bash setup.sh "$@"
 }
 
@@ -526,16 +507,14 @@ run_setup() {
 print_post_install() {
     echo ""
     echo -e "${GREEN}=====================================${NC}"
-    echo -e "${GREEN}    XDC Node Setup Complete!${NC}"
+    echo -e "${GREEN}    XNS Setup Complete!${NC}"
     echo -e "${GREEN}=====================================${NC}"
     echo ""
-    
     echo "Useful commands:"
-    echo "  xdc status       — Node status + sync progress"
-    echo "  xdc health       — Health check (score 0-100)"
-    echo "  xdc logs         — View node logs"
-    echo "  xdc attach       — Attach to node console"
-    echo "  xdc help         — Show all commands"
+    echo "  xns status       — Node status + sync progress"
+    echo "  xns logs         — View node logs"
+    echo "  xns down         — Stop node"
+    echo "  xns help         — Show all commands"
     echo ""
     echo "Documentation: $REPO_URL"
     echo ""
@@ -545,56 +524,22 @@ print_post_install() {
 # Main
 #==============================================================================
 main() {
-    # Parse command line arguments
     local verify_checksum_flag=false
-    local verify_gpg_flag=false
+    local interactive_flag=false
     local SETUP_ARGS=()
-    
+
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --yes|-y)
-                SKIP_CONFIRMATION=true
-                shift
-                ;;
-            --dry-run)
-                DRY_RUN=true
+            --interactive)
+                interactive_flag=true
                 shift
                 ;;
             --verify)
                 verify_checksum_flag=true
                 shift
                 ;;
-            --verify-gpg)
-                verify_checksum_flag=true
-                verify_gpg_flag=true
-                shift
-                ;;
-            --all)
-                SETUP_ARGS+=("--client" "all")
-                shift
-                ;;
-            --erigon)
-                SETUP_ARGS+=("--client" "erigon")
-                shift
-                ;;
-            --geth)
-                SETUP_ARGS+=("--client" "stable")
-                shift
-                ;;
-            --nethermind)
-                SETUP_ARGS+=("--client" "nethermind")
-                shift
-                ;;
             --client)
                 SETUP_ARGS+=("--client" "$2")
-                shift 2
-                ;;
-            --email)
-                SETUP_ARGS+=("--email" "$2")
-                shift 2
-                ;;
-            --tg|--telegram)
-                SETUP_ARGS+=("--tg" "$2")
                 shift 2
                 ;;
             --network)
@@ -607,44 +552,31 @@ main() {
                 ;;
             --help|-h)
                 cat << EOF
-XDC Node Setup Installer
+XNS (XDC Node Setup) Installer v${INSTALLER_VERSION}
 
-Usage: curl -sSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/install.sh | bash -s -- [OPTIONS]
+Usage: curl -fsSL https://install.xdc.network | bash
+       curl -fsSL https://install.xdc.network | bash -s -- --interactive
 
 Options:
-  --yes, -y        Skip confirmation prompts (for CI/CD)
-  --dry-run        Show what will be done without executing
-  --verify         Verify SHA256 checksum before execution
-  --verify-gpg     Verify GPG signature (implies --verify)
-  --all            Install all clients (geth + erigon + nethermind)
-  --erigon         Install erigon client only
-  --nethermind     Install nethermind client only
-  --geth           Install geth client only (default)
-  --client CLIENT  Client type: stable, erigon, geth-pr5, nethermind, all
-  --email EMAIL    Email for SkyNet alerts
-  --tg HANDLE      Telegram handle for SkyNet alerts
-  --network NET    Network: mainnet, testnet, devnet (default: mainnet)
-  --help, -h       Show this help message
+  --interactive      Enable interactive prompts (default: non-interactive)
+  --verify           Verify SHA256 checksum before execution
+  --client CLIENT    Client: gp5, v268, erigon, nethermind, reth (default: gp5)
+  --network NET      Network: mainnet, apothem (default: mainnet)
+  --type TYPE        Node type: full, archive, masternode (default: full)
+  --help, -h         Show this help message
 
 Environment Variables:
-  SKIP_CONFIRMATION=true   Same as --yes flag
+  INSTALLER_CHECKSUM=sha256   Verify installer integrity
 
 Examples:
-  # Standard installation (geth)
-  curl -sSL https://.../install.sh | bash
+  # Default: non-interactive, mainnet, gp5 client
+  curl -fsSL https://install.xdc.network | bash
 
-  # Install all clients (geth + erigon)
-  curl -sSL https://.../install.sh | bash -s -- --all
+  # Apothem testnet with interactive prompts
+  curl -fsSL https://install.xdc.network | bash -s -- --interactive --network apothem
 
-  # Install erigon only with alerts
-  curl -sSL https://.../install.sh | bash -s -- --erigon --email you@example.com --tg @username
-
-  # CI/CD (no prompts)
-  curl -sSL https://.../install.sh | bash -s -- --yes --all
-
-Safer alternative:
-  git clone ${REPO_URL}.git
-  cd xdc-node-setup && bash install.sh --all
+  # With verification
+  curl -fsSL https://install.xdc.network | bash -s -- --verify
 
 EOF
                 exit 0
@@ -655,31 +587,16 @@ EOF
                 ;;
         esac
     done
-    
-    # Check environment variable for skip confirmation
-    if [[ "${SKIP_CONFIRMATION:-false}" == "true" ]]; then
-        SKIP_CONFIRMATION=true
-    fi
-    
-    # Handle dry-run mode
-    if [[ "${DRY_RUN:-false}" == "true" ]]; then
-        print_dry_run_summary
-        exit 0
-    fi
-    
-    # If called with --verify or --verify-gpg, verify this script
+
+    # Handle --verify: download and verify, then exit
     if [[ "$verify_checksum_flag" == "true" ]]; then
-        # When piped, we can't verify the running script, so download and verify
-        info "Verification mode - downloading and verifying script..."
+        info "Verification mode — downloading and verifying script..."
         local temp_script
         temp_script=$(mktemp)
         if curl -fsSL "${RAW_URL}/install.sh" -o "$temp_script" 2>/dev/null; then
             if verify_checksum "$temp_script"; then
                 log "Checksum verification passed"
-                if [[ "$verify_gpg_flag" == "true" ]]; then
-                    verify_gpg_signature "$temp_script"
-                fi
-                info "Verification complete. You can now run: bash $temp_script"
+                info "Verification complete. Run: bash $temp_script"
                 exit 0
             else
                 error "Verification failed!"
@@ -692,33 +609,38 @@ EOF
             exit 1
         fi
     fi
-    
+
     show_banner
-    print_security_banner
-    
-    # Print security warning (unless --yes was used)
-    if [[ "${SKIP_CONFIRMATION:-false}" != "true" ]]; then
+
+    # Only show interactive confirmation if --interactive flag is used
+    if [[ "$interactive_flag" == "true" ]]; then
         warn "This script will install Docker (if needed), download XDC node software, and configure your system."
-        warn "Review the source at: https://github.com/AnilChinchawale/xdc-node-setup"
+        info "Review the source at: $REPO_URL"
         echo ""
-        read -rp "Do you want to continue? [y/N]: " confirm
+        read -rp "Continue? [y/N]: " confirm
         if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-            info "Installation cancelled by user"
+            info "Installation cancelled"
             exit 0
         fi
     fi
-    
+
+    # Initialize rollback tracking
+    rollback_init
+
+    # Set trap to call rollback on failure
+    trap 'rollback_execute' ERR
+
     # Check OS compatibility
     if ! check_os_compatibility; then
         exit 1
     fi
-    
+
     # Check prerequisites
     check_prerequisites
-    
+
     # Install Docker
     install_docker
-    
+
     # Verify Docker is running
     if ! docker info >/dev/null 2>&1; then
         error "Docker is installed but not running"
@@ -732,13 +654,16 @@ EOF
         esac
         exit 1
     fi
-    
+
     # Install dependencies
     install_dependencies
-    
+
     # Run setup
     run_setup "${SETUP_ARGS[@]}"
-    
+
+    # Success — clear rollback trap
+    trap - ERR
+
     # Print post-install info
     print_post_install
 }

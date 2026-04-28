@@ -1,15 +1,15 @@
-# XDC Node Setup
+# XDC Node Setup (XNS)
 
 <div align="center">
 
 ![XDC Node Setup](https://img.shields.io/badge/XDC-Node%20Setup-blue?style=for-the-badge&logo=docker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.0.0-blue?style=for-the-badge)](VERSION)
+[![Version](https://img.shields.io/badge/Version-2.1.0-blue?style=for-the-badge)](VERSION)
 [![XDC Network](https://img.shields.io/badge/XDC-Network-brightgreen?style=for-the-badge)](https://xdc.network/)
 
 **Run an XDC Network node with one command — no technical knowledge needed**
 
-[🚀 Quick Start (Non-Technical)](#-quick-start-for-everyone) • [💻 Technical Setup](#-technical-setup) • [Features](#features) • [CLI Reference](#cli-reference) • [Troubleshooting](#troubleshooting)
+[🚀 Quick Start (Non-Technical)](#-quick-start-for-everyone) • [💻 Technical Setup](#-technical-setup) • [CLI Reference](#cli-reference) • [Troubleshooting](#troubleshooting)
 
 </div>
 
@@ -19,9 +19,9 @@
 
 ### What is an XDC Node?
 
-An XDC node is a computer program that helps run the XDC Network — a fast, low-cost blockchain for global trade and finance. By running a node, you help secure the network and earn rewards.
+An **XDC node** is a computer program that helps run the XDC Network — a fast, low-cost blockchain used for global trade and finance. Think of it like running a server that helps keep the network secure and running smoothly.
 
-**You don't need to be a programmer.** If you can copy and paste a command, you can run a node.
+**You don't need to be a programmer.** If you can copy and paste a single command, you can run a node.
 
 ### One Command to Start
 
@@ -38,12 +38,13 @@ That's it. The installer will:
 - ✅ Install Docker (if not already installed)
 - ✅ Download a recent snapshot (fast sync, not days)
 - ✅ Start your node with safe defaults
-- ✅ Verify your node is working before saying "done"
+- ✅ **Verify your node is actually working** before saying "done"
 
 **What you'll see:**
 ```
-🚀 XDC Node Setup
+🚀 XNS Installer v2.1.0
 Checking requirements... ✓
+Installing Docker... ✓
 Downloading snapshot... ████████░░ 80%
 Starting node... ✓
 Waiting for peers... 3 peers connected ✓
@@ -63,6 +64,17 @@ xns status
 
 Shows: sync percentage, peers, disk usage, and whether everything is healthy.
 
+### Common Commands
+
+| Command | What it does |
+|---------|-------------|
+| `xns status` | See if your node is healthy |
+| `xns logs` | View recent logs |
+| `xns logs -f` | Follow logs live |
+| `xns down` | Stop the node |
+| `xns up` | Start the node |
+| `xns restart` | Restart the node |
+
 ### Need Help?
 
 - 💬 [Discord](https://discord.gg/xdc) — ask questions, get help
@@ -80,7 +92,7 @@ Shows: sync percentage, peers, disk usage, and whether everything is healthy.
 git clone https://github.com/XDCIndia/xdc-node-setup.git
 cd xdc-node-setup
 
-# Build XNS CLI v2.0
+# Build XNS CLI
 cd xns && go build -o xns ./cmd/xdccli
 
 # One-command node setup
@@ -118,22 +130,23 @@ See [docs/ADVANCED.md](docs/ADVANCED.md) for full technical documentation.
 
 ## 🚀 Quick Start
 
-### One-Command Node Setup (XNS CLI v2.0)
+### One-Command Node Setup (XNS CLI v2.1)
 
 ```bash
 # Single command: init spec + render compose + start container
-xns node init --network apothem --client gp5 --name mynode --up
+xns init --network apothem --client gp5 --name mynode
+xns up --network apothem --client gp5
 
 # With snapshot restore (fastest path to sync)
-xns node init --network apothem --client gp5 --name mynode --up \
-  --snapshot https://snapshots.xdcindia.com/apothem-latest.tar.zst
+xns snapshot --network apothem --client gp5
+xns up --network apothem --client gp5
 ```
 
 ### What happens:
-1. `init` — Creates `mynode.yaml` with XNS-standard ports (30313/8645/8649)
-2. `render` — Generates `docker-compose.mynode.yml` from spec
-3. `up` — Starts container with correct bootnodes, no `--nodiscover`
-4. `health` — Waits 60s, verifies `net.peerCount > 0`
+1. `init` — Creates docker-compose with XNS-standard ports
+2. `up` — Starts container with correct bootnodes
+3. `wait` — Blocks until `net.peerCount > 0` and blocks are progressing
+4. `health` — Verifies node is actually syncing, not just "running"
 
 ### Fleet Setup (multi-server)
 
@@ -149,7 +162,7 @@ xns fleet rolling-update --fleet apothem \
 ### Legacy One-Liner Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/XDCIndia/xdc-node-setup/feat/xns-2.0-roadmap/install.sh | bash
 ```
 
 ---
@@ -165,10 +178,13 @@ curl -fsSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main
 | 🌐 **Multi-Network** | Mainnet, Testnet (Apothem), Devnet | ✅ |
 | 📡 **SkyNet Integration** | Auto-registers with XDC SkyNet for fleet monitoring | ✅ |
 | 💾 **Fast Sync** | Snapshot download with resume support | ✅ |
-| 🔍 **Snapshot Validation** | Pre-deployment chaindata validation (quick/standard/full) | ✅ |
+| 🔍 **Real Healthcheck** | Verifies peers + sync + block progression | ✅ |
 | 🔄 **Auto-Updates** | Automatic version checks and updates | ✅ |
-| 🛠️ **Powerful CLI** | Single `xdc` command for all operations | ✅ |
+| 🛠️ **Unified CLI** | Single `xns` command for all operations | ✅ |
 | 📱 **Mobile Ready** | Responsive dashboard for mobile monitoring | ✅ |
+| 🛡️ **Non-Interactive** | No prompts by default — safe for CI/CD | ✅ |
+| 📦 **Pinned Images** | Reproducible builds — no `:latest` tags | ✅ |
+| ↩️ **Atomic Rollback** | Failed installs clean up after themselves | ✅ |
 
 ---
 
@@ -197,93 +213,69 @@ curl -fsSL https://raw.githubusercontent.com/AnilChinchawale/xdc-node-setup/main
 ### Mainnet Setup
 
 ```bash
-# Quick start with defaults (XDC Stable client)
-xdc start
+# Quick start with defaults (GP5 client)
+xns init --network mainnet --client gp5
+xns up --network mainnet --client gp5
 
 # With specific client
-xdc start --client stable
+xns init --network mainnet --client v268
+xns up --network mainnet --client v268
 
 # With custom ports
-xdc start --rpc-port 8545 --p2p-port 30303
+xns init --network mainnet --client gp5
+# Edit ~/.xns/compose-mainnet-gp5.yml to change ports
+xns up --network mainnet --client gp5
 ```
 
 ### Apothem Testnet Setup
 
 ```bash
-# Navigate to Apothem directory
-cd docker/apothem
+# One command
+xns init --network apothem --client gp5
+xns up --network apothem --client gp5
 
-# Run setup script (validates genesis, bootnodes, ports)
-./setup.sh
-
-# Or manually with docker-compose
-docker-compose -f docker-compose.apothem-geth.yml up -d
+# With snapshot for fast sync
+xns snapshot --network apothem --client gp5
+xns up --network apothem --client gp5
 ```
 
 **Apothem Testnet Details:**
 - **Network ID:** 51
-- **RPC:** http://localhost:8545
-- **WebSocket:** ws://localhost:8546
+- **RPC:** http://localhost:9645
+- **WebSocket:** ws://localhost:9646
 - **Chain ID:** 51
 - **Genesis:** Matches official XDPoSChain testnet
 
 ### Multi-Client Setup
 
-Run all 4 XDC clients simultaneously using XDCSync infrastructure:
+Run all 4 XDC clients simultaneously:
 
 ```bash
-# 1. Initialize genesis for all clients
-./scripts/init-genesis.sh --network mainnet
+# 1. Initialize each client
+xns init --network mainnet --client gp5 --name gp5-node
+xns init --network mainnet --client erigon --name erigon-node
+xns init --network mainnet --client nethermind --name nm-node
+xns init --network mainnet --client reth --name reth-node
 
-# 2. Start all clients with docker-compose
-docker-compose -f docker-compose.multi-client.yml up -d
+# 2. Start all clients
+xns up --network mainnet --client gp5
+xns up --network mainnet --client erigon
+xns up --network mainnet --client nethermind
+xns up --network mainnet --client reth
 
 # 3. Check status of all clients
-./scripts/skyone-register.sh status
-
-# 4. View logs
-docker-compose -f docker-compose.multi-client.yml logs -f
+xns status --network mainnet --client gp5
+xns status --network mainnet --client erigon
 ```
 
 **Multi-Client Port Allocation:**
 
 | Client | RPC HTTP | RPC WS | P2P | Metrics |
 |--------|----------|--------|-----|---------|
-| GP5 (Geth PR5) | 7070 | 7071 | 30303 | 6070 |
-| Erigon | 7072 | 7073 | 30304 | 6071 |
-| Nethermind | 7074 | 7075 | 30306 | 6072 |
-| Reth | 8588 | 8589 | 40303 | 6073 |
-
-**SkyOne Auto-Registration:**
-All clients automatically register with SkyNet when `SKYNET_ENABLED=true`.
-
-```bash
-# Enable SkyNet monitoring
-export SKYNET_ENABLED=true
-export SKYNET_API_KEY=your-api-key  # Optional
-docker-compose -f docker-compose.multi-client.yml up -d
-```
-
-**Genesis Guard:**
-The start scripts include Genesis Guard to validate chainId on startup:
-- Prevents network mismatch (mainnet vs apothem)
-- Auto-wipes chaindata on network switch (when `GENESIS_GUARD_AUTO_WIPE=true`)
-
-See [docs/TROUBLESHOOTING-MULTI-CLIENT.md](docs/TROUBLESHOOTING-MULTI-CLIENT.md) for common issues.
-
-### Single Client Setup
-
-```bash
-# Start with different clients
-xdc start --client stable      # XDC Stable (v2.6.8)
-xdc start --client geth-pr5    # XDC Geth PR5 (latest)
-xdc start --client erigon      # Erigon-XDC (experimental)
-xdc start --client nethermind  # Nethermind-XDC (beta)
-xdc start --client reth        # Reth-XDC (alpha)
-
-# Check which client is running
-xdc client
-```
+| GP5 (Geth PR5) | 8545 | 8546 | 30303 | 6070 |
+| Erigon | 8547 | 8548 | 30304 | 6071 |
+| Nethermind | 8548 | 8553 | 30304 | 6072 |
+| Reth | 8588 | — | 30306 | 6073 |
 
 ---
 
@@ -306,11 +298,8 @@ By default, RPC is bound to `0.0.0.0` (all interfaces). For production:
 
 ```bash
 # Bind to localhost only (secure)
-export RPC_BIND=127.0.0.1
-xdc start
-
-# Or use nginx reverse proxy with SSL
-# See docs/SSL_SETUP.md
+# Edit ~/.xns/config.yaml to set bind_address: 127.0.0.1
+xns restart
 ```
 
 ---
@@ -320,46 +309,51 @@ xdc start
 ### Core Commands
 
 ```bash
-# Start node
-xdc start [--client <name>] [--network <mainnet|apothem>]
+# Initialize node configuration
+xns init --network mainnet --client gp5 --name mynode
+
+# Start node (waits until healthy)
+xns up [--network mainnet] [--client gp5]
 
 # Stop node
-xdc stop
+xns down [--network mainnet] [--client gp5]
 
 # Restart node
-xdc restart
+xns restart [--network mainnet] [--client gp5]
 
 # Check status
-xdc status
+xns status [--network mainnet] [--client gp5]
 
 # View logs
-xdc logs [--follow] [--client <name>]
+xns logs [--network mainnet] [--client gp5] [-f|--follow]
 
-# Update to latest version
-xdc update
+# Run healthcheck
+xns health [--network mainnet] [--client gp5]
 
-# Check version
-xdc version
+# Wait until node is ready
+xns wait [--network mainnet] [--client gp5] [--timeout 300]
+
+# Download snapshot
+xns snapshot --network mainnet --client gp5
+
+# Show config
+xns config
+
+# Show version
+xns version
+
+# Show help
+xns help
 ```
 
-### Advanced Commands
+### Global Options
 
-```bash
-# Backup node data
-xdc backup
-
-# Restore from backup
-xdc restore <backup-file>
-
-# Reset node (dangerous - wipes data)
-xdc reset
-
-# Enter node shell
-xdc shell
-
-# Run diagnostic checks
-xdc doctor
-```
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--network` | Network to use | `mainnet` |
+| `--client` | Client to use | `gp5` |
+| `--name` | Container name | `xns-node` |
+| `--timeout` | Timeout for wait command | `300` |
 
 ---
 
@@ -388,7 +382,7 @@ Automatically register your node with XDC SkyNet for fleet monitoring:
 # Enable SkyNet (enabled by default)
 export SKYNET_ENABLED=true
 export SKYNET_URL=https://skynet.xdcindia.com
-xdc start
+xns up
 ```
 
 ---
@@ -397,11 +391,11 @@ xdc start
 
 | Client | Version | Status | RPC Port | P2P Port |
 |--------|---------|--------|----------|----------|
+| **GP5 (Geth PR5)** | v2.1.0 | Production | 8545 | 30303 |
 | **XDC Stable** | v2.6.8 | Production | 8545 | 30303 |
-| **XDC Geth PR5** | Latest | Testing | 8545 | 30303 |
-| **Erigon-XDC** | Latest | Experimental | 8547 | 30304 |
-| **Nethermind-XDC** | Latest | Beta | 8558 | 30306 |
-| **Reth-XDC** | Latest | Alpha | 7073 | 40303 |
+| **Erigon-XDC** | v1.0.0 | Experimental | 8547 | 30304 |
+| **Nethermind-XDC** | v1.0.0 | Beta | 8558 | 30306 |
+| **Reth-XDC** | v0.1.0 | Alpha | 8588 | 30306 |
 
 See [docs/CLIENTS.md](docs/CLIENTS.md) for detailed client comparison.
 
@@ -426,15 +420,17 @@ See [deploy/](deploy/) directory for templates.
 
 ```bash
 # Check logs
-xdc logs --follow
+xns logs -f
 
 # Check peer count
-curl -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}'
+xns status
 
-# Restart with verbose logging
-xdc restart --verbose
+# Check health
+xns health
+
+# Restart with fresh config
+xns down
+xns up
 ```
 
 ### Port Conflicts
@@ -445,10 +441,21 @@ sudo lsof -i :8545
 sudo lsof -i :30303
 
 # Kill conflicting process or change ports
-xdc stop
-export RPC_PORT=8546
-export P2P_PORT=30304
-xdc start
+xns down
+# Edit ~/.xns/compose-mainnet-gp5.yml to change ports
+xns up
+```
+
+### No Peers Connected
+
+```bash
+# Check bootnodes are configured
+xns config | grep bootnodes
+
+# Manually add a peer (if needed)
+curl -X POST http://localhost:8545 \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"admin_addPeer","params":["enode://..."],"id":1}'
 ```
 
 See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more.
@@ -464,6 +471,9 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more.
 - ✅ fail2ban intrusion prevention
 - ✅ Docker security hardening
 - ✅ Automatic security updates
+- ✅ Non-interactive install (no prompts to accidentally skip)
+- ✅ Checksum verification for downloads
+- ✅ Atomic rollback on failure
 
 ### Production Hardening
 

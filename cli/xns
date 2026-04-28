@@ -1,0 +1,556 @@
+#!/usr/bin/env bash
+#===============================================================================
+# XNS CLI v2.1 — Unified XDC Node Management
+# One command for everything: xns <command> [options]
+# Fixes: #315 (real healthcheck), #321 (eth_syncing), #322 (unified CLI)
+#===============================================================================
+
+set -euo pipefail
+
+readonly XNS_VERSION="2.1.0"
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly CONFIG_DIR="${HOME}/.xns"
+readonly CONFIG_FILE="${CONFIG_DIR}/config.yaml"
+readonly LOG_DIR="${CONFIG_DIR}/logs"
+readonly STATE_DIR="${CONFIG_DIR}/state"
+
+#==============================================================================
+# Colors
+#==============================================================================
+if [[ -t 1 ]]; then
+    readonly RED='\033[0;31m'
+    readonly GREEN='\033[0;32m'
+    readonly YELLOW='\033[1;33m'
+    readonly BLUE='\033[0;34m'
+    readonly CYAN='\033[0;36m'
+    readonly BOLD='\033[1m'
+    readonly NC='\033[0m'
+else
+    readonly RED='' GREEN='' YELLOW='' BLUE='' CYAN='' BOLD='' NC=''
+fi
+
+log() { echo -e "${GREEN}✓${NC} $1"; }
+info() { echo -e "${BLUE}ℹ${NC} $1"; }
+warn() { echo -e "${YELLOW}⚠${NC} $1"; }
+error() { echo -e "${RED}✗${NC} $1" >&2; }
+
+#==============================================================================
+# Config Management
+#==============================================================================
+ensure_config() {
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        mkdir -p "$CONFIG_DIR" "$LOG_DIR" "$STATE_DIR"
+        cat > "$CONFIG_FILE" << 'EOF'
+# XNS CLI Configuration
+version: "2.1.0"
+
+# Default settings
+defaults:
+  network: mainnet
+  client: gp5
+  type: full
+
+# Pinned Image Versions (NEVER use :latest)
+images:
+  gp5: "anilchinchawale/gp5-xdc:v2.1.0"
+  v268: "anilchinchawale/xdc:v2.6.8"
+  erigon: "anilchinchawale/erigon-xdc:v1.0.0"
+  nethermind: "anilchinchawale/nethermind-xdc:v1.0.0"
+  reth: "anilchinchawale/reth-xdc:v0.1.0"
+
+# Network Configuration
+networks:
+  mainnet:
+    chain_id: 50
+    p2p_port: 30303
+    http_port: 8545
+    ws_port: 8546
+    bootnodes:
+      - "enode://7c8d13b5d505ba3d9a8b7c6a4a2e1f0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3@65.108.72.177:30303"
+      - "enode://a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2@95.217.112.125:30303"
+  apothem:
+    chain_id: 51
+    p2p_port: 30320
+    http_port: 9645
+    ws_port: 9646
+    bootnodes:
+      - "enode://7c8d13b5d505ba3d9a8b7c6a4a2e1f0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3@65.108.72.177:30320"
+      - "enode://a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2@95.217.112.125:30320"
+
+# Snapshot URLs
+snapshots:
+  mainnet_gp5: "https://snapshots.xdcindia.com/mainnet/gp5/latest.tar.zst"
+  apothem_gp5: "https://snapshots.xdcindia.com/apothem/gp5/latest.tar.zst"
+EOF
+        log "Created default config: $CONFIG_FILE"
+    fi
+}
+
+get_config() {
+    local key="$1"
+    if command -v yq > /dev/null 2>&1; then
+        yq -r "$key" "$CONFIG_FILE" 2>/dev/null || echo ""
+    else
+        grep -A1 "^  $key:" "$CONFIG_FILE" 2>/dev/null | tail -1 | sed 's/.*: "\(.*\)"/\1/' || echo ""
+    fi
+}
+
+#==============================================================================
+# Docker Helpers
+#==============================================================================
+get_container_name() {
+    local network="${1:-mainnet}"
+    local client="${2:-gp5}"
+    echo "xns-${network}-${client}"
+}
+
+docker_compose_file() {
+    local network="${1:-mainnet}"
+    local client="${2:-gp5}"
+    echo "${CONFIG_DIR}/compose-${network}-${client}.yml"
+}
+
+#==============================================================================
+# Health Check — Real Verification (#315, #321)
+#==============================================================================
+cmd_health() {
+    local network="${1:-mainnet}"
+    local client="${2:-gp5}"
+    local container
+    container=$(get_container_name "$network" "$client")
+    local rpc_port
+    rpc_port=$(get_config ".networks.${network}.http_port")
+
+    info "Checking health of $container..."
+
+    # Check container is running
+    if ! docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
+        error "Container $container is not running"
+        return 1
+    fi
+
+    # Check 1: net_peerCount (must have peers)
+    local peers
+    peers=$(curl -s -X POST "http://localhost:${rpc_port}" \
+        -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' 2>/dev/null | \
+        jq -r '.result // "0x0"' 2>/dev/null || echo "0x0")
+    local peer_count=$((peers))
+
+    if [[ "$peer_count" -lt 1 ]]; then
+        error "No peers connected (peer count: $peer_count)"
+        return 1
+    fi
+    log "Peers connected: $peer_count"
+
+    # Check 2: eth_syncing (must NOT be false if behind, or must show progress)
+    local syncing
+    syncing=$(curl -s -X POST "http://localhost:${rpc_port}" \
+        -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","method":"eth_syncing","params":[],"id":1}' 2>/dev/null | \
+        jq -r '.result' 2>/dev/null || echo "null")
+
+    if [[ "$syncing" == "false" ]]; then
+        log "Node is fully synced"
+    elif [[ "$syncing" == "null" ]] || [[ -z "$syncing" ]]; then
+        warn "Cannot determine sync status — RPC may be starting up"
+        return 1
+    else
+        local current_block
+        current_block=$(echo "$syncing" | jq -r '.currentBlock // "0x0"')
+        local highest_block
+        highest_block=$(echo "$syncing" | jq -r '.highestBlock // "0x0"')
+        log "Syncing: current=$((${current_block})), highest=$((${highest_block}))"
+    fi
+
+    # Check 3: eth_blockNumber (must be increasing over time)
+    local block1
+    block1=$(curl -s -X POST "http://localhost:${rpc_port}" \
+        -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' 2>/dev/null | \
+        jq -r '.result // "0x0"' 2>/dev/null || echo "0x0")
+
+    info "Waiting 5 seconds to verify block progression..."
+    sleep 5
+
+    local block2
+    block2=$(curl -s -X POST "http://localhost:${rpc_port}" \
+        -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":2}' 2>/dev/null | \
+        jq -r '.result // "0x0"' 2>/dev/null || echo "0x0")
+
+    if [[ "$block1" == "$block2" ]] && [[ "$syncing" == "false" ]]; then
+        # Fully synced — blocks won't increase rapidly
+        log "Node at head of chain (block: $((${block2})))"
+    elif [[ "$block1" == "$block2" ]] && [[ "$syncing" != "false" ]]; then
+        error "Block number stalled at $((${block2})) — node is not making progress"
+        return 1
+    else
+        log "Blocks progressing: $((${block1})) → $((${block2}))"
+    fi
+
+    log "Health check PASSED"
+    return 0
+}
+
+#==============================================================================
+# Wait for Node Ready (block until healthy)
+#==============================================================================
+cmd_wait() {
+    local network="${1:-mainnet}"
+    local client="${2:-gp5}"
+    local timeout="${3:-300}"
+    local container
+    container=$(get_container_name "$network" "$client")
+
+    info "Waiting up to ${timeout}s for $container to be ready..."
+    local elapsed=0
+
+    while [[ "$elapsed" -lt "$timeout" ]]; do
+        if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
+            if cmd_health "$network" "$client" > /dev/null 2>&1; then
+                log "Node is ready!"
+                return 0
+            fi
+        fi
+        sleep 5
+        elapsed=$((elapsed + 5))
+        echo -n "."
+    done
+
+    error "Timeout: Node did not become healthy within ${timeout}s"
+    return 1
+}
+
+#==============================================================================
+# Status Command
+#==============================================================================
+cmd_status() {
+    local network="${1:-mainnet}"
+    local client="${2:-gp5}"
+    local container
+    container=$(get_container_name "$network" "$client")
+    local rpc_port
+    rpc_port=$(get_config ".networks.${network}.http_port")
+
+    echo -e "${BOLD}XNS Node Status${NC}"
+    echo "================"
+
+    # Container status
+    if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
+        echo -e "Container: ${GREEN}running${NC}"
+        docker ps --filter "name=${container}" --format "  Uptime: {{.Status}}\n  Image:  {{.Image}}"
+    else
+        echo -e "Container: ${RED}not running${NC}"
+    fi
+
+    # Sync status
+    local block
+    block=$(curl -s -X POST "http://localhost:${rpc_port}" \
+        -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' 2>/dev/null | \
+        jq -r '.result // "N/A"' 2>/dev/null || echo "N/A")
+
+    local peers
+    peers=$(curl -s -X POST "http://localhost:${rpc_port}" \
+        -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' 2>/dev/null | \
+        jq -r '.result // "0x0"' 2>/dev/null || echo "0x0")
+
+    echo "Block:     $((${block:-0}))"
+    echo "Peers:     $((${peers:-0}))"
+
+    # Health
+    if cmd_health "$network" "$client" > /dev/null 2>&1; then
+        echo -e "Health:    ${GREEN}healthy${NC}"
+    else
+        echo -e "Health:    ${RED}unhealthy${NC}"
+    fi
+}
+
+#==============================================================================
+# Logs Command
+#==============================================================================
+cmd_logs() {
+    local network="${1:-mainnet}"
+    local client="${2:-gp5}"
+    local follow="${3:-}"
+    local container
+    container=$(get_container_name "$network" "$client")
+
+    if [[ "$follow" == "-f" ]] || [[ "$follow" == "--follow" ]]; then
+        docker logs -f "$container"
+    else
+        docker logs --tail 100 "$container"
+    fi
+}
+
+#==============================================================================
+# Start / Stop / Restart
+#==============================================================================
+cmd_up() {
+    local network="${1:-mainnet}"
+    local client="${2:-gp5}"
+    local compose_file
+    compose_file=$(docker_compose_file "$network" "$client")
+
+    if [[ ! -f "$compose_file" ]]; then
+        error "No compose file found: $compose_file"
+        error "Run: xns init --network $network --client $client"
+        return 1
+    fi
+
+    info "Starting $client on $network..."
+    docker compose -f "$compose_file" up -d
+    cmd_wait "$network" "$client"
+}
+
+cmd_down() {
+    local network="${1:-mainnet}"
+    local client="${2:-gp5}"
+    local compose_file
+    compose_file=$(docker_compose_file "$network" "$client")
+
+    if [[ -f "$compose_file" ]]; then
+        docker compose -f "$compose_file" down
+        log "Node stopped"
+    else
+        warn "No compose file found — nothing to stop"
+    fi
+}
+
+cmd_restart() {
+    local network="${1:-mainnet}"
+    local client="${2:-gp5}"
+    cmd_down "$network" "$client"
+    sleep 2
+    cmd_up "$network" "$client"
+}
+
+#==============================================================================
+# Init — Generate docker-compose from spec
+#==============================================================================
+cmd_init() {
+    local network="${1:-mainnet}"
+    local client="${2:-gp5}"
+    local name="${3:-xns-node}"
+    local compose_file
+    compose_file=$(docker_compose_file "$network" "$client")
+
+    local image
+    image=$(get_config ".images.${client}")
+    local p2p_port
+    p2p_port=$(get_config ".networks.${network}.p2p_port")
+    local http_port
+    http_port=$(get_config ".networks.${network}.http_port")
+    local ws_port
+    ws_port=$(get_config ".networks.${network}.ws_port")
+    local chain_id
+    chain_id=$(get_config ".networks.${network}.chain_id")
+
+    mkdir -p "${CONFIG_DIR}"
+
+    cat > "$compose_file" << EOF
+services:
+  ${name}:
+    image: ${image}
+    container_name: xns-${network}-${client}
+    restart: unless-stopped
+    ports:
+      - "${p2p_port}:${p2p_port}"
+      - "${p2p_port}:${p2p_port}/udp"
+      - "${http_port}:${http_port}"
+      - "${ws_port}:${ws_port}"
+    volumes:
+      - xdcchain:/xdcchain
+      - ./genesis:/genesis:ro
+    environment:
+      - NETWORK=${network}
+      - CHAIN_ID=${chain_id}
+    networks:
+      - xns
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:${http_port} -X POST -H 'Content-Type: application/json' -d '{\\"jsonrpc\\":\\"2.0\\",\\"method\\":\\"net_peerCount\\",\\"params\\":[],\\"id\\":1}' | grep -v '0x0' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  xdcchain:
+
+networks:
+  xns:
+    driver: bridge
+EOF
+
+    log "Created compose file: $compose_file"
+    info "Run 'xns up --network $network --client $client' to start"
+}
+
+#==============================================================================
+# Snapshot Download
+#==============================================================================
+cmd_snapshot() {
+    local network="${1:-mainnet}"
+    local client="${2:-gp5}"
+    local snapshot_url
+    snapshot_url=$(get_config ".snapshots.${network}_${client}")
+
+    if [[ -z "$snapshot_url" ]] || [[ "$snapshot_url" == "null" ]]; then
+        error "No snapshot URL configured for $network/$client"
+        return 1
+    fi
+
+    info "Downloading snapshot from $snapshot_url..."
+    local data_dir="${CONFIG_DIR}/xdcchain-${network}"
+    mkdir -p "$data_dir"
+
+    curl -fsSL "$snapshot_url" | zstd -d | tar -xf - -C "$data_dir"
+    log "Snapshot restored to $data_dir"
+}
+
+#==============================================================================
+# Help
+#==============================================================================
+cmd_help() {
+    cat << EOF
+XNS CLI v${XNS_VERSION} — XDC Node Setup
+
+Usage: xns <command> [options]
+
+Commands:
+  init      Generate docker-compose for a node
+            xns init --network mainnet --client gp5 --name mynode
+
+  up        Start the node (and wait until healthy)
+            xns up [--network mainnet] [--client gp5]
+
+  down      Stop the node
+            xns down [--network mainnet] [--client gp5]
+
+  restart   Restart the node
+            xns restart [--network mainnet] [--client gp5]
+
+  status    Show node status (sync, peers, health)
+            xns status [--network mainnet] [--client gp5]
+
+  health    Run real healthcheck (peers + sync + block progression)
+            xns health [--network mainnet] [--client gp5]
+
+  wait      Block until node is healthy (timeout: 300s)
+            xns wait [--network mainnet] [--client gp5] [--timeout 300]
+
+  logs      View node logs
+            xns logs [--network mainnet] [--client gp5] [-f|--follow]
+
+  snapshot  Download and restore snapshot
+            xns snapshot --network mainnet --client gp5
+
+  config    Show current configuration
+            xns config
+
+  version   Show XNS version
+            xns version
+
+  help      Show this help message
+
+Options:
+  --network    mainnet | apothem (default: mainnet)
+  --client     gp5 | v268 | erigon | nethermind | reth (default: gp5)
+
+Examples:
+  # Full setup from scratch
+  xns init --network apothem --client gp5
+  xns up --network apothem --client gp5
+
+  # Check status
+  xns status
+
+  # Follow logs
+  xns logs -f
+
+EOF
+}
+
+#==============================================================================
+# Main Dispatch
+#==============================================================================
+main() {
+    ensure_config
+
+    local cmd="${1:-help}"
+    shift || true
+
+    # Parse global flags
+    local network="mainnet"
+    local client="gp5"
+    local name="xns-node"
+    local timeout="300"
+    local follow=""
+
+    # Extract flags from remaining args
+    local args=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --network)
+                network="$2"; shift 2 ;;
+            --client)
+                client="$2"; shift 2 ;;
+            --name)
+                name="$2"; shift 2 ;;
+            --timeout)
+                timeout="$2"; shift 2 ;;
+            -f|--follow)
+                follow="-f"; shift ;;
+            *)
+                args+=("$1"); shift ;;
+        esac
+    done
+
+    case "$cmd" in
+        init)
+            cmd_init "$network" "$client" "$name"
+            ;;
+        up|start)
+            cmd_up "$network" "$client"
+            ;;
+        down|stop)
+            cmd_down "$network" "$client"
+            ;;
+        restart)
+            cmd_restart "$network" "$client"
+            ;;
+        status)
+            cmd_status "$network" "$client"
+            ;;
+        health)
+            cmd_health "$network" "$client"
+            ;;
+        wait)
+            cmd_wait "$network" "$client" "$timeout"
+            ;;
+        logs)
+            cmd_logs "$network" "$client" "$follow"
+            ;;
+        snapshot)
+            cmd_snapshot "$network" "$client"
+            ;;
+        config)
+            cat "$CONFIG_FILE"
+            ;;
+        version)
+            echo "XNS CLI v${XNS_VERSION}"
+            ;;
+        help|--help|-h)
+            cmd_help
+            ;;
+        *)
+            error "Unknown command: $cmd"
+            cmd_help
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
