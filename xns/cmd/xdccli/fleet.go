@@ -15,17 +15,21 @@ var fleetCmd = &cobra.Command{
 
 var fleetStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show fleet status across all servers",
+	Short: "Show fleet status across all servers [STUB: SSH aggregation not yet implemented]",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fleet, _ := cmd.Flags().GetString("fleet")
 		fmt.Printf("Fleet status: %s\n", fleet)
-		fmt.Println("Server          | Client | Status | Block    | Peers")
-		fmt.Println("----------------|--------|--------|----------|-------")
-		// TODO: SSH to each server and collect status
-		fmt.Println("xdc01.apothem   | gp5    | 🟢     | 56,831,200 | 25")
-		fmt.Println("xdc02.apothem   | gp5    | 🟢     | 56,831,198 | 23")
-		fmt.Println("xdc03.apothem   | erigon | 🟡     | 56,830,293 | 12  ⚠️ STUCK")
-		fmt.Println("xdc04.apothem   | gp5    | 🟢     | 56,831,201 | 28")
+		fmt.Println()
+		fmt.Println("⚠️  Fleet status requires SSH-based aggregation (Phase 2).")
+		fmt.Println("   Use --dry-run to see planned fleet layout.")
+		fmt.Println()
+		fmt.Println("Example output (mock):")
+		fmt.Println("  Server          | Client | Status | Block      | Peers")
+		fmt.Println("  ----------------|--------|--------|------------|-------")
+		fmt.Println("  xdc01.apothem   | gp5    | 🟢     | 56,831,200 | 25")
+		fmt.Println("  xdc02.apothem   | gp5    | 🟢     | 56,831,198 | 23")
+		fmt.Println("  xdc03.apothem   | erigon | 🟡     | 56,830,293 | 12  ⚠️ STUCK")
+		fmt.Println("  xdc04.apothem   | gp5    | 🟢     | 56,831,201 | 28")
 		return nil
 	},
 }

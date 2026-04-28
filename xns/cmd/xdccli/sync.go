@@ -76,12 +76,13 @@ var syncCompareCmd = &cobra.Command{
 		fmt.Printf("Comparing %s vs %s (interval: %v)\n", primary, canary, interval)
 
 		for {
-			primaryBlock, _ := rpcCallInt(primary, "eth_blockNumber")
-			canaryBlock, _ := rpcCallInt(canary, "eth_blockNumber")
-		primaryHash, _ := rpcCallString(primary, "eth_getBlockByNumber", fmt.Sprintf("0x%x", primaryBlock), false)
-		canaryHash, _ := rpcCallString(canary, "eth_getBlockByNumber", fmt.Sprintf("0x%x", canaryBlock), false)
-		_ = primaryHash
-		_ = canaryHash
+			primaryBlock, err1 := rpcCallInt(primary, "eth_blockNumber")
+			canaryBlock, err2 := rpcCallInt(canary, "eth_blockNumber")
+			if err1 != nil || err2 != nil {
+				fmt.Printf("  RPC error: primary=%v canary=%v\n", err1, err2)
+				time.Sleep(interval)
+				continue
+			}
 
 			diff := primaryBlock - canaryBlock
 			if diff < 0 {
@@ -155,9 +156,17 @@ func rpcCallBool(url, method string, params ...interface{}) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	// syncing returns object or false
-	_, ok := result.(bool)
-	return !ok, nil // if it's an object, we're syncing
+	// #4 FIX: explicit type switch for eth_syncing
+	switch v := result.(type) {
+	case bool:
+		return !v, nil // false = synced, true = syncing (rare)
+	case map[string]interface{}:
+		return true, nil // object = syncing
+	case nil:
+		return false, nil // null = synced
+	default:
+		return false, fmt.Errorf("unexpected type for %s: %T", method, result)
+	}
 }
 
 func rpcCallString(url, method string, params ...interface{}) (string, error) {

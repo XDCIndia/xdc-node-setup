@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 	"xns/pkg/render"
 	"xns/pkg/spec"
 )
@@ -192,7 +193,9 @@ var nodeRestoreCmd = &cobra.Command{
 
 		fmt.Printf("Extracting to %s...\n", datadir)
 		os.MkdirAll(datadir, 0755)
-		extract := exec.Command("tar", "--use-compress-program=zstd -d", "-xf", snapshotFile, "-C", datadir)
+		// #1 FIX: Use unzstd as the decompressor program (tar --use-compress-program
+		// takes a single program name, not 'program args').
+		extract := exec.Command("tar", "--use-compress-program=unzstd", "-xf", snapshotFile, "-C", datadir)
 		extract.Stdout = os.Stdout
 		extract.Stderr = os.Stderr
 		if err := extract.Run(); err != nil {
@@ -249,16 +252,16 @@ func writeSpecYAML(path string, s spec.NodeSpec) error {
 }
 
 func readSpecYAML(path string) (*spec.NodeSpec, error) {
-	// Stub: in production use yaml.Unmarshal
-	// For now, return a minimal spec
-	return &spec.NodeSpec{
-		Name:    "default",
-		Network: spec.Apothem,
-		Client:  spec.GP5,
-		Role:    spec.Fullnode,
-		Image:   "xdcindia/gp5-xdc:latest",
-		Datadir: "/data",
-	}, nil
+	// #2 FIX: Real YAML unmarshalling via gopkg.in/yaml.v3
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read spec: %w", err)
+	}
+	var s spec.NodeSpec
+	if err := yaml.Unmarshal(data, &s); err != nil {
+		return nil, fmt.Errorf("parse spec: %w", err)
+	}
+	return &s, nil
 }
 
 func init() {
