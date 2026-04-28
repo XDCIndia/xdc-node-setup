@@ -7,11 +7,90 @@
 [![Version](https://img.shields.io/badge/Version-2.0.0-blue?style=for-the-badge)](VERSION)
 [![XDC Network](https://img.shields.io/badge/XDC-Network-brightgreen?style=for-the-badge)](https://xdc.network/)
 
-**Production-ready XDC Network node deployment in minutes**
+**Run an XDC Network node with one command — no technical knowledge needed**
 
-[Quick Start](#quick-start) • [Features](#features) • [Setup Guide](#setup-guide) • [CLI Reference](#cli-reference) • [Documentation](#documentation) • [Troubleshooting](#troubleshooting)
+[🚀 Quick Start (Non-Technical)](#-quick-start-for-everyone) • [💻 Technical Setup](#-technical-setup) • [Features](#features) • [CLI Reference](#cli-reference) • [Troubleshooting](#troubleshooting)
 
 </div>
+
+---
+
+## 🚀 Quick Start for Everyone
+
+### What is an XDC Node?
+
+An XDC node is a computer program that helps run the XDC Network — a fast, low-cost blockchain for global trade and finance. By running a node, you help secure the network and earn rewards.
+
+**You don't need to be a programmer.** If you can copy and paste a command, you can run a node.
+
+### One Command to Start
+
+**Step 1:** Open your terminal (on Linux or macOS)
+
+**Step 2:** Copy and paste this one line:
+
+```bash
+curl -fsSL https://install.xdc.network | bash
+```
+
+That's it. The installer will:
+- ✅ Check your computer meets the requirements
+- ✅ Install Docker (if not already installed)
+- ✅ Download a recent snapshot (fast sync, not days)
+- ✅ Start your node with safe defaults
+- ✅ Verify your node is working before saying "done"
+
+**What you'll see:**
+```
+🚀 XDC Node Setup
+Checking requirements... ✓
+Downloading snapshot... ████████░░ 80%
+Starting node... ✓
+Waiting for peers... 3 peers connected ✓
+Node is syncing! Current block: 45,231,000
+
+✅ Setup complete! Your node is running.
+   Check status anytime: xns status
+   View logs: xns logs
+   Stop node: xns down
+```
+
+### Check Your Node
+
+```bash
+xns status
+```
+
+Shows: sync percentage, peers, disk usage, and whether everything is healthy.
+
+### Need Help?
+
+- 💬 [Discord](https://discord.gg/xdc) — ask questions, get help
+- 📖 [Full Documentation](docs/README.md) — for advanced users
+- 🛠️ [Troubleshooting](#troubleshooting) — common fixes
+
+---
+
+## 💻 Technical Setup
+
+### For Developers & DevOps
+
+```bash
+# Clone and install
+git clone https://github.com/XDCIndia/xdc-node-setup.git
+cd xdc-node-setup
+
+# Build XNS CLI v2.0
+cd xns && go build -o xns ./cmd/xdccli
+
+# One-command node setup
+./xns node init --network apothem --client gp5 --name mynode --up
+
+# Fleet deployment
+./xns fleet deploy --config ~/.xns/fleet.yaml
+```
+
+See [docs/ADVANCED.md](docs/ADVANCED.md) for full technical documentation.
 
 ---
 
