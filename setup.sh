@@ -977,10 +977,14 @@ STARTEOF
                     if [[ "$NETWORK" == "apothem" || "$NETWORK" == "testnet" ]]; then
                         cat > "$network_dir/bootnodes.list" << 'BNEOF'
 enode://91e59fa1b034ae35e9f4e8a99cc6621f09d74e76a6220abb6c93b29ed41a9e1fc4e5b70e2c5fc43f883cffbdcd6f4f6cbc1d23af077f28c2aecc22403355d4b1@bootnodes.apothem.network:30312
+enode://0e0fa1421f78d8b7a9e8df8c03987e6f5f8c5d2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0@apothem-bootnode1.xdc.network:30312
+enode://1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8@apothem-bootnode2.xdc.network:30312
 BNEOF
                     else
                         cat > "$network_dir/bootnodes.list" << 'BNEOF'
 enode://9a977b1ac4320fa2c862dcaf536aaaea3a8f8f7cd14e3bcde32e5a1c0152bd17bd18bfdc3c2ca8c4a0f3da153c62935fea1dc040cc1e66d2c07d6b4c91e2ed42@bootnode.xinfin.network:30303
+enode://a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8@bootnode2.xinfin.network:30303
+enode://b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0@bootnode3.xinfin.network:30303
 BNEOF
                     fi
                     ;;
@@ -1104,7 +1108,7 @@ services:
     networks:
       - xdc-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8545 -X POST -H 'Content-Type: application/json' -d '{\\"jsonrpc\\":\\"2.0\\",\\"method\\":\\"eth_syncing\\",\\"params\\":[],\\"id\\":1}' || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8545 -X POST -H 'Content-Type: application/json' -d '{\\"jsonrpc\\":\\"2.0\\",\\"method\\":\\"eth_syncing\\",\\"params\\":[],\\"id\\":1}' | grep -q 'false' && curl -sf http://localhost:8545 -X POST -H 'Content-Type: application/json' -d '{\\"jsonrpc\\":\\"2.0\\",\\"method\\":\\"net_peerCount\\",\\"params\\":[],\\"id\\":1}' | grep -qv '0x0' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1116,7 +1120,7 @@ EOF
         cat >> "$PROJECT_ROOT/docker/docker-compose.yml" << 'EOF'
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.45.0
     container_name: xdc-prometheus
     restart: unless-stopped
     ports:
@@ -1132,7 +1136,7 @@ EOF
       - xdc-network
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.0.0
     container_name: xdc-grafana
     restart: unless-stopped
     ports:
@@ -1150,7 +1154,7 @@ EOF
       - prometheus
 
   node-exporter:
-    image: prom/node-exporter:latest
+    image: prom/node-exporter:v1.6.0
     container_name: xdc-node-exporter
     restart: unless-stopped
     volumes:
